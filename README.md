@@ -270,14 +270,15 @@ npm start
 
 ## 🔮 Próximas Melhorias
 
-- [ ] Integração com leitor de código de barras
-- [ ] Sistema de notificações por email
-- [ ] Controle financeiro (custos e lucros)
-- [ ] Modo offline com sincronização
+- [ ] Remover Implementações temporárias e dados simulados do backend
+- [ ] Adicionar opção de Atualizar Estoque em Movimentações
+- [ ] Corrigir Histórico de Vendas em Vendas e Registar Vendas em Movimentações
+- [ ] Adicionar Visualização do Histórico de movimentações
+- [ ] Melhoria na página de Relatórios
+- [ ] Atualização do dashboard com mais informações
+- [ ] Mudança da página Usuários para Gerenciamento
 - [ ] Aplicativo móvel nativo (React Native)
-- [ ] Importação/exportação de dados em massa
-- [ ] Dashboards personalizáveis
-
+      
 ## 📄 Licença
 
 Este projeto está licenciado sob a licença MIT - consulte o arquivo [LICENSE](LICENSE) para obter detalhes.
