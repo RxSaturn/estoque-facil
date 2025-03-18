@@ -66,6 +66,10 @@ function App() {
                 path="/movimentacao" 
                 element={<PrivateRoute component={Movimentacao} />} 
               />
+              <Route
+                path="/movimentacoes/adicionar"
+                element={<Movimentacao />}
+              />
               <Route 
                 path="/vendas" 
                 element={<PrivateRoute component={Vendas} />} 
