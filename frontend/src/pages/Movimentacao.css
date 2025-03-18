@@ -36,6 +36,7 @@
 
 .tipo-btn span {
   font-weight: 500;
+  text-align: center;
 }
 
 .tipo-btn.active {
@@ -108,6 +109,11 @@
   border-left: 4px solid var(--secondary-color);
 }
 
+/* Estilo específico para o card de entrada */
+.entrada-card {
+  border-left: 4px solid #28a745;
+}
+
 .resumo-card h3 {
   margin-top: 0;
   margin-bottom: 15px;
@@ -177,17 +183,25 @@
   margin-bottom: 15px;
 }
 
-.busca-produto {
+/* Novos estilos para filtros avançados */
+.search-filter-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 15px;
 }
 
-.search-input {
-  position: relative;
+.search-box {
   width: 100%;
-  max-width: 500px;
+  max-width: 400px;
 }
 
-.search-input input {
+.search-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.search-input-wrapper input {
   width: 100%;
   padding: 10px 15px 10px 40px;
   border: 1px solid var(--border-color);
@@ -201,6 +215,58 @@
   top: 50%;
   transform: translateY(-50%);
   color: #999;
+}
+
+.filter-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.filter-btn.active {
+  background-color: var(--light-primary-color, #e3f2fd);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.clear-btn:hover {
+  background-color: rgba(231, 76, 60, 0.1);
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.advanced-filters {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border-color);
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.filter-group {
+  flex: 1;
+  min-width: 180px;
+}
+
+.filter-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.filter-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: white;
+  font-size: 15px;
 }
 
 /* Estilos para o carrinho */
@@ -311,6 +377,22 @@
     gap: 10px;
   }
 
+  .search-filter-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .search-box {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .filter-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .form-row {
     grid-template-columns: 1fr;
     gap: 15px;
@@ -332,5 +414,10 @@
   .carrinho-sumario {
     flex-direction: column;
     gap: 10px;
+  }
+
+  .filter-row {
+    flex-direction: column;
+    gap: 15px;
   }
 }
