@@ -2,6 +2,27 @@
   padding: 20px 0;
 }
 
+/* Estilo para o botão Adicionar Estoque */
+.btn-adicionar-estoque {
+  background-color: #17a2b8;
+  border-color: #17a2b8;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border: none;
+}
+
+.btn-adicionar-estoque:hover {
+  background-color: #138496;
+  border-color: #117a8b;
+}
+
 .form-container {
   background-color: white;
   border-radius: 8px;
