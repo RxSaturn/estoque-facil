@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   FaSave, 
   FaExchangeAlt, 
@@ -7,16 +8,27 @@ import {
   FaSearch, 
   FaPlus, 
   FaTrash, 
-  FaShoppingCart 
+  FaShoppingCart,
+  FaFilter,
+  FaTimes,
+  FaBoxes
 } from 'react-icons/fa';
 import api from '../services/api';
 import { toast } from 'react-toastify';
 import './Movimentacao.css';
 
 const Movimentacao = () => {
-  const [tipoMovimentacao, setTipoMovimentacao] = useState('transferencia');
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const produtoIdParam = queryParams.get('produtoId');
+  const tipoMovimentacaoParam = queryParams.get('tipo') || 'transferencia';
+  
+  // Estado do tipo de movimentação - agora com 'entrada' como opção
+  const [tipoMovimentacao, setTipoMovimentacao] = useState(tipoMovimentacaoParam);
+  
+  // Formulário
   const [formData, setFormData] = useState({
-    produto: '',
+    produto: produtoIdParam || '',
     localOrigem: '',
     localDestino: '',
     quantidade: 1,
@@ -24,9 +36,21 @@ const Movimentacao = () => {
     observacao: ''
   });
   
+  // Estados para busca e filtros
   const [produtoBusca, setProdutoBusca] = useState('');
+  const [filtroAvancado, setFiltroAvancado] = useState(false);
+  const [filtros, setFiltros] = useState({
+    tipo: '',
+    categoria: '',
+    subcategoria: ''
+  });
+  
+  // Dados para formulários e filtros
   const [produtos, setProdutos] = useState([]);
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
+  const [tipos, setTipos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [subcategorias, setSubcategorias] = useState([]);
   const [locais, setLocais] = useState([]);
   const [estoqueOrigem, setEstoqueOrigem] = useState(0);
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
@@ -44,12 +68,41 @@ const Movimentacao = () => {
         
         // Carregar produtos
         const resProdutos = await api.get('/api/produtos');
-        setProdutos(resProdutos.data.produtos);
-        setProdutosFiltrados(resProdutos.data.produtos);
+        const produtosCarregados = resProdutos.data.produtos || [];
+        setProdutos(produtosCarregados);
+        setProdutosFiltrados(produtosCarregados);
+        
+        // Extrair opções de filtros dos produtos
+        extrairOpcoesFiltro(produtosCarregados);
         
         // Carregar locais
         const resLocais = await api.get('/api/estoque/locais');
         setLocais(resLocais.data);
+        
+        // Se fornecido um produtoId, buscar e selecionar este produto
+        if (produtoIdParam) {
+          try {
+            const produtoRes = await api.get(`/api/produtos/${produtoIdParam}`);
+            const produtoInfo = produtoRes.data.produto;
+            
+            setProdutoSelecionado(produtoInfo);
+            setFormData(prev => ({
+              ...prev,
+              produto: produtoIdParam
+            }));
+            
+            // Se também tiver um local e o tipo for entrada, verificar estoque
+            if (resLocais.data.length > 0 && tipoMovimentacaoParam === 'entrada') {
+              setFormData(prev => ({
+                ...prev,
+                localOrigem: resLocais.data[0]
+              }));
+            }
+          } catch (err) {
+            console.error("Erro ao buscar produto:", err);
+            toast.error("Não foi possível carregar o produto especificado");
+          }
+        }
         
         setCarregando(false);
       } catch (error) {
@@ -60,21 +113,52 @@ const Movimentacao = () => {
     };
     
     carregarDados();
-  }, []);
+  }, [produtoIdParam, tipoMovimentacaoParam]);
   
-  // Filtrar produtos quando o termo de busca mudar
+  // Extrair opções de filtro dos produtos
+  const extrairOpcoesFiltro = (produtos) => {
+    const tiposSet = new Set();
+    const categoriasSet = new Set();
+    const subcategoriasSet = new Set();
+    
+    produtos.forEach(produto => {
+      if (produto.tipo) tiposSet.add(produto.tipo);
+      if (produto.categoria) categoriasSet.add(produto.categoria);
+      if (produto.subcategoria) subcategoriasSet.add(produto.subcategoria);
+    });
+    
+    setTipos(Array.from(tiposSet).sort());
+    setCategorias(Array.from(categoriasSet).sort());
+    setSubcategorias(Array.from(subcategoriasSet).sort());
+  };
+  
+  // Aplicar filtros quando mudam
   useEffect(() => {
-    if (produtoBusca) {
-      const filtrados = produtos.filter(produto => 
-        produto.nome.toLowerCase().includes(produtoBusca.toLowerCase()) ||
-        produto.id.toLowerCase().includes(produtoBusca.toLowerCase()) ||
-        produto.categoria.toLowerCase().includes(produtoBusca.toLowerCase())
-      );
-      setProdutosFiltrados(filtrados);
-    } else {
-      setProdutosFiltrados(produtos);
-    }
-  }, [produtoBusca, produtos]);
+    filtrarProdutos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [produtoBusca, filtros, produtos]);
+  
+  // Filtrar produtos com base nos critérios de busca e filtros
+  const filtrarProdutos = () => {
+    if (!produtos || produtos.length === 0) return;
+    
+    const resultados = produtos.filter(produto => {
+      // Verificar termo de busca
+      const matchBusca = !produtoBusca || 
+        (produto.nome && produto.nome.toLowerCase().includes(produtoBusca.toLowerCase())) ||
+        (produto.id && produto.id.toLowerCase().includes(produtoBusca.toLowerCase())) ||
+        (produto.categoria && produto.categoria.toLowerCase().includes(produtoBusca.toLowerCase()));
+      
+      // Verificar filtros avançados
+      const matchTipo = !filtros.tipo || produto.tipo === filtros.tipo;
+      const matchCategoria = !filtros.categoria || produto.categoria === filtros.categoria;
+      const matchSubcategoria = !filtros.subcategoria || produto.subcategoria === filtros.subcategoria;
+      
+      return matchBusca && matchTipo && matchCategoria && matchSubcategoria;
+    });
+    
+    setProdutosFiltrados(resultados);
+  };
   
   // Verificar estoque ao selecionar produto e local origem
   useEffect(() => {
@@ -93,7 +177,6 @@ const Movimentacao = () => {
         }
       } else {
         setEstoqueOrigem(0);
-        setProdutoSelecionado(null);
       }
     };
     
@@ -103,21 +186,20 @@ const Movimentacao = () => {
   const handleChangeMovimentacao = (tipo) => {
     setTipoMovimentacao(tipo);
     
-    // Limpar o carrinho se mudar para transferência
-    if (tipo === 'transferencia') {
+    // Limpar o carrinho se mudar o tipo
+    if (tipo !== 'venda') {
       setCarrinhoProdutos([]);
     }
     
-    // Reiniciar campos da movimentação
+    // Reiniciar campos da movimentação mas manter o produto se já estiver selecionado
     setFormData(prev => ({
       ...prev,
-      produto: '',
       localOrigem: '',
       localDestino: '',
       quantidade: 1
     }));
+    
     setEstoqueOrigem(0);
-    setProdutoSelecionado(null);
   };
   
   const handleChange = (e) => {
@@ -127,6 +209,22 @@ const Movimentacao = () => {
 
   const handleBuscaProduto = (e) => {
     setProdutoBusca(e.target.value);
+  };
+  
+  // Atualizar filtros
+  const handleChangeFiltro = (e) => {
+    const { name, value } = e.target;
+    setFiltros(prev => ({ ...prev, [name]: value }));
+  };
+  
+  // Limpar filtros
+  const limparFiltros = () => {
+    setProdutoBusca('');
+    setFiltros({
+      tipo: '',
+      categoria: '',
+      subcategoria: ''
+    });
   };
   
   const adicionarAoCarrinho = () => {
@@ -146,7 +244,7 @@ const Movimentacao = () => {
       return;
     }
     
-    if (formData.quantidade > estoqueOrigem) {
+    if (tipoMovimentacao === 'saida' && formData.quantidade > estoqueOrigem) {
       toast.error(`Quantidade insuficiente. Estoque disponível: ${estoqueOrigem}`);
       return;
     }
@@ -212,7 +310,7 @@ const Movimentacao = () => {
         return;
       }
       
-      if (tipoMovimentacao === 'transferencia' && formData.localOrigem === formData.localDestino) {
+      if (formData.localOrigem === formData.localDestino) {
         toast.error('Os locais de origem e destino não podem ser iguais');
         return;
       }
@@ -255,7 +353,65 @@ const Movimentacao = () => {
       } finally {
         setEnviando(false);
       }
-    } else {
+    } 
+    else if (tipoMovimentacao === 'entrada') {
+      // Validações para entrada de estoque
+      if (!formData.produto) {
+        toast.error('Selecione um produto');
+        return;
+      }
+      
+      if (!formData.localOrigem) {
+        toast.error('Selecione o local de entrada');
+        return;
+      }
+      
+      if (formData.quantidade <= 0) {
+        toast.error('A quantidade deve ser maior que zero');
+        return;
+      }
+      
+      try {
+        setEnviando(true);
+        
+        // Criar uma movimentação de entrada
+        const resposta = await api.post('/api/movimentacoes', {
+          tipo: 'entrada',
+          produto: formData.produto,
+          quantidade: parseInt(formData.quantidade),
+          localOrigem: formData.localOrigem,
+          observacao: formData.observacao || 'Entrada de estoque'
+        });
+        
+        if (resposta.data.sucesso) {
+          toast.success('Entrada de estoque registrada com sucesso!');
+          
+          // Resetar formulário mas manter o produto se chegou por parâmetro
+          setFormData({
+            produto: produtoIdParam || '',
+            localOrigem: '',
+            localDestino: '',
+            quantidade: 1,
+            data: new Date().toISOString().split('T')[0],
+            observacao: ''
+          });
+          setEstoqueOrigem(0);
+          
+          // Manter ou limpar produto selecionado com base em produtoIdParam
+          if (!produtoIdParam) {
+            setProdutoSelecionado(null);
+          }
+        } else {
+          toast.error(resposta.data.mensagem || 'Erro ao processar operação');
+        }
+      } catch (error) {
+        console.error('Erro na operação:', error);
+        toast.error(error.response?.data?.mensagem || 'Erro ao registrar entrada de estoque. Tente novamente.');
+      } finally {
+        setEnviando(false);
+      }
+    }
+    else {
       // Validações para venda múltipla
       if (carrinhoProdutos.length === 0) {
         toast.error('Adicione ao menos um produto ao carrinho');
@@ -322,6 +478,14 @@ const Movimentacao = () => {
       
       <div className="tipo-movimentacao">
         <button 
+          className={`tipo-btn ${tipoMovimentacao === 'entrada' ? 'active' : ''}`}
+          onClick={() => handleChangeMovimentacao('entrada')}
+        >
+          <FaBoxes />
+          <span>Adicionar Estoque</span>
+        </button>
+        
+        <button 
           className={`tipo-btn ${tipoMovimentacao === 'transferencia' ? 'active' : ''}`}
           onClick={() => handleChangeMovimentacao('transferencia')}
         >
@@ -340,25 +504,98 @@ const Movimentacao = () => {
       
       <div className="card movimentacao-card">
         <h2>
-          {tipoMovimentacao === 'transferencia' ? 'Transferir Produto' : 'Registrar Venda'}
+          {tipoMovimentacao === 'entrada' ? 'Adicionar Estoque' :
+           tipoMovimentacao === 'transferencia' ? 'Transferir Produto' : 
+           'Registrar Venda'}
         </h2>
         
         <form onSubmit={handleSubmit}>
-          {/* Seleção de Produto com Busca */}
+          {/* Seleção de Produto com Busca e Filtros */}
           <div className="produto-selecao">
             <h3>Seleção de Produto</h3>
             
-            <div className="busca-produto">
-              <div className="search-input">
-                <FaSearch className="search-icon" />
-                <input
-                  type="text"
-                  placeholder="Buscar por nome, ID ou categoria..."
-                  value={produtoBusca}
-                  onChange={handleBuscaProduto}
-                />
+            <div className="search-filter-container">
+              <div className="search-box">
+                <div className="search-input-wrapper">
+                  <FaSearch className="search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nome, ID ou categoria..."
+                    value={produtoBusca}
+                    onChange={handleBuscaProduto}
+                  />
+                </div>
+              </div>
+              
+              <div className="filter-controls">
+                <button
+                  type="button"
+                  className={`btn btn-outline filter-btn ${filtroAvancado ? 'active' : ''}`}
+                  onClick={() => setFiltroAvancado(!filtroAvancado)}
+                >
+                  <FaFilter /> {filtroAvancado ? 'Ocultar Filtros' : 'Mostrar Filtros'}
+                </button>
+                
+                {(produtoBusca || filtros.tipo || filtros.categoria || filtros.subcategoria) && (
+                  <button
+                    type="button"
+                    className="btn btn-outline clear-btn"
+                    onClick={limparFiltros}
+                  >
+                    <FaTimes /> Limpar Filtros
+                  </button>
+                )}
               </div>
             </div>
+            
+            {/* Filtros avançados */}
+            {filtroAvancado && (
+              <div className="advanced-filters">
+                <div className="filter-row">
+                  <div className="filter-group">
+                    <label>Tipo</label>
+                    <select
+                      name="tipo"
+                      value={filtros.tipo}
+                      onChange={handleChangeFiltro}
+                    >
+                      <option value="">Todos</option>
+                      {tipos.map((tipo, index) => (
+                        <option key={index} value={tipo}>{tipo}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div className="filter-group">
+                    <label>Categoria</label>
+                    <select
+                      name="categoria"
+                      value={filtros.categoria}
+                      onChange={handleChangeFiltro}
+                    >
+                      <option value="">Todas</option>
+                      {categorias.map((categoria, index) => (
+                        <option key={index} value={categoria}>{categoria}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div className="filter-group">
+                    <label>Subcategoria</label>
+                    <select
+                      name="subcategoria"
+                      value={filtros.subcategoria}
+                      onChange={handleChangeFiltro}
+                    >
+                      <option value="">Todas</option>
+                      {subcategorias.map((subcategoria, index) => (
+                        <option key={index} value={subcategoria}>{subcategoria}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
             
             <div className="form-row">
               <div className="form-group">
@@ -368,7 +605,8 @@ const Movimentacao = () => {
                   name="produto"
                   value={formData.produto}
                   onChange={handleChange}
-                  required={tipoMovimentacao === 'transferencia'}
+                  required={tipoMovimentacao !== 'venda'}
+                  disabled={produtoIdParam && produtoSelecionado}
                 >
                   <option value="">Selecione um produto</option>
                   {produtosFiltrados.map(produto => (
@@ -410,7 +648,11 @@ const Movimentacao = () => {
           
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="localOrigem">Local de Origem *</label>
+              <label htmlFor="localOrigem">
+                {tipoMovimentacao === 'entrada' ? 'Local de Entrada *' :
+                 tipoMovimentacao === 'transferencia' ? 'Local de Origem *' :
+                 'Local de Saída *'}
+              </label>
               <select 
                 id="localOrigem"
                 name="localOrigem"
@@ -460,10 +702,10 @@ const Movimentacao = () => {
                 value={formData.quantidade}
                 onChange={handleChange}
                 min="1"
-                max={estoqueOrigem || undefined}
+                max={tipoMovimentacao !== 'entrada' ? estoqueOrigem || undefined : undefined}
                 required
               />
-              {estoqueOrigem > 0 && (
+              {estoqueOrigem > 0 && tipoMovimentacao !== 'entrada' && (
                 <small>Estoque disponível: {estoqueOrigem}</small>
               )}
             </div>
@@ -588,6 +830,22 @@ const Movimentacao = () => {
                 </div>
               </div>
             )}
+            
+            {tipoMovimentacao === 'entrada' && formData.produto && formData.localOrigem && produtoSelecionado && (
+              <div className="resumo-card entrada-card">
+                <h3>Resumo da Entrada de Estoque</h3>
+                
+                <div className="resumo-detalhes">
+                  <p><strong>Produto:</strong> {produtoSelecionado.nome}</p>
+                  <p><strong>Quantidade a adicionar:</strong> {formData.quantidade}</p>
+                  <p><strong>Local de entrada:</strong> {formData.localOrigem}</p>
+                  <p><strong>Data:</strong> {new Date(formData.data).toLocaleDateString('pt-BR')}</p>
+                  {formData.observacao && (
+                    <p><strong>Observação:</strong> {formData.observacao}</p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="form-actions">
@@ -598,7 +856,10 @@ const Movimentacao = () => {
             >
               {enviando ? 'Processando...' : (
                 <>
-                  <FaSave /> {tipoMovimentacao === 'transferencia' ? 'Concluir Transferência' : 'Registrar Venda'}
+                  <FaSave /> 
+                  {tipoMovimentacao === 'entrada' ? 'Registrar Entrada de Estoque' : 
+                   tipoMovimentacao === 'transferencia' ? 'Concluir Transferência' : 
+                   'Registrar Venda'}
                 </>
               )}
             </button>
