@@ -11,6 +11,7 @@ const estoqueRoutes = require('./routes/estoqueRoutes');
 const vendaRoutes = require('./routes/vendaRoutes');
 const relatorioRoutes = require('./routes/relatorioRoutes');
 const usuarioRoutes = require('./routes/usuarioRoutes');
+const movimentacaoRoutes = require('./routes/movimentacaoRoutes');
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use('/api/estoque', estoqueRoutes);
 app.use('/api/vendas', vendaRoutes);
 app.use('/api/relatorios', relatorioRoutes);
 app.use('/api/usuarios', usuarioRoutes);
+app.use('/api/movimentacoes', movimentacaoRoutes);
 
 // Rota de teste
 app.get('/', (req, res) => {
