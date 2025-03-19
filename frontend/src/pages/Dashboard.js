@@ -155,9 +155,9 @@ const Dashboard = () => {
             <FaShoppingCart />
           </div>
           <div className="card-content">
-            <h3>Vendas</h3>
+            <h3>Historico</h3>
             <p className="card-value">{resumo.vendasRecentes} hoje</p>
-            <Link to="/vendas" className="card-link">Detalhes</Link>
+            <Link to="/historico" className="card-link">Detalhes</Link>
           </div>
         </div>
         
@@ -270,7 +270,7 @@ const Dashboard = () => {
             ))}
           </div>
           
-          <Link to="/vendas" className="ver-tudo-link">
+          <Link to="/historico" className="ver-tudo-link">
             Ver todas as movimentações
           </Link>
         </div>

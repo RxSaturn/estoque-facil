@@ -15,7 +15,7 @@ import Produtos from './pages/Produtos';
 import AdicionarProduto from './pages/AdicionarProduto';
 import EditarProduto from './pages/EditarProduto';
 import Movimentacao from './pages/Movimentacao';
-import Vendas from './pages/Vendas';
+import Historico from './pages/Historico';
 import Relatorios from './pages/Relatorios';
 import Usuarios from './pages/Usuarios';
 
@@ -71,8 +71,8 @@ function App() {
                 element={<Movimentacao />}
               />
               <Route 
-                path="/vendas" 
-                element={<PrivateRoute component={Vendas} />} 
+                path="/historico" 
+                element={<PrivateRoute component={Historico} />} 
               />
               <Route 
                 path="/relatorios" 

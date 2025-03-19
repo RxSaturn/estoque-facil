@@ -48,9 +48,9 @@ const Navbar = () => {
             <FaExchangeAlt />
             <span>Movimentação</span>
           </Link>
-          <Link to="/vendas" className="navbar-item">
+          <Link to="/historico" className="navbar-item">
             <FaShoppingCart />
-            <span>Vendas</span>
+            <span>Historico</span>
           </Link>
           <Link to="/relatorios" className="navbar-item">
             <FaFileAlt />
