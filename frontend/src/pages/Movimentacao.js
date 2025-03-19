@@ -425,7 +425,7 @@ const Movimentacao = () => {
         const vendasPromises = carrinhoProdutos.map(item => 
           api.post('/api/vendas', {
             produto: item.produto,
-            localOrigem: item.localOrigem,
+            local: item.localOrigem,
             quantidade: item.quantidade,
             data: formData.data,
             observacao: formData.observacao
@@ -456,7 +456,15 @@ const Movimentacao = () => {
         }
       } catch (error) {
         console.error('Erro na operação de venda:', error);
-        toast.error(error.response?.data?.mensagem || 'Erro ao processar vendas. Tente novamente.');
+
+        // Melhorar a mensagem de erro para ser mais específica
+        const mensagemErro = error.response?.data?.mensagem || 'Erro ao processar vendas. Tente novamente.';
+        toast.error(mensagemErro);
+
+        // Log detalhado para debug
+        if (error.response?.data) {
+          console.log('Detalhes do erro:', error.response.data);
+        }
       } finally {
         setEnviando(false);
       }
