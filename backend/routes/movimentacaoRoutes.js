@@ -176,4 +176,84 @@ router.post('/', proteger, async (req, res) => {
   }
 });
 
+// Listar histórico de movimentações
+router.get('/historico', proteger, async (req, res) => {
+  try {
+    const { dataInicio, dataFim, produto, localOrigem, tipo } = req.query;
+    
+    console.log('Parâmetros de busca recebidos:', { dataInicio, dataFim, produto, localOrigem, tipo });
+    
+    // Construir filtro
+    const filtro = {};
+    
+    // Tratamento de datas com validação
+    if (dataInicio && dataFim) {
+      try {
+        const inicio = new Date(dataInicio);
+        const fim = new Date(dataFim);
+        
+        // Ajustar dataFim para incluir todo o dia
+        fim.setHours(23, 59, 59, 999);
+        
+        // Verificar se as datas são válidas
+        if (!isNaN(inicio.getTime()) && !isNaN(fim.getTime())) {
+          filtro.data = {
+            $gte: inicio,
+            $lte: fim
+          };
+          console.log('Filtrando por período:', inicio, 'até', fim);
+        } else {
+          console.warn('Datas inválidas fornecidas:', { dataInicio, dataFim });
+        }
+      } catch (err) {
+        console.error('Erro ao processar datas:', err);
+      }
+    }
+    
+    if (produto) {
+      filtro.produto = produto;
+      console.log('Filtrando por produto:', produto);
+    }
+    
+    if (localOrigem) {
+      filtro.localOrigem = localOrigem;
+      console.log('Filtrando por localOrigem:', localOrigem);
+    }
+    
+    if (tipo) {
+      filtro.tipo = tipo;
+      console.log('Filtrando por tipo:', tipo);
+    }
+    
+    // Garantir que apenas movimentações com produtos válidos sejam retornadas
+    filtro.produto = { $ne: null };
+    
+    console.log('Filtro de busca montado:', JSON.stringify(filtro));
+    
+    // Buscar movimentações com populate para obter detalhes do produto e realizador
+    const movimentacoes = await Movimentacao.find(filtro)
+      .populate('produto', 'id nome tipo categoria subcategoria')
+      .populate('realizadoPor', 'nome')
+      .sort({ data: -1 });
+    
+    // Filtrar movimentações para garantir que apenas aquelas com produto preenchido sejam retornadas
+    const movimentacoesFiltradas = movimentacoes.filter(m => m.produto !== null);
+    
+    console.log(`Encontradas ${movimentacoesFiltradas.length} movimentações válidas`);
+    
+    res.status(200).json({
+      sucesso: true,
+      contagem: movimentacoesFiltradas.length,
+      movimentacoes: movimentacoesFiltradas
+    });
+  } catch (error) {
+    console.error('Erro ao listar movimentações:', error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: 'Erro ao listar movimentações',
+      erro: error.message
+    });
+  }
+});
+
 module.exports = router;
