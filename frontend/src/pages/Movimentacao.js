@@ -1,17 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
-  FaSave, 
-  FaExchangeAlt, 
-  FaBoxOpen, 
-  FaArrowRight, 
-  FaSearch, 
-  FaPlus, 
-  FaTrash, 
-  FaShoppingCart,
-  FaFilter,
-  FaTimes,
-  FaBoxes
+  FaSave, FaExchangeAlt, FaBoxOpen, 
+  FaArrowRight, FaSearch, FaPlus, 
+  FaTrash, FaShoppingCart, FaFilter,
+  FaTimes, FaBoxes
 } from 'react-icons/fa';
 import api from '../services/api';
 import { toast } from 'react-toastify';
@@ -328,8 +321,11 @@ const Movimentacao = () => {
       try {
         setEnviando(true);
         
-        const resposta = await api.post('/api/estoque/transferir', formData);
-        
+        const resposta = await api.post('/api/estoque/transferir', {
+          ...formData,
+          data: formData.data + 'T12:00:00'
+        });
+
         if (resposta.data.sucesso) {
           toast.success('Transferência realizada com sucesso!');
           
@@ -373,6 +369,16 @@ const Movimentacao = () => {
       
       try {
         setEnviando(true);
+
+        // Log para depuração
+        console.log('Enviando dados para entrada de estoque:', {
+          tipo: 'entrada',
+          produto: formData.produto,
+          quantidade: parseInt(formData.quantidade),
+          localOrigem: formData.localOrigem,
+          data: formData.data + 'T12:00:00',
+          observacao: formData.observacao || 'Entrada de estoque'
+        });
         
         // Criar uma movimentação de entrada
         const resposta = await api.post('/api/movimentacoes', {
@@ -380,6 +386,7 @@ const Movimentacao = () => {
           produto: formData.produto,
           quantidade: parseInt(formData.quantidade),
           localOrigem: formData.localOrigem,
+          data: formData.data + 'T12:00:00',
           observacao: formData.observacao || 'Entrada de estoque'
         });
         
@@ -427,7 +434,7 @@ const Movimentacao = () => {
             produto: item.produto,
             local: item.localOrigem,
             quantidade: item.quantidade,
-            data: formData.data,
+            data: formData.data + 'T12:00:00',
             observacao: formData.observacao
           })
         );
@@ -847,7 +854,7 @@ const Movimentacao = () => {
                   <p><strong>Produto:</strong> {produtoSelecionado.nome}</p>
                   <p><strong>Quantidade a adicionar:</strong> {formData.quantidade}</p>
                   <p><strong>Local de entrada:</strong> {formData.localOrigem}</p>
-                  <p><strong>Data:</strong> {new Date(formData.data).toLocaleDateString('pt-BR')}</p>
+                  <p><strong>Data:</strong> {new Date(formData.data + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
                   {formData.observacao && (
                     <p><strong>Observação:</strong> {formData.observacao}</p>
                   )}

@@ -210,6 +210,10 @@
     color: #f39c12;
 }
 
+.icon-atualizacao {
+    color: #3498db;
+}
+
 .locais-info {
     display: flex;
     align-items: center;
@@ -237,6 +241,10 @@
     border-left: 3px solid #f39c12;
 }
 
+.movimentacao-row.atualizacao {
+    border-left: 3px solid #3498db;
+}
+
 .produto-info {
     display: flex;
     flex-direction: column;
@@ -250,6 +258,17 @@
 .produto-id {
     color: #777;
     font-size: 12px;
+}
+
+/* Estilo para a observação do produto */
+.produto-observacao {
+    font-style: italic;
+    color: #666;
+    font-size: 12px;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Estado vazio */
@@ -275,6 +294,7 @@
     font-size: 14px;
 }
 
+/* Estilo para mensagem de erro */
 .error-message {
     background-color: #f8d7da;
     color: #721c24;
