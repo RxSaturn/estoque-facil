@@ -1,8 +1,17 @@
+const Produto = require('../models/Produto');
+const Estoque = require('../models/Estoque');
+const Movimentacao = require('../models/Movimentacao');
+
 // Criar movimentação de estoque
 exports.criarMovimentacao = async (req, res) => {
   try {
-    const { tipo, produto, quantidade, localOrigem, localDestino, observacao } = req.body;
+    const { tipo, produto, quantidade, localOrigem, localDestino, data, observacao } = req.body;
     
+    // Logs detalhados para depuração
+    console.log('Recebido no backend - CORPO COMPLETO:', req.body);
+    console.log('Data recebida:', data);
+    console.log('Tipo da data:', typeof data);
+
     // Validar tipo de movimentação
     if (!['entrada', 'saida', 'transferencia', 'venda'].includes(tipo)) {
       return res.status(400).json({
@@ -10,7 +19,7 @@ exports.criarMovimentacao = async (req, res) => {
         mensagem: 'Tipo de movimentação inválido'
       });
     }
-    
+
     // Validar campos obrigatórios
     if (!produto || !quantidade || quantidade <= 0 || !localOrigem) {
       return res.status(400).json({
@@ -18,7 +27,7 @@ exports.criarMovimentacao = async (req, res) => {
         mensagem: 'Dados incompletos ou inválidos para a movimentação'
       });
     }
-    
+
     // Validar produto
     const produtoExiste = await Produto.findById(produto);
     if (!produtoExiste) {
@@ -27,7 +36,7 @@ exports.criarMovimentacao = async (req, res) => {
         mensagem: 'Produto não encontrado'
       });
     }
-    
+
     // Para transferência, verificar se localDestino foi informado
     if (tipo === 'transferencia' && !localDestino) {
       return res.status(400).json({
@@ -35,14 +44,14 @@ exports.criarMovimentacao = async (req, res) => {
         mensagem: 'Local de destino é obrigatório para transferências'
       });
     }
-    
+
     // Para tipos que não são entrada, verificar estoque disponível
     if (tipo !== 'entrada') {
       const estoque = await Estoque.findOne({
         produto: produto,
         local: localOrigem
       });
-      
+
       if (!estoque || estoque.quantidade < quantidade) {
         return res.status(400).json({
           sucesso: false,
@@ -50,21 +59,26 @@ exports.criarMovimentacao = async (req, res) => {
         });
       }
     }
-    
+
     // Processar movimentação com base no tipo
     let resultadoOperacao;
-    
+
+    // Tratar a data para garantir que seja armazenada corretamente
+    const dataMovimentacao = data ? new Date(data) : new Date();
+
+    console.log('Data após processamento:', dataMovimentacao);
+
     if (tipo === 'entrada') {
       // Verificar se já existe um registro de estoque para este produto e local
-      let estoque = await Estoque.findOne({ 
+      let estoque = await Estoque.findOne({
         produto: produto,
         local: localOrigem
       });
-      
+
       if (estoque) {
         // Atualizar estoque existente
         estoque.quantidade += parseInt(quantidade);
-        estoque.ultimaAtualizacao = new Date();
+        estoque.ultimaAtualizacao = dataMovimentacao; // Usar a data fornecida
         estoque.atualizadoPor = req.usuario.id;
         await estoque.save();
       } else {
@@ -73,19 +87,75 @@ exports.criarMovimentacao = async (req, res) => {
           produto: produto,
           local: localOrigem,
           quantidade: parseInt(quantidade),
+          ultimaAtualizacao: dataMovimentacao, // Usar a data fornecida
           atualizadoPor: req.usuario.id
         });
       }
-      
+
       resultadoOperacao = estoque;
     } else if (tipo === 'transferencia') {
-      // Implementação da transferência...
-      // (código omitido para brevidade)
+      // Subtrair do estoque de origem
+      let estoqueOrigem = await Estoque.findOne({
+        produto: produto,
+        local: localOrigem
+      });
+
+      if (!estoqueOrigem || estoqueOrigem.quantidade < quantidade) {
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: 'Estoque insuficiente para transferência'
+        });
+      }
+
+      estoqueOrigem.quantidade -= parseInt(quantidade);
+      estoqueOrigem.ultimaAtualizacao = new Date();
+      estoqueOrigem.atualizadoPor = req.usuario.id;
+      await estoqueOrigem.save();
+
+      // Adicionar ao estoque de destino
+      let estoqueDestino = await Estoque.findOne({
+        produto: produto,
+        local: localDestino
+      });
+
+      if (estoqueDestino) {
+        estoqueDestino.quantidade += parseInt(quantidade);
+        estoqueDestino.ultimaAtualizacao = new Date();
+        estoqueDestino.atualizadoPor = req.usuario.id;
+        await estoqueDestino.save();
+      } else {
+        estoqueDestino = await Estoque.create({
+          produto: produto,
+          local: localDestino,
+          quantidade: parseInt(quantidade),
+          ultimaAtualizacao: new Date(),
+          atualizadoPor: req.usuario.id
+        });
+      }
+
+      resultadoOperacao = { origem: estoqueOrigem, destino: estoqueDestino };
     } else {
-      // Implementação de saída/venda...
-      // (código omitido para brevidade)
+      // Para saída ou venda, subtrair do estoque de origem
+      let estoque = await Estoque.findOne({
+        produto: produto,
+        local: localOrigem
+      });
+
+      if (!estoque || estoque.quantidade < quantidade) {
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: 'Estoque insuficiente para esta movimentação'
+        });
+      }
+
+      estoque.quantidade -= parseInt(quantidade);
+      estoque.ultimaAtualizacao = new Date();
+      estoque.atualizadoPor = req.usuario.id;
+      await estoque.save();
+
+      resultadoOperacao = estoque;
     }
-    
+
     // Registrar a movimentação
     const movimentacao = await Movimentacao.create({
       tipo,
@@ -93,10 +163,11 @@ exports.criarMovimentacao = async (req, res) => {
       quantidade: parseInt(quantidade),
       localOrigem,
       localDestino: localDestino || undefined,
+      data: dataMovimentacao, // Usar o objeto Date já convertido
       realizadoPor: req.usuario.id,
       observacao
     });
-    
+
     res.status(201).json({
       sucesso: true,
       mensagem: 'Movimentação registrada com sucesso',
