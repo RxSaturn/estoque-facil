@@ -1,10 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { FaShoppingCart, FaExchangeAlt, FaSearch, FaCalendarAlt, FaFilter, FaTimes, FaBoxes, FaArrowRight, FaExclamationTriangle } from 'react-icons/fa';
+import {
+  FaShoppingCart, FaExchangeAlt, FaSearch,
+  FaCalendarAlt, FaFilter, FaTimes, FaBoxes,
+  FaArrowRight, FaExclamationTriangle, FaPen
+} from 'react-icons/fa';
 import api from '../services/api';
 import { toast } from 'react-toastify';
 import './Historico.css';
 
 const Historico = () => {
+  // Funções de utilidade para manipulação de datas
+  // Função para obter a data de hoje no formato YYYY-MM-DD
+  const obterDataHoje = () => {
+    const hoje = new Date();
+    return hoje.toISOString().split('T')[0];
+  };
+
+  // Função para obter a data de um mês atrás no formato YYYY-MM-DD
+  const obterDataUmMesAtras = () => {
+    const dataAtras = new Date();
+    dataAtras.setMonth(dataAtras.getMonth() - 1);
+    return dataAtras.toISOString().split('T')[0];
+  };
+
   const [activeTab, setActiveTab] = useState('vendas');
   const [vendas, setVendas] = useState([]);
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -12,8 +30,8 @@ const Historico = () => {
   const [erro, setErro] = useState(null);
   
   const [filtros, setFiltros] = useState({
-    dataInicio: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
-    dataFim: new Date().toISOString().split('T')[0],
+    dataInicio: obterDataUmMesAtras(),
+    dataFim: obterDataHoje(),
     produto: '',
     local: '',
     tipo: ''
@@ -29,11 +47,22 @@ const Historico = () => {
     { value: 'entrada', label: 'Entrada de Estoque' },
     { value: 'saida', label: 'Saída de Estoque' },
     { value: 'transferencia', label: 'Transferência' },
-    { value: 'venda', label: 'Venda' }
+    { value: 'venda', label: 'Venda' },
+    { value: 'atualizacao', label: 'Atualização de Produto' }
   ];
 
   // Funções auxiliares para lidar com dados possivelmente nulos
   const getProdutoNome = (mov) => {
+    // Identificar movimentações de produto novo
+    if (!mov.produto && mov.tipo === 'entrada' && mov.observacao?.includes('Registro inicial de produto')) {
+      return 'Produto Novo Adicionado';
+    }
+    
+    // Identificar movimentações de remoção de produto
+    if (!mov.produto && (mov.tipo === 'saida' || mov.observacao?.includes('removido'))) {
+      return 'Produto Removido';
+    }
+    
     return mov?.produto?.nome || 'Produto não disponível';
   };
 
@@ -41,10 +70,20 @@ const Historico = () => {
     return mov?.produto?.id || '';
   };
   
-  const getNomeUsuario = (userId) => {
-    if (!userId) return 'Usuário';
-    const usuario = usuarios.find(u => u._id === userId);
-    return usuario ? usuario.nome : 'Usuário';
+  // Função melhorada para obter o nome do usuário
+  const getNomeUsuario = (realizadoPor) => {
+    // Verificar se realizadoPor é um objeto com nome
+    if (realizadoPor && typeof realizadoPor === 'object' && realizadoPor.nome) {
+      return realizadoPor.nome;
+    }
+    
+    // Verificar se é um ID e buscar no array de usuários
+    if (realizadoPor && typeof realizadoPor === 'string') {
+      const usuario = usuarios.find(u => u._id === realizadoPor);
+      if (usuario) return usuario.nome;
+    }
+    
+    return 'Usuário';
   };
 
   useEffect(() => {
@@ -62,6 +101,7 @@ const Historico = () => {
         
         try {
           const resUsuarios = await api.get('/api/usuarios');
+          console.log('Usuários carregados:', resUsuarios.data);
           setUsuarios(resUsuarios.data || []);
         } catch (err) {
           console.warn('Não foi possível carregar usuários:', err);
@@ -83,18 +123,22 @@ const Historico = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  // Modificar a função carregarHistorico para carregar ambos os tipos de dados
+  // Modificar a função carregarHistorico para tratar datas corretamente
   const carregarHistorico = async () => {
     try {
       setCarregando(true);
       setErro(null);
       
-      // Garantir que as datas estejam no formato correto
-      const dataInicio = new Date(filtros.dataInicio);
-      const dataFim = new Date(filtros.dataFim);
+      // Converter datas para objetos Date com hora explícita para evitar problemas de fuso horário
+      const dataInicio = new Date(`${filtros.dataInicio}T00:00:00.000Z`);
+      const dataFim = new Date(`${filtros.dataFim}T23:59:59.999Z`);
       
-      // Ajustar dataFim para incluir todo o dia
-      dataFim.setHours(23, 59, 59, 999);
+      console.log('Datas selecionadas:', {
+        dataInicioSelecionada: filtros.dataInicio,
+        dataFimSelecionada: filtros.dataFim,
+        dataInicioObjeto: dataInicio.toISOString(),
+        dataFimObjeto: dataFim.toISOString()
+      });
       
       // Construir query string com filtros para vendas
       let queryVendas = `dataInicio=${dataInicio.toISOString()}&dataFim=${dataFim.toISOString()}`;
@@ -122,16 +166,15 @@ const Historico = () => {
         if (filtros.tipo) queryMovimentacoes += `&tipo=${filtros.tipo}`;
         
         const resMovimentacoes = await api.get(`/api/movimentacoes/historico?${queryMovimentacoes}`);
-        const movsRecebidas = resMovimentacoes.data.movimentacoes || [];
+        const movs = resMovimentacoes.data.movimentacoes || [];
         
-        // Filtrar movimentações para garantir que não temos produtos nulos
-        const movsFiltradas = movsRecebidas.filter(m => m.produto !== null);
-        setMovimentacoes(movsFiltradas);
+        // Log para debug das primeiras movimentações
+        console.log('Movimentações carregadas (primeiras 2):', movs.slice(0, 2));
         
-        // Avisar se algumas movimentações foram filtradas
-        if (movsRecebidas.length !== movsFiltradas.length) {
-          console.warn(`Filtradas ${movsRecebidas.length - movsFiltradas.length} movimentações com produtos inválidos`);
-        }
+        // Aceitar todas as movimentações, mesmo com produto nulo
+        setMovimentacoes(movs);
+        
+        console.log(`Carregadas ${resMovimentacoes.data.movimentacoes?.length || 0} movimentações`);
       } catch (err) {
         console.error('Erro ao carregar movimentações:', err);
         setMovimentacoes([]);
@@ -161,32 +204,64 @@ const Historico = () => {
 
   const limparFiltros = () => {
     setFiltros({
-      dataInicio: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
-      dataFim: new Date().toISOString().split('T')[0],
+      dataInicio: obterDataUmMesAtras(),
+      dataFim: obterDataHoje(),
       produto: '',
       local: '',
       tipo: ''
     });
     setFiltroAvancado(false);
+    carregarHistorico();
   };
   
   const handleTabChange = (tab) => {
     setActiveTab(tab);
+    // Não precisamos recarregar os dados já que eles são carregados para ambas as abas
   };
   
-  // Função para formatar data
+  // Função melhorada para formatar data no padrão brasileiro dd/mm/yyyy
   const formatarData = (dataString) => {
     try {
-      const data = new Date(dataString);
-      return data.toLocaleDateString('pt-BR');
+      // Para datas no formato YYYY-MM-DD (sem hora), adicionar T00:00:00 para evitar problemas de fuso
+      const dataFormatada = dataString.includes('T') ? dataString : `${dataString}T00:00:00`;
+      const data = new Date(dataFormatada);
+      
+      // Formatação explícita para DD/MM/YYYY
+      const dia = data.getUTCDate().toString().padStart(2, '0');
+      const mes = (data.getUTCMonth() + 1).toString().padStart(2, '0');
+      const ano = data.getUTCFullYear();
+      return `${dia}/${mes}/${ano}`;
     } catch (e) {
+      console.error('Erro ao formatar data:', e, dataString);
       return dataString || 'Data não disponível';
     }
   };
   
-  // Função para renderizar o ícone de tipo de movimentação
-  const renderIconeTipo = (tipo) => {
-    switch (tipo) {
+  // Função para exibir data formatada para o resumo de período
+  const formatarDataResumo = (dataString) => {
+    try {
+      // Pegar apenas a parte da data (YYYY-MM-DD)
+      const dataPura = dataString.split('T')[0];
+      
+      // Dividir em ano, mês e dia
+      const [ano, mes, dia] = dataPura.split('-');
+      
+      // Retornar no formato DD/MM/YYYY
+      return `${dia}/${mes}/${ano}`;
+    } catch (e) {
+      console.error('Erro ao formatar data para resumo:', e, dataString);
+      return dataString || 'Data não disponível';
+    }
+  };
+  
+  // Função atualizada para renderizar o ícone de tipo de movimentação
+  const renderIconeTipo = (mov) => {
+    // Detectar atualizações pela observação
+    if (mov.tipo === 'entrada' && mov.observacao && mov.observacao.includes('Produto atualizado')) {
+      return <FaPen className="icon-atualizacao" />;
+    }
+    
+    switch (mov.tipo) {
       case 'entrada':
         return <FaBoxes className="icon-entrada" />;
       case 'saida':
@@ -195,20 +270,28 @@ const Historico = () => {
         return <FaExchangeAlt className="icon-transferencia" />;
       case 'venda':
         return <FaShoppingCart className="icon-venda" />;
+      case 'atualizacao':
+        return <FaPen className="icon-atualizacao" />;
       default:
         return <FaBoxes />;
     }
   };
   
-  // Função para obter descrição legível do tipo
-  const getDescricaoTipo = (tipo) => {
+  // Função atualizada para obter descrição legível do tipo
+  const getDescricaoTipo = (mov) => {
+    // Se for entrada mas a observação contém "Produto atualizado", é uma atualização
+    if (mov.tipo === 'entrada' && mov.observacao && mov.observacao.includes('Produto atualizado')) {
+      return 'Atualização de Produto';
+    }
+    
     const tipos = {
       'entrada': 'Entrada de Estoque',
       'saida': 'Saída de Estoque',
       'transferencia': 'Transferência',
-      'venda': 'Venda'
+      'venda': 'Venda',
+      'atualizacao': 'Atualização de Produto'
     };
-    return tipos[tipo] || tipo || 'Tipo não disponível';
+    return tipos[mov.tipo] || mov.tipo || 'Tipo não disponível';
   };
 
   if (carregando && (!vendas.length && !movimentacoes.length)) {
@@ -374,7 +457,7 @@ const Historico = () => {
               <div className="resumo-item">
                 <span>Período</span>
                 <strong>
-                  {new Date(filtros.dataInicio).toLocaleDateString('pt-BR')} a {new Date(filtros.dataFim).toLocaleDateString('pt-BR')}
+                  {formatarDataResumo(filtros.dataInicio)} a {formatarDataResumo(filtros.dataFim)}
                 </strong>
               </div>
             </div>
@@ -392,7 +475,7 @@ const Historico = () => {
               <div className="resumo-item">
                 <span>Período</span>
                 <strong>
-                  {new Date(filtros.dataInicio).toLocaleDateString('pt-BR')} a {new Date(filtros.dataFim).toLocaleDateString('pt-BR')}
+                  {formatarDataResumo(filtros.dataInicio)} a {formatarDataResumo(filtros.dataFim)}
                 </strong>
               </div>
             </div>
@@ -437,7 +520,7 @@ const Historico = () => {
                         </td>
                         <td>{venda.quantidade || 0}</td>
                         <td>{venda.local || 'Local não especificado'}</td>
-                        <td>{venda.registradoPor?.nome || 'Usuário'}</td>
+                        <td>{getNomeUsuario(venda.registradoPor)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -474,36 +557,46 @@ const Historico = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {movimentacoes.map((mov, index) => (
-                      <tr key={mov._id || index} className={`movimentacao-row ${mov.tipo || 'sem-tipo'}`}>
-                        <td>{formatarData(mov.data)}</td>
-                        <td>
-                          <div className="tipo-movimentacao">
-                            {renderIconeTipo(mov.tipo)}
-                            <span>{getDescricaoTipo(mov.tipo)}</span>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="produto-info">
-                            <span className="produto-nome">{getProdutoNome(mov)}</span>
-                            <span className="produto-id">{getProdutoId(mov)}</span>
-                          </div>
-                        </td>
-                        <td>{mov.quantidade || 0}</td>
-                        <td>
-                          <div className="locais-info">
-                            <span>{mov.localOrigem || 'Local não especificado'}</span>
-                            {mov.tipo === 'transferencia' && mov.localDestino && (
-                              <>
-                                <FaArrowRight className="arrow-icon" />
-                                <span>{mov.localDestino}</span>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                        <td>{getNomeUsuario(mov.realizadoPor)}</td>
-                      </tr>
-                    ))}
+                    {movimentacoes.map((mov, index) => {
+                      // Determinar se é uma atualização baseado na observação
+                      const isAtualizacao = mov.tipo === 'entrada' && mov.observacao && mov.observacao.includes('Produto atualizado');
+                      const rowClass = isAtualizacao ? 'atualizacao' : mov.tipo || 'sem-tipo';
+                      
+                      return (
+                        <tr key={mov._id || index} className={`movimentacao-row ${rowClass}`}>
+                          <td>{formatarData(mov.data)}</td>
+                          <td>
+                            <div className="tipo-movimentacao">
+                              {renderIconeTipo(mov)}
+                              <span>{getDescricaoTipo(mov)}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="produto-info">
+                              <span className="produto-nome">{getProdutoNome(mov)}</span>
+                              {mov.produto ? (
+                                <span className="produto-id">{getProdutoId(mov)}</span>
+                              ) : (
+                                <span className="produto-observacao">{mov.observacao}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td>{isAtualizacao ? '-' : mov.quantidade || 0}</td>
+                          <td>
+                            <div className="locais-info">
+                              <span>{mov.localOrigem || 'Local não especificado'}</span>
+                              {mov.tipo === 'transferencia' && mov.localDestino && (
+                                <>
+                                  <FaArrowRight className="arrow-icon" />
+                                  <span>{mov.localDestino}</span>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                          <td>{getNomeUsuario(mov.realizadoPor)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
