@@ -174,19 +174,54 @@ exports.atualizarProduto = async (req, res) => {
       });
     }
     
+    // Guardar nome original para log de alteração
+    const nomeOriginal = produto.nome;
+    const tipoOriginal = produto.tipo;
+    const categoriaOriginal = produto.categoria;
+    const subcategoriaOriginal = produto.subcategoria;
+    
     // Atualizar imagem se fornecida
     if (req.file) {
       produto.imagemUrl = `/uploads/${req.file.filename}`;
     }
     
-    // Atualizar campos
-    if (nome) produto.nome = nome;
-    if (tipo) produto.tipo = tipo;
-    if (categoria) produto.categoria = categoria;
-    if (subcategoria) produto.subcategoria = subcategoria;
+    // Verificar se houve alterações nos campos principais
+    const alteracoes = [];
+    if (nome && nome !== produto.nome) {
+      alteracoes.push(`Nome: ${nomeOriginal} → ${nome}`);
+      produto.nome = nome;
+    }
+    
+    if (tipo && tipo !== produto.tipo) {
+      alteracoes.push(`Tipo: ${tipoOriginal} → ${tipo}`);
+      produto.tipo = tipo;
+    }
+    
+    if (categoria && categoria !== produto.categoria) {
+      alteracoes.push(`Categoria: ${categoriaOriginal} → ${categoria}`);
+      produto.categoria = categoria;
+    }
+    
+    if (subcategoria && subcategoria !== produto.subcategoria) {
+      alteracoes.push(`Subcategoria: ${subcategoriaOriginal} → ${subcategoria}`);
+      produto.subcategoria = subcategoria;
+    }
     
     // Salvar alterações
     await produto.save();
+    
+    // Se houve alterações, registrar uma movimentação de atualização
+    if (alteracoes.length > 0) {
+      // Usar um tipo existente e quantidade mínima para evitar erros de validação
+      await Movimentacao.create({
+        tipo: 'entrada', // Usar tipo válido existente
+        produto: produto._id,
+        quantidade: 1, // Usar quantidade mínima válida
+        localOrigem: 'Sistema',
+        realizadoPor: req.usuario.id,
+        observacao: `Produto atualizado: ${alteracoes.join(', ')}` // Manter o registro na observação
+      });
+    }
     
     res.status(200).json({
       sucesso: true,
@@ -286,22 +321,41 @@ exports.removerProduto = async (req, res) => {
     // Remover estoque do produto
     await Estoque.deleteMany({ produto: produto._id });
     
+    // Nome do produto para usar na observação
+    const nomeProduto = produto.nome;
+    const idProduto = produto.id;
+    
     // Registrar movimentações históricas antes de remover o produto
-    await Movimentacao.create({
+    const movimentacaoSaida = await Movimentacao.create({
       tipo: 'saida',
       produto: produto._id,
-      quantidade: 1, // Alterado de 0 para 1 para satisfazer a validação
+      quantidade: 1,
       localOrigem: 'Sistema',
       realizadoPor: req.usuario.id,
-      observacao: 'Produto removido do sistema (registro de encerramento)'
+      observacao: `Produto ${idProduto} - ${nomeProduto} removido do sistema`
     });
+    
+    // Salvar a movimentação de remoção para referência
+    const movimentacaoId = movimentacaoSaida._id;
     
     // Remover o produto
     await Produto.findByIdAndDelete(req.params.id);
     
+    // IMPORTANTE: Atualizar as movimentações existentes para não perderem a referência
+    // Marcar todas as movimentações antigas desse produto para manter referência
+    await Movimentacao.updateMany(
+      { produto: produto._id },
+      { 
+        $set: { 
+          observacao: `${produto.observacao || ''} [Produto ${idProduto} - ${nomeProduto} removido]`
+        }
+      }
+    );
+    
     res.status(200).json({
       sucesso: true,
-      mensagem: 'Produto removido com sucesso'
+      mensagem: 'Produto removido com sucesso',
+      movimentacaoId: movimentacaoId
     });
   } catch (error) {
     console.error('Erro ao remover produto:', error);
