@@ -8,10 +8,8 @@ const Movimentacao = require('../models/Movimentacao');
 // Registrar uma movimentação (entrada, saída, transferência)
 router.post('/', proteger, async (req, res) => {
   try {
-    const { tipo, produto, quantidade, localOrigem, localDestino, observacao } = req.body;
-    
-    console.log('Dados recebidos:', { tipo, produto, quantidade, localOrigem, localDestino });
-    
+    const { tipo, produto, quantidade, localOrigem, localDestino, data, observacao } = req.body;
+        
     // Validar tipo de movimentação
     if (!['entrada', 'saida', 'transferencia', 'venda'].includes(tipo)) {
       return res.status(400).json({
@@ -63,6 +61,9 @@ router.post('/', proteger, async (req, res) => {
     // Processar movimentação com base no tipo
     let resultadoOperacao;
     
+    // Tratar a data para garantir que seja armazenada corretamente
+    const dataMovimentacao = data ? new Date(data) : new Date();
+
     if (tipo === 'entrada') {
       // Verificar se já existe um registro de estoque para este produto e local
       let estoque = await Estoque.findOne({ 
@@ -73,7 +74,7 @@ router.post('/', proteger, async (req, res) => {
       if (estoque) {
         // Atualizar estoque existente
         estoque.quantidade += parseInt(quantidade);
-        estoque.ultimaAtualizacao = new Date();
+        estoque.ultimaAtualizacao = dataMovimentacao;
         estoque.atualizadoPor = req.usuario.id;
         await estoque.save();
       } else {
@@ -82,6 +83,7 @@ router.post('/', proteger, async (req, res) => {
           produto: produto,
           local: localOrigem,
           quantidade: parseInt(quantidade),
+          ultimaAtualizacao: dataMovimentacao,
           atualizadoPor: req.usuario.id
         });
       }
@@ -103,7 +105,7 @@ router.post('/', proteger, async (req, res) => {
       
       // Reduzir estoque na origem
       estoqueOrigem.quantidade -= parseInt(quantidade);
-      estoqueOrigem.ultimaAtualizacao = new Date();
+      estoqueOrigem.ultimaAtualizacao = dataMovimentacao;
       estoqueOrigem.atualizadoPor = req.usuario.id;
       await estoqueOrigem.save();
       
@@ -115,7 +117,7 @@ router.post('/', proteger, async (req, res) => {
       
       if (estoqueDestino) {
         estoqueDestino.quantidade += parseInt(quantidade);
-        estoqueDestino.ultimaAtualizacao = new Date();
+        estoqueDestino.ultimaAtualizacao = dataMovimentacao;
         estoqueDestino.atualizadoPor = req.usuario.id;
         await estoqueDestino.save();
       } else {
@@ -123,6 +125,7 @@ router.post('/', proteger, async (req, res) => {
           produto: produto,
           local: localDestino,
           quantidade: parseInt(quantidade),
+          ultimaAtualizacao: dataMovimentacao,
           atualizadoPor: req.usuario.id
         });
       }
@@ -143,7 +146,7 @@ router.post('/', proteger, async (req, res) => {
       }
       
       estoque.quantidade -= parseInt(quantidade);
-      estoque.ultimaAtualizacao = new Date();
+      estoque.ultimaAtualizacao = dataMovimentacao;
       estoque.atualizadoPor = req.usuario.id;
       await estoque.save();
       
@@ -157,6 +160,7 @@ router.post('/', proteger, async (req, res) => {
       quantidade: parseInt(quantidade),
       localOrigem,
       localDestino: localDestino || undefined,
+      data: dataMovimentacao,
       realizadoPor: req.usuario.id,
       observacao
     });
@@ -181,7 +185,13 @@ router.get('/historico', proteger, async (req, res) => {
   try {
     const { dataInicio, dataFim, produto, localOrigem, tipo } = req.query;
     
-    console.log('Parâmetros de busca recebidos:', { dataInicio, dataFim, produto, localOrigem, tipo });
+    console.log('Parâmetros de busca recebidos:', {
+      dataInicio,
+      dataFim,
+      produto,
+      localOrigem,
+      tipo
+    });
     
     // Construir filtro
     const filtro = {};
@@ -192,8 +202,12 @@ router.get('/historico', proteger, async (req, res) => {
         const inicio = new Date(dataInicio);
         const fim = new Date(dataFim);
         
-        // Ajustar dataFim para incluir todo o dia
-        fim.setHours(23, 59, 59, 999);
+        console.log('Datas processadas:', {
+          dataInicioRaw: dataInicio,
+          dataFimRaw: dataFim,
+          dataInicioObj: inicio.toISOString(),
+          dataFimObj: fim.toISOString()
+        });
         
         // Verificar se as datas são válidas
         if (!isNaN(inicio.getTime()) && !isNaN(fim.getTime())) {
@@ -201,7 +215,7 @@ router.get('/historico', proteger, async (req, res) => {
             $gte: inicio,
             $lte: fim
           };
-          console.log('Filtrando por período:', inicio, 'até', fim);
+          console.log('Filtro de data aplicado:', filtro.data);
         } else {
           console.warn('Datas inválidas fornecidas:', { dataInicio, dataFim });
         }
@@ -221,30 +235,52 @@ router.get('/historico', proteger, async (req, res) => {
     }
     
     if (tipo) {
-      filtro.tipo = tipo;
-      console.log('Filtrando por tipo:', tipo);
+      // Caso especial para atualizações
+      if (tipo === 'atualizacao') {
+        // Usar operador $or para buscar tanto tipo 'atualizacao' quanto 'entrada' com observação de atualização
+        filtro.$or = [
+          { tipo: 'atualizacao' },
+          { 
+            tipo: 'entrada', 
+            observacao: { $regex: /Produto atualizado/i }
+          }
+        ];
+        console.log('Filtrando por atualizações de produto (lógica especial)');
+      }
+      // Caso especial para entrada - EXCLUIR atualizações
+      else if (tipo === 'entrada') {
+        filtro.tipo = 'entrada';
+        // Excluir entradas que são atualizações
+        filtro.observacao = { $not: { $regex: /Produto atualizado/i } };
+        console.log('Filtrando por entradas regulares (excluindo atualizações)');
+      }
+      else {
+        // Para outros tipos, filtro normal
+        filtro.tipo = tipo;
+        console.log('Filtrando por tipo:', tipo);
+      }
     }
     
-    // Garantir que apenas movimentações com produtos válidos sejam retornadas
-    filtro.produto = { $ne: null };
+    console.log('Filtro final:', filtro);
     
-    console.log('Filtro de busca montado:', JSON.stringify(filtro));
-    
-    // Buscar movimentações com populate para obter detalhes do produto e realizador
+    // Buscar todas as movimentações sem filtrar produtos nulos
     const movimentacoes = await Movimentacao.find(filtro)
       .populate('produto', 'id nome tipo categoria subcategoria')
       .populate('realizadoPor', 'nome')
       .sort({ data: -1 });
     
-    // Filtrar movimentações para garantir que apenas aquelas com produto preenchido sejam retornadas
-    const movimentacoesFiltradas = movimentacoes.filter(m => m.produto !== null);
-    
-    console.log(`Encontradas ${movimentacoesFiltradas.length} movimentações válidas`);
+    // log para depuração
+    console.log(`Encontradas ${movimentacoes.length} movimentações - Exemplo:`, 
+      movimentacoes.length > 0 ? {
+        _id: movimentacoes[0]._id,
+        tipo: movimentacoes[0].tipo,
+        realizadoPor: movimentacoes[0].realizadoPor
+      } : 'Nenhuma');
     
     res.status(200).json({
       sucesso: true,
-      contagem: movimentacoesFiltradas.length,
-      movimentacoes: movimentacoesFiltradas
+      contagem: movimentacoes.length,
+      movimentacoes: movimentacoes
     });
   } catch (error) {
     console.error('Erro ao listar movimentações:', error);
