@@ -6,5 +6,6 @@ const { proteger } = require('../middlewares/auth');
 // Rotas de vendas
 router.post('/', proteger, vendaController.registrarVenda);
 router.get('/', proteger, vendaController.listarVendas);
+router.get('/historico', proteger, vendaController.listarHistorico);
 
 module.exports = router;

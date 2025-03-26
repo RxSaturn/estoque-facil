@@ -82,12 +82,22 @@ exports.registrarVenda = async (req, res) => {
 // Listar vendas
 exports.listarVendas = async (req, res) => {
   try {
-    const { dataInicio, dataFim, produto, local } = req.query;
+    const { 
+      dataInicio, dataFim, produto, local,
+      page = 1, limit = 20 
+    } = req.query;
     
-    console.log('Parâmetros de busca recebidos:', { dataInicio, dataFim, produto, local });
+    // Converter para números
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
     
     // Construir filtro
     const filtro = {};
+    
+    console.log('Parâmetros de busca recebidos:', {
+      dataInicio, dataFim, produto, local,
+      page: pageNum, limit: limitNum
+    });
     
     // Tratamento de datas com validação
     if (dataInicio && dataFim) {
@@ -122,24 +132,66 @@ exports.listarVendas = async (req, res) => {
     
     console.log('Filtro de busca montado:', JSON.stringify(filtro));
     
-    // Buscar vendas com populate para obter detalhes do produto
+    // Contar total de vendas que correspondem ao filtro
+    const total = await Venda.countDocuments(filtro);
+    
+    // Buscar vendas com filtro e paginação
     const vendas = await Venda.find(filtro)
       .populate('produto', 'id nome tipo categoria subcategoria')
       .populate('registradoPor', 'nome')
-      .sort({ dataVenda: -1 });
+      .sort({ dataVenda: -1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
     
-    console.log(`Encontradas ${vendas.length} vendas`);
+    console.log(`Encontradas ${total} vendas no total, mostrando ${vendas.length} resultados`);
     
     res.status(200).json({
       sucesso: true,
-      contagem: vendas.length,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
       vendas
     });
   } catch (error) {
-    console.error('Erro ao listar vendas:', error);
+    console.error('Erro ao listar histórico de vendas:', error);
     res.status(500).json({
       sucesso: false,
-      mensagem: 'Erro ao listar vendas',
+      mensagem: 'Erro ao listar histórico de vendas',
+      erro: error.message
+    });
+  }
+};
+
+// Novo método - Listar histórico de vendas (alias para listarVendas, para compatibilidade com frontend)
+exports.listarHistorico = async (req, res) => {
+  try {
+    console.log('Acessando endpoint /vendas/historico');
+    
+    // Se as datas não estiverem definidas, definir um período padrão (último mês)
+    if (!req.query.dataInicio || !req.query.dataFim) {
+      console.log('Datas não fornecidas, definindo período padrão (último mês)');
+      
+      const dataFim = new Date();
+      const dataInicio = new Date();
+      dataInicio.setMonth(dataInicio.getMonth() - 1);
+      
+      req.query.dataInicio = dataInicio.toISOString();
+      req.query.dataFim = dataFim.toISOString();
+      
+      console.log('Período padrão definido:', {
+        dataInicio: req.query.dataInicio,
+        dataFim: req.query.dataFim
+      });
+    }
+    
+    // Reutilizar a função listarVendas para manter consistência
+    return await exports.listarVendas(req, res);
+  } catch (error) {
+    console.error('Erro ao acessar histórico de vendas:', error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: 'Erro ao acessar histórico de vendas',
       erro: error.message
     });
   }

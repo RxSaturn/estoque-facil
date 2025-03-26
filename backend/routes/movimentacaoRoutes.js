@@ -183,14 +183,18 @@ router.post('/', proteger, async (req, res) => {
 // Listar histórico de movimentações
 router.get('/historico', proteger, async (req, res) => {
   try {
-    const { dataInicio, dataFim, produto, localOrigem, tipo } = req.query;
+    const { 
+      dataInicio, dataFim, produto, localOrigem, tipo,
+      page = 1, limit = 20 
+    } = req.query;
+    
+    // Converter para números
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
     
     console.log('Parâmetros de busca recebidos:', {
-      dataInicio,
-      dataFim,
-      produto,
-      localOrigem,
-      tipo
+      dataInicio, dataFim, produto, localOrigem, tipo,
+      page: pageNum, limit: limitNum
     });
     
     // Construir filtro
@@ -262,23 +266,27 @@ router.get('/historico', proteger, async (req, res) => {
     }
     
     console.log('Filtro final:', filtro);
+
+    // Contar total de documentos que correspondem ao filtro
+    const total = await Movimentacao.countDocuments(filtro);
     
-    // Buscar todas as movimentações sem filtrar produtos nulos
+    // Buscar todas as movimentações com filtro e paginação
     const movimentacoes = await Movimentacao.find(filtro)
       .populate('produto', 'id nome tipo categoria subcategoria')
       .populate('realizadoPor', 'nome')
-      .sort({ data: -1 });
+      .sort({ data: -1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
     
     // log para depuração
-    console.log(`Encontradas ${movimentacoes.length} movimentações - Exemplo:`, 
-      movimentacoes.length > 0 ? {
-        _id: movimentacoes[0]._id,
-        tipo: movimentacoes[0].tipo,
-        realizadoPor: movimentacoes[0].realizadoPor
-      } : 'Nenhuma');
+    console.log(`Encontradas ${total} movimentações no total, mostrando ${movimentacoes.length} resultados`);
     
     res.status(200).json({
       sucesso: true,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
       contagem: movimentacoes.length,
       movimentacoes: movimentacoes
     });

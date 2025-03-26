@@ -103,30 +103,57 @@ exports.criarProduto = async (req, res) => {
   }
 };
 
-// Listar todos os produtos
+// Listar produtos com paginação
 exports.listarProdutos = async (req, res) => {
   try {
-    const { nome, tipo, categoria, subcategoria } = req.query;
+    const { 
+      categoria, subcategoria, tipo, busca,
+      page = 1, limit = 20
+    } = req.query;
     
-    // Construir filtro com base nas querystrings
+    // Converter para números
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    
+    // Construir filtro
     const filtro = {};
-    if (nome) filtro.nome = { $regex: nome, $options: 'i' };
-    if (tipo) filtro.tipo = { $regex: tipo, $options: 'i' };
-    if (categoria) filtro.categoria = { $regex: categoria, $options: 'i' };
-    if (subcategoria) filtro.subcategoria = { $regex: subcategoria, $options: 'i' };
     
-    const produtos = await Produto.find(filtro);
+    if (categoria) filtro.categoria = categoria;
+    if (subcategoria) filtro.subcategoria = subcategoria;
+    if (tipo) filtro.tipo = tipo;
+    
+    if (busca) {
+      // Busca por nome, ID ou outras propriedades
+      filtro.$or = [
+        { nome: { $regex: busca, $options: 'i' } },
+        { id: { $regex: busca, $options: 'i' } },
+        { categoria: { $regex: busca, $options: 'i' } }
+      ];
+    }
+    
+    // Contar total de documentos que correspondem ao filtro
+    const total = await Produto.countDocuments(filtro);
+    
+    // Buscar produtos com filtro e paginação
+    const produtos = await Produto.find(filtro)
+      .sort({ updatedAt: -1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
     
     res.status(200).json({
       sucesso: true,
-      contagem: produtos.length,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
       produtos
     });
   } catch (error) {
     console.error('Erro ao listar produtos:', error);
     res.status(500).json({
       sucesso: false,
-      mensagem: 'Erro ao listar produtos'
+      mensagem: 'Erro ao listar produtos',
+      erro: error.message
     });
   }
 };
