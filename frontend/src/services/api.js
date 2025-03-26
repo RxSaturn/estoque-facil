@@ -3,11 +3,17 @@ import { toast } from 'react-toastify';
 
 // Criar instância do axios com configurações padrão
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || ''
+  baseURL: process.env.REACT_APP_API_URL || '',
+  timeout: 15000 // Adicionando timeout para evitar esperas infinitas
 });
 
 // Objeto para rastrear requisições em andamento e evitar duplicações
 const pendingRequests = {};
+
+// Contador de erros de conexão para não mostrar múltiplos toasts
+let connectionErrorCount = 0;
+let connectionErrorToastId = 'connection-error-toast';
+let isReconnected = false;
 
 // Interceptor de requisições
 api.interceptors.request.use(
@@ -50,6 +56,24 @@ api.interceptors.response.use(
     const requestId = `${response.config.url}|${response.config.method}`;
     delete pendingRequests[requestId];
     
+    // Se houve problemas de conexão antes e agora está funcionando
+    if (connectionErrorCount > 0) {
+      connectionErrorCount = 0;
+      
+      // Mostrar mensagem de reconexão apenas uma vez
+      if (!isReconnected) {
+        isReconnected = true;
+        toast.dismiss(connectionErrorToastId);
+        
+        toast.success('Conexão com o servidor restaurada', {
+          autoClose: 3000,
+          onClose: () => {
+            isReconnected = false; // Reset flag para futuras desconexões
+          }
+        });
+      }
+    }
+    
     return response;
   },
   (error) => {
@@ -64,16 +88,52 @@ api.interceptors.response.use(
       delete pendingRequests[requestId];
     }
     
+    // Tratamento de erros de conexão melhorado
+    if (!error.response || error.code === 'ECONNABORTED' || 
+        error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
+      
+      connectionErrorCount++;
+      
+      // Mostrar toast apenas para o primeiro erro de conexão
+      if (connectionErrorCount === 1) {
+        toast.error(
+          <div>
+            <strong>Erro de conexão com o servidor</strong>
+            <p>Não foi possível conectar ao servidor backend.</p>
+            <p>Verifique se o servidor está rodando.</p>
+          </div>,
+          {
+            toastId: connectionErrorToastId,
+            autoClose: false,
+            closeOnClick: false
+          }
+        );
+      }
+      
+      console.error(`Erro de conexão (${connectionErrorCount}):`, error.message || 'Falha na conexão com o servidor');
+      return Promise.reject({
+        isConnectionError: true,
+        message: 'Não foi possível conectar ao servidor',
+        originalError: error
+      });
+    }
+    
     // Tratamento de erros de autenticação
     if (error.response?.status === 401) {
-      // Exibir apenas um toast para erro de autenticação
-      toast.error('Sua sessão expirou. Por favor, faça login novamente.', {
-        toastId: 'auth-error'
-      });
+      // Verificar se estamos na página de login para evitar redirecionamento em loop
+      const isLoginPage = window.location.pathname === '/login';
       
-      // Limpar token e redirecionar para login
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      if (!isLoginPage) {
+        // Exibir apenas um toast para erro de autenticação
+        toast.error('Sua sessão expirou. Por favor, faça login novamente.', {
+          toastId: 'auth-error'
+        });
+        
+        // Limpar token e redirecionar para login
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
+      
       return Promise.reject(error);
     }
     
@@ -87,5 +147,16 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Função helper para verificar status do servidor
+api.checkServerStatus = async () => {
+  try {
+    await api.get('/api/health', { timeout: 3000 });
+    return true;
+  } catch (error) {
+    console.log('Servidor indisponível:', error.message);
+    return false;
+  }
+};
 
 export default api;
