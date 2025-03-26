@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   FaShoppingCart, FaExchangeAlt, FaSearch,
   FaCalendarAlt, FaFilter, FaTimes, FaBoxes,
@@ -6,6 +6,7 @@ import {
 } from 'react-icons/fa';
 import api from '../services/api';
 import { toast } from 'react-toastify';
+import Paginacao from '../components/Paginacao';
 import './Historico.css';
 
 const Historico = () => {
@@ -42,6 +43,19 @@ const Historico = () => {
   const [locais, setLocais] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   
+  // Estado para paginação separado por tipo de visualização
+  const [paginacaoVendas, setPaginacaoVendas] = useState({
+    currentPage: 1,
+    itemsPerPage: 20,
+    totalItems: 0
+  });
+  
+  const [paginacaoMovimentacoes, setPaginacaoMovimentacoes] = useState({
+    currentPage: 1,
+    itemsPerPage: 20,
+    totalItems: 0
+  });
+
   const tiposMovimentacao = [
     { value: '', label: 'Todos os tipos' },
     { value: 'entrada', label: 'Entrada de Estoque' },
@@ -50,6 +64,30 @@ const Historico = () => {
     { value: 'venda', label: 'Venda' },
     { value: 'atualizacao', label: 'Atualização de Produto' }
   ];
+
+  // Função para lidar com a mudança de página para vendas com useCallback
+  const handleVendasPageChange = useCallback((page) => {
+    console.log('Página de vendas alterada para:', page);
+    setPaginacaoVendas(prev => ({ ...prev, currentPage: page }));
+  }, []);
+
+  // Função para lidar com a mudança de itens por página para vendas com useCallback
+  const handleVendasItemsPerPageChange = useCallback((itemsPerPage) => {
+    console.log('Itens por página de vendas alterados para:', itemsPerPage);
+    setPaginacaoVendas(prev => ({ ...prev, itemsPerPage, currentPage: 1 }));
+  }, []);
+  
+  // Função para lidar com a mudança de página para movimentações com useCallback
+  const handleMovimentacoesPageChange = useCallback((page) => {
+    console.log('Página de movimentações alterada para:', page);
+    setPaginacaoMovimentacoes(prev => ({ ...prev, currentPage: page }));
+  }, []);
+
+  // Função para lidar com a mudança de itens por página para movimentações com useCallback
+  const handleMovimentacoesItemsPerPageChange = useCallback((itemsPerPage) => {
+    console.log('Itens por página de movimentações alterados para:', itemsPerPage);
+    setPaginacaoMovimentacoes(prev => ({ ...prev, itemsPerPage, currentPage: 1 }));
+  }, []);
 
   // Funções auxiliares para lidar com dados possivelmente nulos
   const getProdutoNome = (mov) => {
@@ -85,6 +123,28 @@ const Historico = () => {
     
     return 'Usuário';
   };
+
+  // Efeito para garantir que as datas estejam sempre definidas
+  useEffect(() => {
+    // Verifica se as datas estão indefinidas e define valores padrão se necessário
+    const valoresAtualizados = {};
+    let precisaAtualizar = false;
+    
+    if (!filtros.dataInicio) {
+      valoresAtualizados.dataInicio = obterDataUmMesAtras();
+      precisaAtualizar = true;
+    }
+    
+    if (!filtros.dataFim) {
+      valoresAtualizados.dataFim = obterDataHoje();
+      precisaAtualizar = true;
+    }
+    
+    if (precisaAtualizar) {
+      console.log('Definindo valores padrão para datas:', valoresAtualizados);
+      setFiltros(prev => ({ ...prev, ...valoresAtualizados }));
+    }
+  }, [filtros.dataInicio, filtros.dataFim]);
 
   useEffect(() => {
     const carregarDados = async () => {
@@ -123,7 +183,23 @@ const Historico = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  // Modificar a função carregarHistorico para tratar datas corretamente
+  // Efeito para recarregar quando a paginação mudar
+  useEffect(() => {
+    if (!carregando && activeTab === 'vendas') {
+      carregarHistorico();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paginacaoVendas.currentPage, paginacaoVendas.itemsPerPage]);
+  
+  // Efeito para recarregar quando a paginação mudar
+  useEffect(() => {
+    if (!carregando && activeTab === 'movimentacoes') {
+      carregarHistorico();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paginacaoMovimentacoes.currentPage, paginacaoMovimentacoes.itemsPerPage]);
+  
+  // Modificar a função carregarHistorico para tratar datas corretamente e usar paginação
   const carregarHistorico = async () => {
     try {
       setCarregando(true);
@@ -133,22 +209,37 @@ const Historico = () => {
       const dataInicio = new Date(`${filtros.dataInicio}T00:00:00.000Z`);
       const dataFim = new Date(`${filtros.dataFim}T23:59:59.999Z`);
       
-      console.log('Datas selecionadas:', {
-        dataInicioSelecionada: filtros.dataInicio,
-        dataFimSelecionada: filtros.dataFim,
-        dataInicioObjeto: dataInicio.toISOString(),
-        dataFimObjeto: dataFim.toISOString()
-      });
-      
-      // Construir query string com filtros para vendas
-      let queryVendas = `dataInicio=${dataInicio.toISOString()}&dataFim=${dataFim.toISOString()}`;
-      if (filtros.produto) queryVendas += `&produto=${filtros.produto}`;
-      if (filtros.local) queryVendas += `&local=${filtros.local}`;
-      
-      // Carregar vendas sempre (não apenas quando a aba vendas estiver ativa)
-      try {
-        const resVendas = await api.get(`/api/vendas?${queryVendas}`);
-        setVendas(resVendas.data.vendas || []);
+      // Carregar vendas quando a aba vendas estiver ativa ou for a primeira carga
+      if (activeTab === 'vendas' || vendas.length === 0) {
+        try {
+          // Construir query string com filtros e paginação
+          let queryVendas = `dataInicio=${dataInicio.toISOString()}&dataFim=${dataFim.toISOString()}`;
+          if (filtros.produto) queryVendas += `&produto=${filtros.produto}`;
+          if (filtros.local) queryVendas += `&local=${filtros.local}`;
+          
+          // Adicionar parâmetros de paginação
+          queryVendas += `&page=${paginacaoVendas.currentPage}&limit=${paginacaoVendas.itemsPerPage}`;
+          
+          const resVendas = await api.get(`/api/vendas/historico?${queryVendas}`);
+          console.log('Resposta de vendas:', resVendas.data);
+          
+          // Atualizar total de itens para paginação
+          if (resVendas.data && Array.isArray(resVendas.data)) {
+          setVendas(resVendas.data);
+          setPaginacaoVendas(prev => ({
+            ...prev,
+            totalItems: resVendas.data.length
+          }));
+        } else if (resVendas.data && Array.isArray(resVendas.data.vendas)) {
+          setVendas(resVendas.data.vendas);
+          setPaginacaoVendas(prev => ({
+            ...prev,
+            totalItems: resVendas.data.total || resVendas.data.vendas.length
+          }));
+        } else {
+          console.warn('Formato da resposta de vendas inesperado:', resVendas.data);
+          setVendas([]);
+        }
       } catch (err) {
         console.error('Erro ao carregar vendas:', err);
         setVendas([]);
@@ -156,31 +247,43 @@ const Historico = () => {
           toast.error('Erro ao carregar histórico de vendas');
         }
       }
+    }
       
-      // Carregar movimentações sempre (não apenas quando a aba movimentações estiver ativa)
-      try {
-        // Construir query para movimentações
-        let queryMovimentacoes = `dataInicio=${dataInicio.toISOString()}&dataFim=${dataFim.toISOString()}`;
-        if (filtros.produto) queryMovimentacoes += `&produto=${filtros.produto}`;
-        if (filtros.local) queryMovimentacoes += `&localOrigem=${filtros.local}`;
-        if (filtros.tipo) queryMovimentacoes += `&tipo=${filtros.tipo}`;
-        
-        const resMovimentacoes = await api.get(`/api/movimentacoes/historico?${queryMovimentacoes}`);
-        const movs = resMovimentacoes.data.movimentacoes || [];
-        
-        // Log para debug das primeiras movimentações
-        console.log('Movimentações carregadas (primeiras 2):', movs.slice(0, 2));
-        
-        // Aceitar todas as movimentações, mesmo com produto nulo
-        setMovimentacoes(movs);
-        
-        console.log(`Carregadas ${resMovimentacoes.data.movimentacoes?.length || 0} movimentações`);
-      } catch (err) {
-        console.error('Erro ao carregar movimentações:', err);
-        setMovimentacoes([]);
-        if (activeTab === 'movimentacoes') {
-          toast.error('Erro ao carregar histórico de movimentações');
-          setErro('Falha ao carregar histórico de movimentações');
+      // Carregar movimentações quando a aba movimentações estiver ativa ou for a primeira carga
+      if (activeTab === 'movimentacoes' || movimentacoes.length === 0) {
+        try {
+          // Construir query para movimentações
+          let queryMovimentacoes = `dataInicio=${dataInicio.toISOString()}&dataFim=${dataFim.toISOString()}`;
+          if (filtros.produto) queryMovimentacoes += `&produto=${filtros.produto}`;
+          if (filtros.local) queryMovimentacoes += `&localOrigem=${filtros.local}`;
+          if (filtros.tipo) queryMovimentacoes += `&tipo=${filtros.tipo}`;
+          
+          // Adicionar parâmetros de paginação
+          queryMovimentacoes += `&page=${paginacaoMovimentacoes.currentPage}&limit=${paginacaoMovimentacoes.itemsPerPage}`;
+          
+          const resMovimentacoes = await api.get(`/api/movimentacoes/historico?${queryMovimentacoes}`);
+          const movs = resMovimentacoes.data.movimentacoes || [];
+          
+          // Log para debug das primeiras movimentações
+          console.log('Movimentações carregadas (primeiras 2):', movs.slice(0, 2));
+          
+          // Aceitar todas as movimentações, mesmo com produto nulo
+          setMovimentacoes(movs);
+          
+          // Atualizar total de itens para paginação
+          setPaginacaoMovimentacoes(prev => ({
+            ...prev,
+            totalItems: resMovimentacoes.data.total || resMovimentacoes.data.contagem
+          }));
+          
+          console.log(`Carregadas ${resMovimentacoes.data.movimentacoes?.length || 0} movimentações de um total de ${resMovimentacoes.data.total || 'desconhecido'}`);
+        } catch (err) {
+          console.error('Erro ao carregar movimentações:', err);
+          setMovimentacoes([]);
+          if (activeTab === 'movimentacoes') {
+            toast.error('Erro ao carregar histórico de movimentações');
+            setErro('Falha ao carregar histórico de movimentações');
+          }
         }
       }
     } catch (error) {
@@ -199,6 +302,14 @@ const Historico = () => {
 
   const aplicarFiltros = (e) => {
     e.preventDefault();
+    
+    // Resetar paginação ao aplicar novos filtros
+    if (activeTab === 'vendas') {
+      setPaginacaoVendas(prev => ({ ...prev, currentPage: 1 }));
+    } else {
+      setPaginacaoMovimentacoes(prev => ({ ...prev, currentPage: 1 }));
+    }
+    
     carregarHistorico();
   };
 
@@ -210,13 +321,24 @@ const Historico = () => {
       local: '',
       tipo: ''
     });
+    
+    // Resetar paginação ao limpar filtros
+    if (activeTab === 'vendas') {
+      setPaginacaoVendas(prev => ({ ...prev, currentPage: 1 }));
+    } else {
+      setPaginacaoMovimentacoes(prev => ({ ...prev, currentPage: 1 }));
+    }
+    
     setFiltroAvancado(false);
     carregarHistorico();
   };
   
   const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    // Não precisamos recarregar os dados já que eles são carregados para ambas as abas
+    if (tab !== activeTab) {
+      setActiveTab(tab);
+      // Recarregar os dados para garantir que estejam atualizados para a aba selecionada
+      setTimeout(() => carregarHistorico(), 0);
+    }
   };
   
   // Função melhorada para formatar data no padrão brasileiro dd/mm/yyyy
@@ -448,10 +570,10 @@ const Historico = () => {
             <div className="resumo-info">
               <div className="resumo-item">
                 <span>Total de Vendas</span>
-                <strong>{vendas.length}</strong>
+                <strong>{paginacaoVendas.totalItems}</strong>
               </div>
               <div className="resumo-item">
-                <span>Produtos Vendidos</span>
+                <span>Produtos Vendidos (na página)</span>
                 <strong>{vendas.reduce((total, venda) => total + (venda.quantidade || 0), 0)}</strong>
               </div>
               <div className="resumo-item">
@@ -466,10 +588,10 @@ const Historico = () => {
             <div className="resumo-info">
               <div className="resumo-item">
                 <span>Total de Movimentações</span>
-                <strong>{movimentacoes.length}</strong>
+                <strong>{paginacaoMovimentacoes.totalItems}</strong>
               </div>
               <div className="resumo-item">
-                <span>Itens Movimentados</span>
+                <span>Itens Movimentados (na página)</span>
                 <strong>{movimentacoes.reduce((total, mov) => total + (mov.quantidade || 0), 0)}</strong>
               </div>
               <div className="resumo-item">
@@ -491,41 +613,51 @@ const Historico = () => {
             <h3>Histórico de Vendas</h3>
             
             {vendas.length > 0 ? (
-              <div className="table-responsive">
-                <table className="historico-table">
-                  <thead>
-                    <tr>
-                      <th>Data</th>
-                      <th>Produto</th>
-                      <th>Quantidade</th>
-                      <th>Local</th>
-                      <th>Registrado por</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vendas.map((venda, index) => (
-                      <tr key={venda._id || index}>
-                        <td>{formatarData(venda.dataVenda)}</td>
-                        <td>
-                          {venda.produto ? (
-                            <div className="produto-info">
-                              <span className="produto-nome">{venda.produto.nome}</span>
-                              <span className="produto-id">{venda.produto.id}</span>
-                            </div>
-                          ) : (
-                            <div className="produto-info">
-                              <span className="produto-nome">Produto não disponível</span>
-                            </div>
-                          )}
-                        </td>
-                        <td>{venda.quantidade || 0}</td>
-                        <td>{venda.local || 'Local não especificado'}</td>
-                        <td>{getNomeUsuario(venda.registradoPor)}</td>
+              <>
+                <div className="table-responsive">
+                  <table className="historico-table">
+                    <thead>
+                      <tr>
+                        <th>Data</th>
+                        <th>Produto</th>
+                        <th>Quantidade</th>
+                        <th>Local</th>
+                        <th>Registrado por</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {vendas.map((venda, index) => (
+                        <tr key={venda._id || index}>
+                          <td>{formatarData(venda.dataVenda)}</td>
+                          <td>
+                            {venda.produto ? (
+                              <div className="produto-info">
+                                <span className="produto-nome">{venda.produto.nome}</span>
+                                <span className="produto-id">{venda.produto.id}</span>
+                              </div>
+                            ) : (
+                              <div className="produto-info">
+                                <span className="produto-nome">Produto não disponível</span>
+                              </div>
+                            )}
+                          </td>
+                          <td>{venda.quantidade || 0}</td>
+                          <td>{venda.local || 'Local não especificado'}</td>
+                          <td>{getNomeUsuario(venda.registradoPor)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {/* Componente de Paginação para Vendas */}
+                <Paginacao
+                  totalItems={paginacaoVendas.totalItems}
+                  onPageChange={handleVendasPageChange}
+                  onItemsPerPageChange={handleVendasItemsPerPageChange}
+                  pageName="historico_vendas"
+                />
+              </>
             ) : (
               <div className="empty-state">
                 <FaShoppingCart className="icon" />
@@ -544,62 +676,73 @@ const Historico = () => {
             <h3>Histórico de Movimentações</h3>
             
             {movimentacoes.length > 0 ? (
-              <div className="table-responsive">
-                <table className="historico-table movimentacao-table">
-                  <thead>
-                    <tr>
-                      <th>Data</th>
-                      <th>Tipo</th>
-                      <th>Produto</th>
-                      <th>Quantidade</th>
-                      <th>Locais</th>
-                      <th>Realizado por</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {movimentacoes.map((mov, index) => {
-                      // Determinar se é uma atualização baseado na observação
-                      const isAtualizacao = mov.tipo === 'entrada' && mov.observacao && mov.observacao.includes('Produto atualizado');
-                      const rowClass = isAtualizacao ? 'atualizacao' : mov.tipo || 'sem-tipo';
-                      
-                      return (
-                        <tr key={mov._id || index} className={`movimentacao-row ${rowClass}`}>
-                          <td>{formatarData(mov.data)}</td>
-                          <td>
-                            <div className="tipo-movimentacao">
-                              {renderIconeTipo(mov)}
-                              <span>{getDescricaoTipo(mov)}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="produto-info">
-                              <span className="produto-nome">{getProdutoNome(mov)}</span>
-                              {mov.produto ? (
-                                <span className="produto-id">{getProdutoId(mov)}</span>
-                              ) : (
-                                <span className="produto-observacao">{mov.observacao}</span>
-                              )}
-                            </div>
-                          </td>
-                          <td>{isAtualizacao ? '-' : mov.quantidade || 0}</td>
-                          <td>
-                            <div className="locais-info">
-                              <span>{mov.localOrigem || 'Local não especificado'}</span>
-                              {mov.tipo === 'transferencia' && mov.localDestino && (
-                                <>
-                                  <FaArrowRight className="arrow-icon" />
-                                  <span>{mov.localDestino}</span>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                          <td>{getNomeUsuario(mov.realizadoPor)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="table-responsive">
+                  <table className="historico-table movimentacao-table">
+                    <thead>
+                      <tr>
+                        <th>Data</th>
+                        <th>Tipo</th>
+                        <th>Produto</th>
+                        <th>Quantidade</th>
+                        <th>Locais</th>
+                        <th>Realizado por</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {movimentacoes.map((mov, index) => {
+                        // Determinar se é uma atualização baseado na observação
+                        const isAtualizacao = mov.tipo === 'atualizacao' || 
+                          (mov.tipo === 'entrada' && mov.observacao && mov.observacao.includes('Produto atualizado'));
+                        const rowClass = isAtualizacao ? 'atualizacao' : mov.tipo || 'sem-tipo';
+                        
+                        return (
+                          <tr key={mov._id || index} className={`movimentacao-row ${rowClass}`}>
+                            <td>{formatarData(mov.data)}</td>
+                            <td>
+                              <div className="tipo-movimentacao">
+                                {renderIconeTipo(mov)}
+                                <span>{getDescricaoTipo(mov)}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="produto-info">
+                                <span className="produto-nome">{getProdutoNome(mov)}</span>
+                                {mov.produto ? (
+                                  <span className="produto-id">{getProdutoId(mov)}</span>
+                                ) : (
+                                  <span className="produto-observacao">{mov.observacao}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td>{isAtualizacao ? '-' : mov.quantidade || 0}</td>
+                            <td>
+                              <div className="locais-info">
+                                <span>{mov.localOrigem || 'Local não especificado'}</span>
+                                {mov.tipo === 'transferencia' && mov.localDestino && (
+                                  <>
+                                    <FaArrowRight className="arrow-icon" />
+                                    <span>{mov.localDestino}</span>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                            <td>{getNomeUsuario(mov.realizadoPor)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {/* Componente de Paginação para Movimentações */}
+                <Paginacao
+                  totalItems={paginacaoMovimentacoes.totalItems}
+                  onPageChange={handleMovimentacoesPageChange}
+                  onItemsPerPageChange={handleMovimentacoesItemsPerPageChange}
+                  pageName="historico_movimentacoes"
+                />
+              </>
             ) : (
               <div className="empty-state">
                 <FaExchangeAlt className="icon" />
