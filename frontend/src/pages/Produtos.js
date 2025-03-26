@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { FaPlus, FaEdit, FaTrash, FaSearch, FaFilter, FaTimes, FaExclamationTriangle } from 'react-icons/fa';
 import api from '../services/api';
 import { toast } from 'react-toastify';
+import Paginacao from '../components/Paginacao';
 import './Produtos.css';
 
 const Produtos = () => {
-  const [produtos, setProdutos] = useState([]);
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState('');
@@ -33,131 +33,234 @@ const Produtos = () => {
   const [erroExclusao, setErroExclusao] = useState(null);
   const [estoqueZerado, setEstoqueZerado] = useState(false);
 
-  // Função para carregar todos os produtos
-  const carregarProdutos = async () => {
+  // Estado para paginação
+  const [paginacao, setPaginacao] = useState({
+    currentPage: 1,
+    itemsPerPage: 20,
+    totalItems: 0
+  });
+  
+  // Refs para controlar carregamentos e evitar ciclos
+  const shouldFetchData = useRef(true);
+  const fetchRequested = useRef(false);
+  const requestInProgress = useRef(false);
+  
+  // Controle avançado de estados de paginação
+  const paginacaoRef = useRef({
+    currentPage: 1,
+    itemsPerPage: 20,
+    totalItems: 0
+  });
+  
+  // Referência aos filtros atuais para evitar ciclos
+  const filtrosRef = useRef({
+    tipo: '',
+    categoria: '',
+    subcategoria: '',
+    busca: ''
+  });
+
+  // Função para carregar produtos sem depender de estados
+  const carregarProdutosFn = useCallback(async (params = {}) => {
+    // Se já existe uma requisição em andamento, marcar que nova requisição foi solicitada
+    if (requestInProgress.current) {
+      fetchRequested.current = true;
+      return;
+    }
+    
+    requestInProgress.current = true;
+    setCarregando(true);
+    
     try {
-      setCarregando(true);
-      toast.dismiss('erro-carregar-produtos');
+      const mergedParams = {
+        page: paginacaoRef.current.currentPage,
+        limit: paginacaoRef.current.itemsPerPage,
+        tipo: filtrosRef.current.tipo,
+        categoria: filtrosRef.current.categoria,
+        subcategoria: filtrosRef.current.subcategoria,
+        busca: filtrosRef.current.busca || undefined,
+        ...params
+      };
       
-      // Fazer requisição sem filtros para obter todos os produtos
-      const resposta = await api.get('/api/produtos');
+      console.log('Buscando produtos com params:', mergedParams);
       
-      // Determinar formato correto da resposta
+      const resposta = await api.get('/api/produtos', { params: mergedParams });
+      
+      console.log('Resposta recebida:', resposta.data);
+      
       let dadosProdutos = [];
+      
       if (resposta.data && Array.isArray(resposta.data)) {
         dadosProdutos = resposta.data;
       } else if (resposta.data && resposta.data.produtos && Array.isArray(resposta.data.produtos)) {
         dadosProdutos = resposta.data.produtos;
       }
       
-      console.log('Produtos carregados:', dadosProdutos.length);
-      setProdutos(dadosProdutos);
+      // Atualizar dados sem disparar ciclos de renderização
+      setProdutosFiltrados(dadosProdutos);
       
-      // Extrair opções de filtro dos próprios produtos
-      extrairOpcoesFiltro(dadosProdutos);
+      // Atualizar total sem causar renderização em cascata
+      if (resposta.data.total) {
+        paginacaoRef.current.totalItems = resposta.data.total;
+        setPaginacao(prev => ({
+          ...prev,
+          totalItems: resposta.data.total
+        }));
+      }
       
-      // Aplicar filtros iniciais
-      aplicarFiltros(dadosProdutos, filtros, busca);
+      // Extrair opções de filtro
+      const tiposSet = new Set();
+      const categoriasSet = new Set();
+      const subcategoriasSet = new Set();
+      
+      dadosProdutos.forEach(produto => {
+        if (produto.tipo) tiposSet.add(produto.tipo);
+        if (produto.categoria) categoriasSet.add(produto.categoria);
+        if (produto.subcategoria) subcategoriasSet.add(produto.subcategoria);
+      });
+      
+      setTipos(Array.from(tiposSet).sort());
+      setCategorias(Array.from(categoriasSet).sort());
+      setSubcategorias(Array.from(subcategoriasSet).sort());
+      
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
       toast.error('Erro ao carregar produtos. Tente novamente.', {
         toastId: 'erro-carregar-produtos'
       });
-      setProdutos([]);
       setProdutosFiltrados([]);
     } finally {
       setCarregando(false);
+      requestInProgress.current = false;
+      
+      // Se uma nova requisição foi solicitada durante esta, executar após um pequeno delay
+      if (fetchRequested.current) {
+        fetchRequested.current = false;
+        setTimeout(() => {
+          carregarProdutosFn();
+        }, 100);
+      }
     }
-  };
-  
-  // Extrair opções de filtro dos produtos carregados
-  const extrairOpcoesFiltro = (produtos) => {
-    // Usar Set para eliminar duplicatas
-    const tiposSet = new Set();
-    const categoriasSet = new Set();
-    const subcategoriasSet = new Set();
-    
-    produtos.forEach(produto => {
-      if (produto.tipo) tiposSet.add(produto.tipo);
-      if (produto.categoria) categoriasSet.add(produto.categoria);
-      if (produto.subcategoria) subcategoriasSet.add(produto.subcategoria);
-    });
-    
-    // Converter Sets em Arrays e ordenar alfabeticamente
-    setTipos(Array.from(tiposSet).sort());
-    setCategorias(Array.from(categoriasSet).sort());
-    setSubcategorias(Array.from(subcategoriasSet).sort());
-    
-    console.log('Opções de filtro extraídas:', {
-      tipos: Array.from(tiposSet).length,
-      categorias: Array.from(categoriasSet).length,
-      subcategorias: Array.from(subcategoriasSet).length
-    });
-  };
-  
-  // Aplicar filtros aos produtos
-  const aplicarFiltros = (produtosOriginais, filtrosAplicados, termoBusca) => {
-    // Guardar os produtos originais ou usar os produtos atuais
-    const dadosProdutos = produtosOriginais || produtos;
-    
-    // Filtragem no cliente
-    const resultadosFiltrados = dadosProdutos.filter(produto => {
-      // Verificar termo de busca
-      const matchBusca = !termoBusca || 
-        (produto.nome && produto.nome.toLowerCase().includes(termoBusca.toLowerCase())) ||
-        (produto.id && produto.id.toLowerCase().includes(termoBusca.toLowerCase()));
-      
-      // Verificar filtros de categoria/tipo
-      const matchTipo = !filtrosAplicados.tipo || produto.tipo === filtrosAplicados.tipo;
-      const matchCategoria = !filtrosAplicados.categoria || produto.categoria === filtrosAplicados.categoria;
-      const matchSubcategoria = !filtrosAplicados.subcategoria || produto.subcategoria === filtrosAplicados.subcategoria;
-      
-      return matchBusca && matchTipo && matchCategoria && matchSubcategoria;
-    });
-    
-    setProdutosFiltrados(resultadosFiltrados);
-    console.log('Produtos filtrados:', resultadosFiltrados.length);
-  };
+  }, []);
 
-  // Efeito para carregar dados iniciais
+  // Handler de mudança de página - versão segura
+  const handlePageChange = useCallback((page) => {
+    console.log(`Mudando para página ${page}`);
+    
+    if (page === paginacaoRef.current.currentPage) return;
+    
+    // Atualizar ref antes do estado
+    paginacaoRef.current.currentPage = page;
+    
+    // Atualizar estado
+    setPaginacao(prev => ({ ...prev, currentPage: page }));
+    
+    // Carregar novos dados com a página atualizada
+    carregarProdutosFn({ page });
+  }, [carregarProdutosFn]);
+
+  // Handler de mudança de itens por página - versão segura
+  const handleItemsPerPageChange = useCallback((itemsPerPage) => {
+    console.log(`Mudando para ${itemsPerPage} itens por página`);
+    
+    if (itemsPerPage === paginacaoRef.current.itemsPerPage) return;
+    
+    // Atualizar ref antes do estado
+    paginacaoRef.current.itemsPerPage = itemsPerPage;
+    paginacaoRef.current.currentPage = 1;
+    
+    // Atualizar estado
+    setPaginacao(prev => ({ 
+      ...prev, 
+      itemsPerPage, 
+      currentPage: 1 
+    }));
+    
+    // Carregar novos dados com os parâmetros atualizados
+    carregarProdutosFn({ limit: itemsPerPage, page: 1 });
+  }, [carregarProdutosFn]);
+
+  // Efeito para carregar dados iniciais - executado apenas UMA vez
   useEffect(() => {
-    carregarProdutos();
+    console.log("Montagem inicial do componente - carregando dados");
+    
+    // Garantir que as refs estão sincronizadas com os estados iniciais
+    paginacaoRef.current = { ...paginacao };
+    filtrosRef.current = { ...filtros, busca };
+    
+    // Carregar produtos apenas uma vez na montagem
+    carregarProdutosFn();
+    
+    // Cleanup function
+    return () => {
+      shouldFetchData.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
-  // Efeito para aplicar filtros quando mudam
-  useEffect(() => {
-    aplicarFiltros(produtos, filtros, busca);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros]);
+
+  // Função para aplicar filtros sem causar loops
+  const aplicarFiltros = useCallback((novosFiltros, novaBusca) => {
+    console.log("Aplicando filtros:", novosFiltros, novaBusca);
+    
+    // Atualizar refs primeiro
+    filtrosRef.current = {
+      ...novosFiltros,
+      busca: novaBusca
+    };
+    
+    paginacaoRef.current.currentPage = 1;
+    
+    // Atualizar estados
+    setFiltros(novosFiltros);
+    setBusca(novaBusca);
+    setPaginacao(prev => ({ ...prev, currentPage: 1 }));
+    
+    // Carregar dados com novos filtros
+    carregarProdutosFn({
+      ...novosFiltros,
+      busca: novaBusca || undefined,
+      page: 1
+    });
+  }, [carregarProdutosFn]);
 
   // Função para atualizar busca
   const handleBuscaChange = (e) => {
     const novaBusca = e.target.value;
     setBusca(novaBusca);
-    
-    // Aplicar busca em tempo real
-    aplicarFiltros(produtos, filtros, novaBusca);
   };
+
+  // Aplicar busca após digitar
+  const aplicarBusca = useCallback(() => {
+    aplicarFiltros(filtros, busca);
+  }, [aplicarFiltros, filtros, busca]);
+
+  // Efeito para aplicar busca apenas quando o usuário parar de digitar
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (busca !== filtrosRef.current.busca) {
+        aplicarBusca();
+      }
+    }, 500);
+    
+    return () => clearTimeout(timeoutId);
+  }, [busca, aplicarBusca]);
 
   // Atualizar filtro
   const handleChangeFiltro = (e) => {
     const { name, value } = e.target;
     const novosFiltros = { ...filtros, [name]: value };
-    setFiltros(novosFiltros);
+    aplicarFiltros(novosFiltros, busca);
   };
 
   // Limpar todos os filtros
   const limparFiltros = () => {
-    setBusca('');
-    setFiltros({
+    const novosFiltros = {
       tipo: '',
       categoria: '',
       subcategoria: ''
-    });
+    };
     
-    // Resetar para mostrar todos os produtos
-    setProdutosFiltrados(produtos);
+    aplicarFiltros(novosFiltros, '');
   };
 
   // Função para confirmar exclusão (agora com carregamento dos dados do produto)
@@ -242,9 +345,8 @@ const Produtos = () => {
       // Agora tenta excluir o produto
       await api.delete(`/api/produtos/${excluirId}`);
       
-      // Atualizar lista de produtos
-      setProdutos(prevProdutos => prevProdutos.filter(p => p._id !== excluirId));
-      setProdutosFiltrados(prevFiltrados => prevFiltrados.filter(p => p._id !== excluirId));
+      // Atualizar lista de produtos recarregando os dados
+      carregarProdutosFn();
       
       toast.success('Produto removido com sucesso!');
       
@@ -289,6 +391,7 @@ const Produtos = () => {
         
         <div className="filter-controls">
           <button
+            type="button"
             className={`btn btn-outline filter-btn ${filtroAvancado ? 'active' : ''}`}
             onClick={() => setFiltroAvancado(!filtroAvancado)}
           >
@@ -297,6 +400,7 @@ const Produtos = () => {
           
           {(busca || filtros.tipo || filtros.categoria || filtros.subcategoria) && (
             <button
+              type="button"
               className="btn btn-outline clear-btn"
               onClick={limparFiltros}
             >
@@ -360,7 +464,7 @@ const Produtos = () => {
 
       {/* Indicador de resultados */}
       <div className="resultados-info">
-        Exibindo {produtosFiltrados.length} de {produtos.length} produtos
+        Exibindo {produtosFiltrados.length} de {paginacao.totalItems} produtos
         {(busca || filtros.tipo || filtros.categoria || filtros.subcategoria) ? ' (filtrados)' : ''}
       </div>
 
@@ -403,6 +507,7 @@ const Produtos = () => {
                       <FaEdit /> Editar
                     </Link>
                     <button 
+                      type="button"
                       className="btn btn-sm btn-danger"
                       onClick={() => confirmarExclusao(produto._id)}
                     >
@@ -426,6 +531,16 @@ const Produtos = () => {
                 </Link>
               )}
             </div>
+          )}
+
+          {/* Componente de Paginação */}
+          {produtosFiltrados.length > 0 && (
+            <Paginacao
+              totalItems={paginacao.totalItems}
+              onPageChange={handlePageChange}
+              onItemsPerPageChange={handleItemsPerPageChange}
+              pageName="produtos"
+            />
           )}
         </>
       )}
@@ -466,6 +581,7 @@ const Produtos = () => {
             
             <div className="modal-actions">
               <button 
+                type="button"
                 className="btn btn-outline"
                 onClick={cancelarExclusao}
                 disabled={excluindoProduto}
@@ -473,6 +589,7 @@ const Produtos = () => {
                 Cancelar
               </button>
               <button 
+                type="button"
                 className="btn btn-danger"
                 onClick={excluirProduto}
                 disabled={excluindoProduto}
