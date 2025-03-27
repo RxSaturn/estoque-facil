@@ -4,6 +4,7 @@ const { proteger } = require('../middlewares/auth');
 const Produto = require('../models/Produto');
 const Estoque = require('../models/Estoque');
 const Movimentacao = require('../models/Movimentacao');
+const movimentacaoController = require('../controllers/movimentacaoController');
 
 // Registrar uma movimentação (entrada, saída, transferência)
 router.post('/', proteger, async (req, res) => {
@@ -299,5 +300,11 @@ router.get('/historico', proteger, async (req, res) => {
     });
   }
 });
+
+// Rota para excluir movimentações de produtos removidos (deve vir ANTES da rota de exclusão por ID)
+router.delete('/produtos-removidos', proteger, movimentacaoController.excluirMovimentacoesProdutosRemovidos);
+
+// Rota para excluir movimentação específica por ID (deve vir DEPOIS da rota específica)
+router.delete('/:id', proteger, movimentacaoController.excluirMovimentacao);
 
 module.exports = router;
