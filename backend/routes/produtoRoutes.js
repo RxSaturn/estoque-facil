@@ -1,56 +1,64 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const produtoController = require('../controllers/produtoController');
-const { proteger } = require('../middlewares/auth');
-const multer = require('multer');
-const path = require('path');
+const produtoController = require("../controllers/produtoController");
+const { proteger } = require("../middlewares/auth");
+const multer = require("multer");
+const path = require("path");
 
 // Configuração do Multer para upload de imagens
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
     cb(null, `produto-${Date.now()}${path.extname(file.originalname)}`);
-  }
+  },
 });
 
-const upload = multer({ 
+const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // Limite de 5MB
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    if (file.mimetype.startsWith("image/")) {
       cb(null, true);
     } else {
-      cb(new Error('Apenas imagens são permitidas'));
+      cb(new Error("Apenas imagens são permitidas"));
     }
-  }
+  },
 });
 
-// Rotas de produtos
-router.post('/', proteger, upload.single('imagem'), produtoController.criarProduto);
-router.get('/', proteger, produtoController.listarProdutos);
-router.get('/:id', proteger, produtoController.obterProdutoPorId);
-router.put('/:id', proteger, upload.single('imagem'), produtoController.atualizarProduto);
-router.delete('/:id', proteger, produtoController.removerProduto);
+// IMPORTANTE: A ordem das rotas é crucial!
+// Rotas específicas devem vir ANTES das rotas com parâmetros
 
-// NOVA ROTA: Zerar estoque de um produto
-router.post('/:id/zerar-estoque', proteger, produtoController.zerarEstoqueProduto);
+// Rotas para metadados (devem vir primeiro)
+router.get("/tipos", proteger, produtoController.listarTipos);
+router.get("/categorias", proteger, produtoController.listarCategorias);
+router.get("/subcategorias", proteger, produtoController.listarSubcategorias);
 
-// Rotas para obter opções de filtro
-router.get('/tipos', proteger, (req, res) => {
-  // Implementação temporária
-  res.json(['Garrafa', 'Lata', 'Caixa', 'Unidade']);
-});
+// Rotas CRUD principais
+router.post(
+  "/",
+  proteger,
+  upload.single("imagem"),
+  produtoController.criarProduto
+);
+router.get("/", proteger, produtoController.listarProdutos);
 
-router.get('/categorias', proteger, (req, res) => {
-  // Implementação temporária
-  res.json(['Bebidas', 'Alimentos', 'Limpeza', 'Eletrônicos']);
-});
+// Rotas com parâmetros (devem vir por último)
+router.get("/:id", proteger, produtoController.obterProdutoPorId);
+router.put(
+  "/:id",
+  proteger,
+  upload.single("imagem"),
+  produtoController.atualizarProduto
+);
+router.delete("/:id", proteger, produtoController.removerProduto);
 
-router.get('/subcategorias', proteger, (req, res) => {
-  // Implementação temporária
-  res.json(['Refrigerantes', 'Cervejas', 'Enlatados', 'Grãos', 'Verde', 'Azul', 'Vermelho']);
-});
+// Rota de zerar estoque
+router.post(
+  "/:id/zerar-estoque",
+  proteger,
+  produtoController.zerarEstoqueProduto
+);
 
 module.exports = router;

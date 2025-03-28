@@ -171,6 +171,65 @@ exports.listarProdutos = async (req, res) => {
   }
 };
 
+// Listar tipos de produtos
+exports.listarTipos = async (req, res) => {
+  try {
+    // Obter tipos distintos de produtos
+    const tipos = await Produto.distinct("tipo");
+
+    res.status(200).json(tipos);
+  } catch (error) {
+    console.error("Erro ao listar tipos de produtos:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao listar tipos de produtos",
+    });
+  }
+};
+
+// Listar categorias de produtos
+exports.listarCategorias = async (req, res) => {
+  try {
+    // Filtrar por tipo se fornecido
+    const filtro = {};
+    if (req.query.tipo) {
+      filtro.tipo = req.query.tipo;
+    }
+
+    // Obter categorias distintas
+    const categorias = await Produto.distinct("categoria", filtro);
+
+    res.status(200).json(categorias);
+  } catch (error) {
+    console.error("Erro ao listar categorias de produtos:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao listar categorias de produtos",
+    });
+  }
+};
+
+// Listar subcategorias de produtos
+exports.listarSubcategorias = async (req, res) => {
+  try {
+    // Filtrar por tipo e/ou categoria se fornecidos
+    const filtro = {};
+    if (req.query.tipo) filtro.tipo = req.query.tipo;
+    if (req.query.categoria) filtro.categoria = req.query.categoria;
+
+    // Obter subcategorias distintas
+    const subcategorias = await Produto.distinct("subcategoria", filtro);
+
+    res.status(200).json(subcategorias);
+  } catch (error) {
+    console.error("Erro ao listar subcategorias de produtos:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao listar subcategorias de produtos",
+    });
+  }
+};
+
 // Obter produto por ID
 exports.obterProdutoPorId = async (req, res) => {
   try {

@@ -1,15 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  FaFileAlt, 
-  FaDownload, 
-  FaChartBar, 
-  FaCalendarAlt, 
-  FaExclamationTriangle, 
-  FaBoxOpen
-} from 'react-icons/fa';
-import api from '../services/api';
-import { toast } from 'react-toastify';
-import { Bar, Pie } from 'react-chartjs-2';
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  FaFileAlt,
+  FaDownload,
+  FaChartBar,
+  FaCalendarAlt,
+  FaExclamationTriangle,
+  FaBoxOpen,
+  FaClock,
+  FaSave,
+  FaTimes,
+} from "react-icons/fa";
+import api from "../services/api";
+import { toast } from "react-toastify";
+import { Bar, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -18,9 +21,9 @@ import {
   Title,
   Tooltip,
   Legend,
-  ArcElement
-} from 'chart.js';
-import './Relatorios.css';
+  ArcElement,
+} from "chart.js";
+import "./Relatorios.css";
 
 // Registrar componentes do Chart.js
 ChartJS.register(
@@ -34,131 +37,365 @@ ChartJS.register(
 );
 
 const Relatorios = () => {
-  const [filtros, setFiltros] = useState({
-    dataInicio: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
-    dataFim: new Date().toISOString().split('T')[0],
-    tipo: '',
-    categoria: '',
-    local: ''
-  });
-  
+  // Carregar preferências salvas do localStorage, se existirem
+  const carregarPreferencias = () => {
+    const salvo = localStorage.getItem("relatorios_filtros");
+    if (salvo) {
+      try {
+        return JSON.parse(salvo);
+      } catch (e) {
+        console.error("Erro ao carregar preferências:", e);
+      }
+    }
+
+    // Valores padrão se não houver preferências
+    return {
+      dataInicio: new Date(new Date().setMonth(new Date().getMonth() - 1))
+        .toISOString()
+        .split("T")[0],
+      dataFim: new Date().toISOString().split("T")[0],
+      tipo: "",
+      categoria: "",
+      subcategoria: "",
+      local: "",
+    };
+  };
+
+  const [filtros, setFiltros] = useState(carregarPreferencias());
+  const [periodoPreDefinido, setPeriodoPreDefinido] = useState("personalizado");
   const [carregando, setCarregando] = useState(false);
   const [gerandoPDF, setGerandoPDF] = useState(false);
   const [resumo, setResumo] = useState(null);
   const [tipos, setTipos] = useState([]);
   const [categorias, setCategorias] = useState([]);
+  const [subcategorias, setSubcategorias] = useState([]);
   const [locais, setLocais] = useState([]);
-  const [activeTab, setActiveTab] = useState('geral');
-  
+  const [activeTab, setActiveTab] = useState("geral");
+  const [erroCarregamento, setErroCarregamento] = useState(null);
+  const [preferenciaSalva, setPreferenciaSalva] = useState(false);
+
+  // Função para aplicar período predefinido
+  const aplicarPeriodoPredefinido = useCallback((periodo) => {
+    const hoje = new Date();
+    let inicio = new Date();
+
+    switch (periodo) {
+      case "ultimaSemana":
+        inicio = new Date(
+          hoje.getFullYear(),
+          hoje.getMonth(),
+          hoje.getDate() - 7
+        );
+        break;
+      case "ultimoMes":
+        inicio = new Date(
+          hoje.getFullYear(),
+          hoje.getMonth() - 1,
+          hoje.getDate()
+        );
+        break;
+      case "ultimoTrimestre":
+        inicio = new Date(
+          hoje.getFullYear(),
+          hoje.getMonth() - 3,
+          hoje.getDate()
+        );
+        break;
+      case "ultimoAno":
+        inicio = new Date(
+          hoje.getFullYear() - 1,
+          hoje.getMonth(),
+          hoje.getDate()
+        );
+        break;
+      case "mesAtual":
+        inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        break;
+      case "anoAtual":
+        inicio = new Date(hoje.getFullYear(), 0, 1);
+        break;
+      default:
+        // Personalizado - não altera as datas
+        return;
+    }
+
+    setFiltros((prev) => ({
+      ...prev,
+      dataInicio: inicio.toISOString().split("T")[0],
+      dataFim: hoje.toISOString().split("T")[0],
+    }));
+
+    setPeriodoPreDefinido(periodo);
+  }, []);
+
+  // Carregar categorias quando tipo mudar
+  const carregarCategorias = useCallback(async (tipo = "") => {
+    try {
+      let url = "/api/produtos/categorias";
+      if (tipo) {
+        url += `?tipo=${tipo}`;
+      }
+
+      const resposta = await api.get(url);
+      setCategorias(resposta.data);
+    } catch (error) {
+      console.error("Erro ao carregar categorias:", error);
+      toast.error("Não foi possível carregar as categorias");
+    }
+  }, []);
+
+  // Carregar subcategorias quando tipo ou categoria mudar
+  const carregarSubcategorias = useCallback(
+    async (tipo = "", categoria = "") => {
+      try {
+        let url = "/api/produtos/subcategorias";
+        const params = [];
+
+        if (tipo) params.push(`tipo=${tipo}`);
+        if (categoria) params.push(`categoria=${categoria}`);
+
+        if (params.length > 0) {
+          url += `?${params.join("&")}`;
+        }
+
+        const resposta = await api.get(url);
+        setSubcategorias(resposta.data);
+      } catch (error) {
+        console.error("Erro ao carregar subcategorias:", error);
+        toast.error("Não foi possível carregar as subcategorias");
+      }
+    },
+    []
+  );
+
+  // IMPORTANTE: carregarResumo deve ser declarado ANTES do useEffect que o utiliza
+  const carregarResumo = useCallback(async () => {
+    try {
+      setCarregando(true);
+      setErroCarregamento(null);
+
+      // Construir query string com filtros
+      let query = `dataInicio=${filtros.dataInicio}&dataFim=${filtros.dataFim}`;
+      if (filtros.tipo) query += `&tipo=${filtros.tipo}`;
+      if (filtros.categoria) query += `&categoria=${filtros.categoria}`;
+      if (filtros.subcategoria)
+        query += `&subcategoria=${filtros.subcategoria}`;
+      if (filtros.local) query += `&local=${filtros.local}`;
+
+      const resposta = await api.get(`/api/relatorios/resumo?${query}`);
+      setResumo(resposta.data);
+    } catch (error) {
+      console.error("Erro ao carregar resumo:", error);
+      setErroCarregamento(
+        "Não foi possível gerar o relatório. Verifique os filtros e tente novamente."
+      );
+      toast.error("Erro ao gerar relatório. Tente novamente.");
+    } finally {
+      setCarregando(false);
+    }
+  }, [filtros]);
+
   // Carregar dados de filtro ao montar o componente
   useEffect(() => {
     const carregarOpcoesFiltro = async () => {
       try {
+        setErroCarregamento(null);
+        setCarregando(true);
+
         // Carregar tipos de produto
-        const resTipos = await api.get('/api/produtos/tipos');
+        const resTipos = await api.get("/api/produtos/tipos");
         setTipos(resTipos.data);
-        
-        // Carregar categorias de produto
-        const resCategorias = await api.get('/api/produtos/categorias');
-        setCategorias(resCategorias.data);
-        
+
+        // Carregar categorias iniciais
+        if (filtros.tipo) {
+          await carregarCategorias(filtros.tipo);
+        } else {
+          await carregarCategorias();
+        }
+
+        // Carregar subcategorias iniciais
+        if (filtros.tipo || filtros.categoria) {
+          await carregarSubcategorias(filtros.tipo, filtros.categoria);
+        }
+
         // Carregar locais
-        const resLocais = await api.get('/api/estoque/locais');
+        const resLocais = await api.get("/api/estoque/locais");
         setLocais(resLocais.data);
-        
+
         // Carregar dados do relatório inicial
-        carregarResumo();
+        await carregarResumo();
       } catch (error) {
-        console.error('Erro ao carregar opções de filtro:', error);
-        toast.error('Erro ao carregar dados iniciais. Tente novamente.');
+        console.error("Erro ao carregar opções de filtro:", error);
+        setErroCarregamento(
+          "Não foi possível carregar os dados iniciais. Verifique sua conexão e tente novamente."
+        );
+        toast.error("Erro ao carregar dados iniciais. Tente novamente.");
+      } finally {
+        setCarregando(false);
       }
     };
-    
+
     carregarOpcoesFiltro();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  
-  const carregarResumo = async () => {
-    try {
-      setCarregando(true);
-      
-      // Construir query string com filtros
-      let query = `dataInicio=${filtros.dataInicio}&dataFim=${filtros.dataFim}`;
-      if (filtros.tipo) query += `&tipo=${filtros.tipo}`;
-      if (filtros.categoria) query += `&categoria=${filtros.categoria}`;
-      if (filtros.local) query += `&local=${filtros.local}`;
-      
-      const resposta = await api.get(`/api/relatorios/resumo?${query}`);
-      setResumo(resposta.data);
-    } catch (error) {
-      console.error('Erro ao carregar resumo:', error);
-      toast.error('Erro ao gerar relatório. Tente novamente.');
-    } finally {
-      setCarregando(false);
-    }
-  };
-  
+  }, [
+    carregarCategorias,
+    carregarSubcategorias,
+    filtros.tipo,
+    filtros.categoria,
+    carregarResumo,
+  ]);
+
+  // Efeito para salvar preferências automaticamente
+  useEffect(() => {
+    localStorage.setItem("relatorios_filtros", JSON.stringify(filtros));
+  }, [filtros]);
+
   const gerarRelatorio = (e) => {
     e.preventDefault();
     carregarResumo();
   };
-  
+
   const handleChangeFiltro = (e) => {
     const { name, value } = e.target;
-    setFiltros(prev => ({ ...prev, [name]: value }));
+
+    // Resetar subcategoria ao mudar tipo
+    if (name === "tipo") {
+      carregarCategorias(value);
+      setFiltros((prev) => ({
+        ...prev,
+        tipo: value,
+        categoria: "",
+        subcategoria: "",
+      }));
+    }
+    // Resetar subcategoria ao mudar categoria
+    else if (name === "categoria") {
+      carregarSubcategorias(filtros.tipo, value);
+      setFiltros((prev) => ({ ...prev, categoria: value, subcategoria: "" }));
+    }
+    // Para outros filtros, apenas atualizar o valor
+    else {
+      setFiltros((prev) => ({ ...prev, [name]: value }));
+    }
+
+    // Se mudar manualmente as datas, resetar o período predefinido
+    if (name === "dataInicio" || name === "dataFim") {
+      setPeriodoPreDefinido("personalizado");
+    }
   };
-  
+
+  const handleChangePeriodo = (e) => {
+    const periodo = e.target.value;
+    aplicarPeriodoPredefinido(periodo);
+  };
+
+  const salvarPreferencias = () => {
+    localStorage.setItem("relatorios_filtros", JSON.stringify(filtros));
+    setPreferenciaSalva(true);
+    toast.success("Preferências de filtro salvas com sucesso!");
+
+    // Resetar a confirmação após 3 segundos
+    setTimeout(() => {
+      setPreferenciaSalva(false);
+    }, 3000);
+  };
+
   const handleDownloadRelatorio = async () => {
     try {
       setGerandoPDF(true);
-      
+
       // Construir query string com filtros
       let query = `dataInicio=${filtros.dataInicio}&dataFim=${filtros.dataFim}`;
       if (filtros.tipo) query += `&tipo=${filtros.tipo}`;
       if (filtros.categoria) query += `&categoria=${filtros.categoria}`;
+      if (filtros.subcategoria)
+        query += `&subcategoria=${filtros.subcategoria}`;
       if (filtros.local) query += `&local=${filtros.local}`;
-      
+
       const resposta = await api.get(`/api/relatorios/pdf?${query}`, {
-        responseType: 'blob'
+        responseType: "blob",
       });
-      
+
       // Criar objeto URL para o blob
       const url = window.URL.createObjectURL(new Blob([resposta.data]));
-      
+
       // Criar elemento de link e simular clique para download
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
-      
+
       // Nome do arquivo para download
-      const dataHoje = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
-      link.setAttribute('download', `estoque-facil-relatorio-${dataHoje}.pdf`);
-      
+      const dataHoje = new Date()
+        .toLocaleDateString("pt-BR")
+        .replace(/\//g, "-");
+      link.setAttribute("download", `estoque-facil-relatorio-${dataHoje}.pdf`);
+
       document.body.appendChild(link);
       link.click();
-      
+
       // Limpar após download
       window.URL.revokeObjectURL(url);
       document.body.removeChild(link);
-      
-      toast.success('Relatório gerado com sucesso!');
+
+      toast.success("Relatório gerado com sucesso!");
     } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      toast.error('Erro ao gerar PDF. Tente novamente.');
+      console.error("Erro ao gerar PDF:", error);
+      toast.error("Erro ao gerar PDF. Tente novamente.");
     } finally {
       setGerandoPDF(false);
     }
   };
 
+  const limparFiltros = () => {
+    const hoje = new Date();
+    const mesAtras = new Date(
+      hoje.getFullYear(),
+      hoje.getMonth() - 1,
+      hoje.getDate()
+    );
+
+    // Resetar para valores padrão
+    setFiltros({
+      dataInicio: mesAtras.toISOString().split("T")[0],
+      dataFim: hoje.toISOString().split("T")[0],
+      tipo: "",
+      categoria: "",
+      subcategoria: "",
+      local: "",
+    });
+
+    setPeriodoPreDefinido("personalizado");
+    toast.info("Filtros resetados com sucesso!");
+  };
+
   return (
     <div className="relatorios-container">
       <h1 className="page-title">Relatórios</h1>
-      
+
       <div className="card filtros-card">
         <h2>
           <FaCalendarAlt /> Período e Filtros
         </h2>
-        
+
         <form onSubmit={gerarRelatorio}>
+          {/* Períodos predefinidos */}
+          <div className="periodos-predefinidos">
+            <label>
+              <FaClock /> Período Predefinido:
+            </label>
+            <select
+              value={periodoPreDefinido}
+              onChange={handleChangePeriodo}
+              className="periodo-select"
+            >
+              <option value="personalizado">Personalizado</option>
+              <option value="ultimaSemana">Última Semana</option>
+              <option value="ultimoMes">Último Mês</option>
+              <option value="ultimoTrimestre">Último Trimestre</option>
+              <option value="ultimoAno">Último Ano</option>
+              <option value="mesAtual">Mês Atual</option>
+              <option value="anoAtual">Ano Atual</option>
+            </select>
+          </div>
+
           <div className="filtros-grid">
             <div className="form-group">
               <label htmlFor="dataInicio">Data Inicial</label>
@@ -171,7 +408,7 @@ const Relatorios = () => {
                 required
               />
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="dataFim">Data Final</label>
               <input
@@ -184,7 +421,7 @@ const Relatorios = () => {
                 min={filtros.dataInicio}
               />
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="tipo">Tipo de Produto</label>
               <select
@@ -195,11 +432,13 @@ const Relatorios = () => {
               >
                 <option value="">Todos</option>
                 {tipos.map((tipo, index) => (
-                  <option key={index} value={tipo}>{tipo}</option>
+                  <option key={index} value={tipo}>
+                    {tipo}
+                  </option>
                 ))}
               </select>
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="categoria">Categoria</label>
               <select
@@ -207,14 +446,35 @@ const Relatorios = () => {
                 name="categoria"
                 value={filtros.categoria}
                 onChange={handleChangeFiltro}
+                disabled={!filtros.tipo}
               >
                 <option value="">Todas</option>
                 {categorias.map((categoria, index) => (
-                  <option key={index} value={categoria}>{categoria}</option>
+                  <option key={index} value={categoria}>
+                    {categoria}
+                  </option>
                 ))}
               </select>
             </div>
-            
+
+            <div className="form-group">
+              <label htmlFor="subcategoria">Subcategoria</label>
+              <select
+                id="subcategoria"
+                name="subcategoria"
+                value={filtros.subcategoria}
+                onChange={handleChangeFiltro}
+                disabled={!filtros.categoria}
+              >
+                <option value="">Todas</option>
+                {subcategorias.map((subcategoria, index) => (
+                  <option key={index} value={subcategoria}>
+                    {subcategoria}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="form-group">
               <label htmlFor="local">Local</label>
               <select
@@ -225,33 +485,60 @@ const Relatorios = () => {
               >
                 <option value="">Todos</option>
                 {locais.map((local, index) => (
-                  <option key={index} value={local}>{local}</option>
+                  <option key={index} value={local}>
+                    {local}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
-          
+
           <div className="filtros-actions">
-            <button 
+            <button
               type="submit"
               className="btn btn-primary"
               disabled={carregando}
             >
-              {carregando ? 'Gerando...' : 'Gerar Relatório'}
+              {carregando ? "Gerando..." : "Gerar Relatório"}
             </button>
-            
-            <button 
+
+            <button
               type="button"
               className="btn btn-secondary"
               onClick={handleDownloadRelatorio}
               disabled={!resumo || gerandoPDF}
             >
-              <FaDownload /> {gerandoPDF ? 'Gerando PDF...' : 'Baixar PDF'}
+              <FaDownload /> {gerandoPDF ? "Gerando PDF..." : "Baixar PDF"}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={salvarPreferencias}
+              title="Salvar estas configurações de filtro"
+            >
+              <FaSave /> {preferenciaSalva ? "Salvo!" : "Salvar Preferências"}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-outline-danger"
+              onClick={limparFiltros}
+              title="Resetar todos os filtros"
+            >
+              <FaTimes /> Limpar
             </button>
           </div>
         </form>
       </div>
-      
+
+      {erroCarregamento && (
+        <div className="erro-card">
+          <FaExclamationTriangle className="erro-icon" />
+          <p>{erroCarregamento}</p>
+        </div>
+      )}
+
       {carregando ? (
         <div className="loading-container">
           <div className="loading-spinner"></div>
@@ -264,82 +551,91 @@ const Relatorios = () => {
             <div>
               <h2>Relatório de Estoque e Vendas</h2>
               <p>
-                Período: {new Date(filtros.dataInicio).toLocaleDateString('pt-BR')} a {new Date(filtros.dataFim).toLocaleDateString('pt-BR')}
+                Período:{" "}
+                {new Date(filtros.dataInicio).toLocaleDateString("pt-BR")} a{" "}
+                {new Date(filtros.dataFim).toLocaleDateString("pt-BR")}
               </p>
               {filtros.tipo && <p>Tipo: {filtros.tipo}</p>}
               {filtros.categoria && <p>Categoria: {filtros.categoria}</p>}
+              {filtros.subcategoria && (
+                <p>Subcategoria: {filtros.subcategoria}</p>
+              )}
               {filtros.local && <p>Local: {filtros.local}</p>}
             </div>
-            
+
             <div className="relatorio-sumario">
               <div className="sumario-item">
                 <p>Total de Produtos</p>
                 <h3>{resumo.totalProdutos}</h3>
               </div>
-              
+
               <div className="sumario-item">
                 <p>Total de Vendas</p>
                 <h3>{resumo.totalVendas}</h3>
               </div>
-              
+
               <div className="sumario-item">
                 <p>Itens Sem Movimentação</p>
                 <h3>{resumo.semMovimentacao}</h3>
               </div>
             </div>
           </div>
-          
+
           {/* Tabs para visualização de diferentes relatórios */}
           <div className="relatorio-tabs">
-            <button 
-              className={`tab-btn ${activeTab === 'geral' ? 'active' : ''}`}
-              onClick={() => setActiveTab('geral')}
+            <button
+              className={`tab-btn ${activeTab === "geral" ? "active" : ""}`}
+              onClick={() => setActiveTab("geral")}
             >
               <FaChartBar /> Visão Geral
             </button>
-            <button 
-              className={`tab-btn ${activeTab === 'topProdutos' ? 'active' : ''}`}
-              onClick={() => setActiveTab('topProdutos')}
+            <button
+              className={`tab-btn ${
+                activeTab === "topProdutos" ? "active" : ""
+              }`}
+              onClick={() => setActiveTab("topProdutos")}
             >
               <FaBoxOpen /> Top Produtos
             </button>
-            <button 
-              className={`tab-btn ${activeTab === 'semMovimentacao' ? 'active' : ''}`}
-              onClick={() => setActiveTab('semMovimentacao')}
+            <button
+              className={`tab-btn ${
+                activeTab === "semMovimentacao" ? "active" : ""
+              }`}
+              onClick={() => setActiveTab("semMovimentacao")}
             >
               <FaExclamationTriangle /> Sem Movimentação
             </button>
           </div>
-          
+
           {/* Conteúdo da tab selecionada */}
           <div className="tab-content">
-            {activeTab === 'geral' && (
+            {activeTab === "geral" && (
               <div className="tab-geral">
                 <div className="graficos-grid">
                   <div className="grafico-card">
                     <h3>Vendas por Categoria</h3>
                     <div className="grafico">
                       {resumo.vendasPorCategoria.labels.length > 0 ? (
-                        <Bar 
+                        <Bar
                           data={{
                             labels: resumo.vendasPorCategoria.labels,
                             datasets: [
                               {
-                                label: 'Quantidade Vendida',
+                                label: "Quantidade Vendida",
                                 data: resumo.vendasPorCategoria.dados,
-                                backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                                borderColor: 'rgba(54, 162, 235, 1)',
-                                borderWidth: 1
-                              }
-                            ]
+                                backgroundColor: "rgba(54, 162, 235, 0.6)",
+                                borderColor: "rgba(54, 162, 235, 1)",
+                                borderWidth: 1,
+                              },
+                            ],
                           }}
-                          options={{ 
+                          options={{
                             responsive: true,
                             plugins: {
                               legend: {
-                                display: false
-                              }
-                            }
+                                display: false,
+                              },
+                            },
                           }}
                         />
                       ) : (
@@ -347,28 +643,28 @@ const Relatorios = () => {
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="grafico-card">
                     <h3>Estoque por Local</h3>
                     <div className="grafico">
                       {resumo.estoquePorLocal.labels.length > 0 ? (
-                        <Pie 
+                        <Pie
                           data={{
                             labels: resumo.estoquePorLocal.labels,
                             datasets: [
                               {
                                 data: resumo.estoquePorLocal.dados,
                                 backgroundColor: [
-                                  'rgba(54, 162, 235, 0.6)',
-                                  'rgba(255, 99, 132, 0.6)',
-                                  'rgba(255, 206, 86, 0.6)',
-                                  'rgba(75, 192, 192, 0.6)',
-                                  'rgba(153, 102, 255, 0.6)',
-                                  'rgba(255, 159, 64, 0.6)'
+                                  "rgba(54, 162, 235, 0.6)",
+                                  "rgba(255, 99, 132, 0.6)",
+                                  "rgba(255, 206, 86, 0.6)",
+                                  "rgba(75, 192, 192, 0.6)",
+                                  "rgba(153, 102, 255, 0.6)",
+                                  "rgba(255, 159, 64, 0.6)",
                                 ],
-                                borderWidth: 1
-                              }
-                            ]
+                                borderWidth: 1,
+                              },
+                            ],
                           }}
                           options={{ responsive: true }}
                         />
@@ -378,40 +674,58 @@ const Relatorios = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="indicadores">
                   <div className="indicador-card">
                     <h3>Estatísticas do Período</h3>
                     <div className="indicadores-grid">
                       <div className="indicador">
-                        <p className="indicador-titulo">Média de Vendas Diárias</p>
-                        <p className="indicador-valor">{resumo.mediaVendasDiarias.toFixed(2)}</p>
+                        <p className="indicador-titulo">
+                          Média de Vendas Diárias
+                        </p>
+                        <p className="indicador-valor">
+                          {resumo.mediaVendasDiarias.toFixed(2)}
+                        </p>
                       </div>
-                      
+
                       <div className="indicador">
-                        <p className="indicador-titulo">Total de Itens Vendidos</p>
-                        <p className="indicador-valor">{resumo.totalItensVendidos}</p>
+                        <p className="indicador-titulo">
+                          Total de Itens Vendidos
+                        </p>
+                        <p className="indicador-valor">
+                          {resumo.totalItensVendidos}
+                        </p>
                       </div>
-                      
+
                       <div className="indicador">
                         <p className="indicador-titulo">Dia com Maior Venda</p>
-                        <p className="indicador-valor">{resumo.diaMaiorVenda ? new Date(resumo.diaMaiorVenda).toLocaleDateString('pt-BR') : '-'}</p>
+                        <p className="indicador-valor">
+                          {resumo.diaMaiorVenda
+                            ? new Date(resumo.diaMaiorVenda).toLocaleDateString(
+                                "pt-BR"
+                              )
+                            : "-"}
+                        </p>
                       </div>
-                      
+
                       <div className="indicador">
-                        <p className="indicador-titulo">Produtos com Estoque Crítico</p>
-                        <p className="indicador-valor">{resumo.produtosEstoqueCritico}</p>
+                        <p className="indicador-titulo">
+                          Produtos com Estoque Crítico
+                        </p>
+                        <p className="indicador-valor">
+                          {resumo.produtosEstoqueCritico}
+                        </p>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
             )}
-            
-            {activeTab === 'topProdutos' && (
+
+            {activeTab === "topProdutos" && (
               <div className="tab-top-produtos">
                 <h3>Top Produtos Vendidos</h3>
-                
+
                 {resumo.topProdutos.length > 0 ? (
                   <div className="table-responsive">
                     <table className="relatorio-table">
@@ -421,6 +735,7 @@ const Relatorios = () => {
                           <th>Produto</th>
                           <th>Tipo</th>
                           <th>Categoria</th>
+                          <th>Subcategoria</th>
                           <th>Quantidade Vendida</th>
                           <th>% do Total</th>
                         </tr>
@@ -432,6 +747,7 @@ const Relatorios = () => {
                             <td>{item.nome}</td>
                             <td>{item.tipo}</td>
                             <td>{item.categoria}</td>
+                            <td>{item.subcategoria || "-"}</td>
                             <td>{item.quantidade}</td>
                             <td>{item.percentual}%</td>
                           </tr>
@@ -440,47 +756,53 @@ const Relatorios = () => {
                     </table>
                   </div>
                 ) : (
-                  <p className="no-data-message">Nenhuma venda registrada no período selecionado.</p>
+                  <p className="no-data-message">
+                    Nenhuma venda registrada no período selecionado.
+                  </p>
                 )}
-                
+
                 {resumo.topProdutos.length > 0 && (
                   <div className="grafico-barra-horizontal">
-                    <Bar 
+                    <Bar
                       data={{
-                        labels: resumo.topProdutos.slice(0, 10).map(item => item.nome),
+                        labels: resumo.topProdutos
+                          .slice(0, 10)
+                          .map((item) => item.nome),
                         datasets: [
                           {
-                            label: 'Quantidade Vendida',
-                            data: resumo.topProdutos.slice(0, 10).map(item => item.quantidade),
-                            backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            borderWidth: 1
-                          }
-                        ]
+                            label: "Quantidade Vendida",
+                            data: resumo.topProdutos
+                              .slice(0, 10)
+                              .map((item) => item.quantidade),
+                            backgroundColor: "rgba(54, 162, 235, 0.6)",
+                            borderColor: "rgba(54, 162, 235, 1)",
+                            borderWidth: 1,
+                          },
+                        ],
                       }}
                       options={{
-                        indexAxis: 'y',
+                        indexAxis: "y",
                         responsive: true,
                         plugins: {
                           legend: {
-                            display: false
+                            display: false,
                           },
                           title: {
                             display: true,
-                            text: 'Top 10 Produtos Vendidos'
-                          }
-                        }
+                            text: "Top 10 Produtos Vendidos",
+                          },
+                        },
                       }}
                     />
                   </div>
                 )}
               </div>
             )}
-            
-            {activeTab === 'semMovimentacao' && (
+
+            {activeTab === "semMovimentacao" && (
               <div className="tab-sem-movimentacao">
                 <h3>Produtos Sem Movimentação</h3>
-                
+
                 {resumo.produtosSemMovimentacao.length > 0 ? (
                   <div className="table-responsive">
                     <table className="relatorio-table">
@@ -490,6 +812,7 @@ const Relatorios = () => {
                           <th>Produto</th>
                           <th>Tipo</th>
                           <th>Categoria</th>
+                          <th>Subcategoria</th>
                           <th>Local</th>
                           <th>Estoque</th>
                           <th>Última Movimentação</th>
@@ -502,51 +825,64 @@ const Relatorios = () => {
                             <td>{item.nome}</td>
                             <td>{item.tipo}</td>
                             <td>{item.categoria}</td>
+                            <td>{item.subcategoria || "-"}</td>
                             <td>{item.local}</td>
                             <td>{item.quantidade}</td>
-                            <td>{item.ultimaMovimentacao ? new Date(item.ultimaMovimentacao).toLocaleDateString('pt-BR') : 'Nunca'}</td>
+                            <td>
+                              {item.ultimaMovimentacao
+                                ? new Date(
+                                    item.ultimaMovimentacao
+                                  ).toLocaleDateString("pt-BR")
+                                : "Nunca"}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 ) : (
-                  <p className="no-data-message">Todos os produtos tiveram movimentação no período selecionado.</p>
+                  <p className="no-data-message">
+                    Todos os produtos tiveram movimentação no período
+                    selecionado.
+                  </p>
                 )}
-                
-                {resumo.produtosSemMovimentacao.length > 0 && resumo.estoqueSemMovimentacao.labels.length > 0 && (
-                  <div className="grafico-sem-movimentacao">
-                    <h4>Distribuição de Produtos sem Movimentação por Local</h4>
-                    <Pie 
-                      data={{
-                        labels: resumo.estoqueSemMovimentacao.labels,
-                        datasets: [
-                          {
-                            data: resumo.estoqueSemMovimentacao.dados,
-                            backgroundColor: [
-                              'rgba(255, 99, 132, 0.6)',
-                              'rgba(54, 162, 235, 0.6)',
-                              'rgba(255, 206, 86, 0.6)',
-                              'rgba(75, 192, 192, 0.6)',
-                              'rgba(153, 102, 255, 0.6)',
-                              'rgba(255, 159, 64, 0.6)'
-                            ],
-                            borderWidth: 1
-                          }
-                        ]
-                      }}
-                      options={{ 
-                        responsive: true,
-                        plugins: {
-                          title: {
-                            display: true,
-                            text: 'Produtos sem Movimentação por Local'
-                          }
-                        }
-                      }}
-                    />
-                  </div>
-                )}
+
+                {resumo.produtosSemMovimentacao.length > 0 &&
+                  resumo.estoqueSemMovimentacao.labels.length > 0 && (
+                    <div className="grafico-sem-movimentacao">
+                      <h4>
+                        Distribuição de Produtos sem Movimentação por Local
+                      </h4>
+                      <Pie
+                        data={{
+                          labels: resumo.estoqueSemMovimentacao.labels,
+                          datasets: [
+                            {
+                              data: resumo.estoqueSemMovimentacao.dados,
+                              backgroundColor: [
+                                "rgba(255, 99, 132, 0.6)",
+                                "rgba(54, 162, 235, 0.6)",
+                                "rgba(255, 206, 86, 0.6)",
+                                "rgba(75, 192, 192, 0.6)",
+                                "rgba(153, 102, 255, 0.6)",
+                                "rgba(255, 159, 64, 0.6)",
+                              ],
+                              borderWidth: 1,
+                            },
+                          ],
+                        }}
+                        options={{
+                          responsive: true,
+                          plugins: {
+                            title: {
+                              display: true,
+                              text: "Produtos sem Movimentação por Local",
+                            },
+                          },
+                        }}
+                      />
+                    </div>
+                  )}
               </div>
             )}
           </div>
@@ -555,7 +891,10 @@ const Relatorios = () => {
         <div className="relatorio-placeholder">
           <FaFileAlt className="placeholder-icon" />
           <h2>Gere um relatório</h2>
-          <p>Configure os filtros acima e clique em "Gerar Relatório" para visualizar os resultados.</p>
+          <p>
+            Configure os filtros acima e clique em "Gerar Relatório" para
+            visualizar os resultados.
+          </p>
         </div>
       )}
     </div>
