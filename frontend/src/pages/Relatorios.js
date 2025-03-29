@@ -9,6 +9,7 @@ import {
   FaClock,
   FaSave,
   FaTimes,
+  FaExchangeAlt,
 } from "react-icons/fa";
 import api from "../services/api";
 import { toast } from "react-toastify";
@@ -73,6 +74,9 @@ const Relatorios = () => {
   const [activeTab, setActiveTab] = useState("geral");
   const [erroCarregamento, setErroCarregamento] = useState(null);
   const [preferenciaSalva, setPreferenciaSalva] = useState(false);
+
+  // Novo estado para selecionar o tipo de cálculo
+  const [metodoCalculo, setMetodoCalculo] = useState("transacoes");
 
   // Função para aplicar período predefinido
   const aplicarPeriodoPredefinido = useCallback((periodo) => {
@@ -182,6 +186,9 @@ const Relatorios = () => {
         query += `&subcategoria=${filtros.subcategoria}`;
       if (filtros.local) query += `&local=${filtros.local}`;
 
+      // Adicionar método de cálculo como parâmetro
+      query += `&metodoCalculo=${metodoCalculo}`;
+
       const resposta = await api.get(`/api/relatorios/resumo?${query}`);
       setResumo(resposta.data);
     } catch (error) {
@@ -193,7 +200,7 @@ const Relatorios = () => {
     } finally {
       setCarregando(false);
     }
-  }, [filtros]);
+  }, [filtros, metodoCalculo]);
 
   // Carregar dados de filtro ao montar o componente
   useEffect(() => {
@@ -283,6 +290,10 @@ const Relatorios = () => {
     }
   };
 
+  const handleChangeMetodoCalculo = (e) => {
+    setMetodoCalculo(e.target.value);
+  };
+
   const handleChangePeriodo = (e) => {
     const periodo = e.target.value;
     aplicarPeriodoPredefinido(periodo);
@@ -310,6 +321,7 @@ const Relatorios = () => {
       if (filtros.subcategoria)
         query += `&subcategoria=${filtros.subcategoria}`;
       if (filtros.local) query += `&local=${filtros.local}`;
+      query += `&metodoCalculo=${metodoCalculo}`;
 
       const resposta = await api.get(`/api/relatorios/pdf?${query}`, {
         responseType: "blob",
@@ -376,24 +388,50 @@ const Relatorios = () => {
         </h2>
 
         <form onSubmit={gerarRelatorio}>
-          {/* Períodos predefinidos */}
-          <div className="periodos-predefinidos">
-            <label>
-              <FaClock /> Período Predefinido:
-            </label>
-            <select
-              value={periodoPreDefinido}
-              onChange={handleChangePeriodo}
-              className="periodo-select"
-            >
-              <option value="personalizado">Personalizado</option>
-              <option value="ultimaSemana">Última Semana</option>
-              <option value="ultimoMes">Último Mês</option>
-              <option value="ultimoTrimestre">Último Trimestre</option>
-              <option value="ultimoAno">Último Ano</option>
-              <option value="mesAtual">Mês Atual</option>
-              <option value="anoAtual">Ano Atual</option>
-            </select>
+          {/* Container flexível para período + método de cálculo */}
+          <div className="periodo-metodo-container">
+            {/* Períodos predefinidos */}
+            <div className="periodos-predefinidos">
+              <label>
+                <FaClock /> Período Predefinido:
+              </label>
+              <select
+                value={periodoPreDefinido}
+                onChange={handleChangePeriodo}
+                className="periodo-select"
+              >
+                <option value="personalizado">Personalizado</option>
+                <option value="ultimaSemana">Última Semana</option>
+                <option value="ultimoMes">Último Mês</option>
+                <option value="ultimoTrimestre">Último Trimestre</option>
+                <option value="ultimoAno">Último Ano</option>
+                <option value="mesAtual">Mês Atual</option>
+                <option value="anoAtual">Ano Atual</option>
+              </select>
+            </div>
+
+            {/* Método de cálculo reposicionado para ficar ao lado */}
+            <div className="metodo-calculo">
+              <label htmlFor="metodoCalculo">
+                <FaExchangeAlt /> Método de Cálculo:
+              </label>
+              <select
+                id="metodoCalculo"
+                name="metodoCalculo"
+                value={metodoCalculo}
+                onChange={handleChangeMetodoCalculo}
+              >
+                <option value="transacoes">
+                  Número de Vendas (Transações)
+                </option>
+                <option value="quantidade">Quantidade Vendida</option>
+              </select>
+              <small className="help-text">
+                {metodoCalculo === "transacoes"
+                  ? "Classifica por número de transações"
+                  : "Classifica por quantidade total"}
+              </small>
+            </div>
           </div>
 
           <div className="filtros-grid">
@@ -492,7 +530,6 @@ const Relatorios = () => {
               </select>
             </div>
           </div>
-
           <div className="filtros-actions">
             <button
               type="submit"
@@ -561,6 +598,12 @@ const Relatorios = () => {
                 <p>Subcategoria: {filtros.subcategoria}</p>
               )}
               {filtros.local && <p>Local: {filtros.local}</p>}
+              <p>
+                Método de cálculo:{" "}
+                {metodoCalculo === "transacoes"
+                  ? "Número de vendas"
+                  : "Quantidade vendida"}
+              </p>
             </div>
 
             <div className="relatorio-sumario">
@@ -681,7 +724,11 @@ const Relatorios = () => {
                     <div className="indicadores-grid">
                       <div className="indicador">
                         <p className="indicador-titulo">
-                          Média de Vendas Diárias
+                          Média{" "}
+                          {metodoCalculo === "transacoes"
+                            ? "de Vendas"
+                            : "de Itens Vendidos"}{" "}
+                          Diária
                         </p>
                         <p className="indicador-valor">
                           {resumo.mediaVendasDiarias.toFixed(2)}
@@ -724,7 +771,12 @@ const Relatorios = () => {
 
             {activeTab === "topProdutos" && (
               <div className="tab-top-produtos">
-                <h3>Top Produtos Vendidos</h3>
+                <h3>
+                  Top Produtos{" "}
+                  {metodoCalculo === "transacoes"
+                    ? "por Número de Vendas"
+                    : "por Quantidade Vendida"}
+                </h3>
 
                 {resumo.topProdutos.length > 0 ? (
                   <div className="table-responsive">
@@ -736,7 +788,11 @@ const Relatorios = () => {
                           <th>Tipo</th>
                           <th>Categoria</th>
                           <th>Subcategoria</th>
-                          <th>Quantidade Vendida</th>
+                          <th>
+                            {metodoCalculo === "transacoes"
+                              ? "Número de Vendas"
+                              : "Quantidade Vendida"}
+                          </th>
                           <th>% do Total</th>
                         </tr>
                       </thead>
@@ -748,7 +804,11 @@ const Relatorios = () => {
                             <td>{item.tipo}</td>
                             <td>{item.categoria}</td>
                             <td>{item.subcategoria || "-"}</td>
-                            <td>{item.quantidade}</td>
+                            <td>
+                              {metodoCalculo === "transacoes"
+                                ? item.transacoes
+                                : item.quantidade}
+                            </td>
                             <td>{item.percentual}%</td>
                           </tr>
                         ))}
@@ -770,10 +830,17 @@ const Relatorios = () => {
                           .map((item) => item.nome),
                         datasets: [
                           {
-                            label: "Quantidade Vendida",
+                            label:
+                              metodoCalculo === "transacoes"
+                                ? "Número de Vendas"
+                                : "Quantidade Vendida",
                             data: resumo.topProdutos
                               .slice(0, 10)
-                              .map((item) => item.quantidade),
+                              .map((item) =>
+                                metodoCalculo === "transacoes"
+                                  ? item.transacoes
+                                  : item.quantidade
+                              ),
                             backgroundColor: "rgba(54, 162, 235, 0.6)",
                             borderColor: "rgba(54, 162, 235, 1)",
                             borderWidth: 1,
@@ -789,7 +856,11 @@ const Relatorios = () => {
                           },
                           title: {
                             display: true,
-                            text: "Top 10 Produtos Vendidos",
+                            text: `Top 10 Produtos ${
+                              metodoCalculo === "transacoes"
+                                ? "por Número de Vendas"
+                                : "por Quantidade Vendida"
+                            }`,
                           },
                         },
                       }}
