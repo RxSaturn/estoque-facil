@@ -1,36 +1,35 @@
+const PDFDocument = require("pdfkit");
+const chartJsPdf = require("chartjs-node-canvas");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 const Produto = require("../models/Produto");
-const Estoque = require("../models/Estoque");
 const Venda = require("../models/Venda");
 const Movimentacao = require("../models/Movimentacao");
-const PDFDocument = require("pdfkit");
+const Estoque = require("../models/Estoque");
 
-// Gerar um resumo para relatório com dados reais do banco
-exports.gerarResumo = async (req, res) => {
+// Gerar PDF com relatório completo
+exports.gerarPDF = async (req, res) => {
   try {
-    console.log(
-      `Gerando relatório para ${req.usuario?.nome || "usuário"} (${
-        req.usuario?.email || "N/A"
-      })`
-    );
-    const { dataInicio, dataFim, tipo, categoria, subcategoria, local } =
-      req.query;
+    // Temporários para armazenar gráficos
+    const tempDir = os.tmpdir();
+    const tempFiles = [];
 
-    // Validar parâmetros de data
-    if (!dataInicio || !dataFim) {
-      return res.status(400).json({
-        sucesso: false,
-        mensagem: "Período é obrigatório",
-      });
-    }
+    // Parâmetros do relatório
+    const {
+      dataInicio,
+      dataFim,
+      tipo,
+      categoria,
+      subcategoria,
+      local,
+      metodoCalculo = "transacoes",
+    } = req.query;
 
-    // Data de início e fim para filtros
+    // Obter dados do resumo para o PDF
     const dataInicioObj = new Date(dataInicio);
     const dataFimObj = new Date(dataFim);
-    dataFimObj.setHours(23, 59, 59, 999); // Incluir o dia inteiro
-
-    console.log(
-      `Período do relatório: ${dataInicioObj.toISOString()} a ${dataFimObj.toISOString()}`
-    );
+    dataFimObj.setHours(23, 59, 59, 999);
 
     // Construir filtros
     const filtroVendas = {
@@ -43,22 +42,11 @@ exports.gerarResumo = async (req, res) => {
     const filtroProdutos = {};
     const filtroEstoque = {};
 
-    if (tipo) {
-      filtroProdutos.tipo = tipo;
-      console.log(`Filtro por tipo: ${tipo}`);
-    }
+    if (tipo) filtroProdutos.tipo = tipo;
+    if (categoria) filtroProdutos.categoria = categoria;
+    if (subcategoria) filtroProdutos.subcategoria = subcategoria;
 
-    if (categoria) {
-      filtroProdutos.categoria = categoria;
-      console.log(`Filtro por categoria: ${categoria}`);
-    }
-
-    if (subcategoria) {
-      filtroProdutos.subcategoria = subcategoria;
-      console.log(`Filtro por subcategoria: ${subcategoria}`);
-    }
-
-    // Apenas incluir produtos que atendem aos filtros, se houver
+    // Aplicar filtros de produto à consulta de vendas
     if (Object.keys(filtroProdutos).length > 0) {
       const produtosFiltrados = await Produto.find(filtroProdutos).select(
         "_id"
@@ -72,465 +60,157 @@ exports.gerarResumo = async (req, res) => {
     if (local) {
       filtroVendas.local = local;
       filtroEstoque.local = local;
-      console.log(`Filtro por local: ${local}`);
     }
 
-    // ----- Cálculos reais para o relatório -----
-
-    // 1. Contagens básicas
+    // Calcular dados para o PDF
     const totalProdutos = await Produto.countDocuments(filtroProdutos);
     const totalVendas = await Venda.countDocuments(filtroVendas);
+    const estatisticas = await calcularEstatisticas(
+      filtroVendas,
+      dataInicioObj,
+      dataFimObj,
+      metodoCalculo
+    );
 
-    // 2. Calcular vendas por categoria
+    // Determinar método de cálculo para os top produtos
+    const topProdutos =
+      metodoCalculo === "transacoes"
+        ? await obterTopProdutosPorTransacoes(
+            filtroVendas,
+            dataInicioObj,
+            dataFimObj
+          )
+        : await obterTopProdutos(filtroVendas, dataInicioObj, dataFimObj);
+
+    const produtosSemMovimentacao = await obterProdutosSemMovimentacao(
+      dataInicioObj,
+      dataFimObj,
+      filtroProdutos,
+      local
+    );
     const vendasPorCategoria = await calcularVendasPorCategoria(
       filtroVendas,
       dataInicioObj,
       dataFimObj
     );
-
-    // 3. Calcular estoque por local
     const estoquePorLocal = await calcularEstoquePorLocal(filtroEstoque);
-
-    // 4. Produtos sem movimentação no período
-    const produtosSemMovimentacao = await obterProdutosSemMovimentacao(
-      dataInicioObj,
-      dataFimObj,
-      filtroProdutos,
-      local
-    );
-
-    // 5. Top produtos vendidos
-    const topProdutos = await obterTopProdutos(
-      filtroVendas,
-      dataInicioObj,
-      dataFimObj
-    );
-
-    // 6. Estatísticas adicionais
-    const estatisticas = await calcularEstatisticas(
-      filtroVendas,
-      dataInicioObj,
-      dataFimObj
-    );
-
-    // 7. Distribuição de produtos sem movimentação por local
     const estoqueSemMovimentacao = await calcularEstoqueSemMovimentacao(
       produtosSemMovimentacao
     );
 
-    // Construir objeto de resposta
-    const resumo = {
-      totalProdutos,
-      totalVendas,
-      semMovimentacao: produtosSemMovimentacao.length,
-      mediaVendasDiarias: estatisticas.mediaVendasDiarias,
-      totalItensVendidos: estatisticas.totalItensVendidos,
-      diaMaiorVenda: estatisticas.diaMaiorVenda,
-      produtosEstoqueCritico: estatisticas.produtosEstoqueCritico,
-      vendasPorCategoria,
-      estoquePorLocal,
-      topProdutos,
-      produtosSemMovimentacao,
-      estoqueSemMovimentacao,
-    };
-
-    res.status(200).json(resumo);
-  } catch (error) {
-    console.error("Erro ao gerar resumo do relatório:", error);
-    res.status(500).json({
-      sucesso: false,
-      mensagem: "Erro ao gerar resumo",
-      erro: error.message,
+    // Gerar gráficos para o PDF
+    const chartWidth = 500;
+    const chartHeight = 300;
+    const canvasRenderService = new chartJsPdf.ChartJSNodeCanvas({
+      width: chartWidth,
+      height: chartHeight,
+      backgroundColor: "white",
     });
-  }
-};
 
-// Função para calcular vendas por categoria
-async function calcularVendasPorCategoria(filtroVendas, dataInicio, dataFim) {
-  try {
-    // Pipeline de agregação para vendas por categoria
-    const resultado = await Venda.aggregate([
-      {
-        $match: {
-          dataVenda: { $gte: dataInicio, $lte: dataFim },
-          ...filtroVendas,
+    // Gráfico de Barras - Vendas por Categoria
+    if (vendasPorCategoria.labels.length > 0) {
+      const vendasPorCategoriaConfig = {
+        type: "bar",
+        data: {
+          labels: vendasPorCategoria.labels,
+          datasets: [
+            {
+              label: "Quantidade Vendida",
+              data: vendasPorCategoria.dados,
+              backgroundColor: "rgba(54, 162, 235, 0.6)",
+              borderColor: "rgba(54, 162, 235, 1)",
+              borderWidth: 1,
+            },
+          ],
         },
-      },
-      {
-        $lookup: {
-          from: "produtos",
-          localField: "produto",
-          foreignField: "_id",
-          as: "produtoInfo",
-        },
-      },
-      { $unwind: "$produtoInfo" },
-      {
-        $group: {
-          _id: "$produtoInfo.categoria",
-          total: { $sum: "$quantidade" },
-        },
-      },
-      { $sort: { total: -1 } },
-    ]);
-
-    // Formatar para o frontend
-    return {
-      labels: resultado.map((item) => item._id || "Sem categoria"),
-      dados: resultado.map((item) => item.total),
-    };
-  } catch (error) {
-    console.error("Erro ao calcular vendas por categoria:", error);
-    return { labels: [], dados: [] };
-  }
-}
-
-// Função para calcular estoque por local
-async function calcularEstoquePorLocal(filtroEstoque) {
-  try {
-    // Pipeline de agregação para estoque por local
-    const resultado = await Estoque.aggregate([
-      { $match: filtroEstoque },
-      {
-        $group: {
-          _id: "$local",
-          total: { $sum: "$quantidade" },
-        },
-      },
-      { $sort: { total: -1 } },
-    ]);
-
-    // Formatar para o frontend
-    return {
-      labels: resultado.map((item) => item._id || "Sem local"),
-      dados: resultado.map((item) => item.total),
-    };
-  } catch (error) {
-    console.error("Erro ao calcular estoque por local:", error);
-    return { labels: [], dados: [] };
-  }
-}
-
-// Função para calcular estatísticas adicionais
-async function calcularEstatisticas(filtroVendas, dataInicio, dataFim) {
-  try {
-    // Total de itens vendidos
-    const resultadoTotal = await Venda.aggregate([
-      { $match: filtroVendas },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$quantidade" },
-        },
-      },
-    ]);
-
-    const totalItensVendidos =
-      resultadoTotal.length > 0 ? resultadoTotal[0].total : 0;
-
-    // Calcular vendas por dia para encontrar o dia com maior venda
-    const vendasPorDia = await Venda.aggregate([
-      { $match: filtroVendas },
-      {
-        $addFields: {
-          dataFormatada: {
-            $dateToString: { format: "%Y-%m-%d", date: "$dataVenda" },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true,
+            },
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: "Vendas por Categoria",
+              font: {
+                size: 16,
+              },
+            },
+            legend: {
+              display: false,
+            },
           },
         },
-      },
-      {
-        $group: {
-          _id: "$dataFormatada",
-          total: { $sum: "$quantidade" },
-        },
-      },
-      { $sort: { total: -1 } },
-      { $limit: 1 },
-    ]);
-
-    // Dia com maior venda
-    const diaMaiorVenda =
-      vendasPorDia.length > 0 ? new Date(vendasPorDia[0]._id) : null;
-
-    // Calcular média diária
-    // Diferença em dias entre as datas
-    const diffTime = Math.abs(dataFim - dataInicio);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1; // Pelo menos 1 dia
-
-    const mediaVendasDiarias = totalItensVendidos / diffDays;
-
-    // Produtos com estoque crítico (menos de 10% do estoque médio)
-    const estoqueCritico = await Estoque.aggregate([
-      { $match: { quantidade: { $gt: 0 } } },
-      {
-        $group: {
-          _id: null,
-          mediaEstoque: { $avg: "$quantidade" },
-        },
-      },
-    ]);
-
-    const mediaEstoque =
-      estoqueCritico.length > 0 ? estoqueCritico[0].mediaEstoque : 10;
-    const nivelCritico = mediaEstoque * 0.1;
-
-    const produtosEstoqueCritico = await Estoque.countDocuments({
-      quantidade: { $gt: 0, $lte: nivelCritico },
-    });
-
-    return {
-      totalItensVendidos,
-      diaMaiorVenda,
-      mediaVendasDiarias,
-      produtosEstoqueCritico,
-    };
-  } catch (error) {
-    console.error("Erro ao calcular estatísticas:", error);
-    return {
-      totalItensVendidos: 0,
-      diaMaiorVenda: null,
-      mediaVendasDiarias: 0,
-      produtosEstoqueCritico: 0,
-    };
-  }
-}
-
-// Função para obter produtos sem movimentação no período
-async function obterProdutosSemMovimentacao(
-  dataInicio,
-  dataFim,
-  filtroProdutos,
-  local = null
-) {
-  try {
-    // 1. Obter todos os produtos que atendem aos filtros
-    const produtos = await Produto.find(filtroProdutos);
-
-    // 2. Obter IDs de produtos que tiveram movimentações no período
-    const produtosComMovimentacao = await Movimentacao.distinct("produto", {
-      data: { $gte: dataInicio, $lte: dataFim },
-    });
-
-    // 3. Obter IDs de produtos que tiveram vendas no período
-    const produtosComVendas = await Venda.distinct("produto", {
-      dataVenda: { $gte: dataInicio, $lte: dataFim },
-    });
-
-    // 4. IDs de produtos com atividade
-    const produtosAtivos = [
-      ...new Set([...produtosComMovimentacao, ...produtosComVendas]),
-    ];
-
-    // 5. Filtrar produtos sem atividade
-    const produtosSemAtividade = produtos.filter(
-      (produto) =>
-        !produtosAtivos.some(
-          (id) => id && produto._id && id.toString() === produto._id.toString()
-        )
-    );
-
-    // 6. Obter informações de estoque para esses produtos
-    const produtosSemMovimentacao = [];
-
-    for (const produto of produtosSemAtividade) {
-      // Filtro de estoque para este produto
-      const filtroEstoqueLocal = {
-        produto: produto._id,
-        ...(local ? { local } : {}),
       };
 
-      // Buscar estoques
-      const estoques = await Estoque.find(filtroEstoqueLocal);
-
-      // Se há estoque, adicionar cada local como uma entrada separada
-      if (estoques.length > 0) {
-        for (const estoque of estoques) {
-          // Obter data da última movimentação (se houver)
-          const ultimaMovimentacao = await Movimentacao.findOne({
-            produto: produto._id,
-            localOrigem: estoque.local,
-          })
-            .sort({ data: -1 })
-            .limit(1);
-
-          produtosSemMovimentacao.push({
-            id: produto.id,
-            nome: produto.nome,
-            tipo: produto.tipo,
-            categoria: produto.categoria,
-            subcategoria: produto.subcategoria,
-            local: estoque.local,
-            quantidade: estoque.quantidade,
-            ultimaMovimentacao: ultimaMovimentacao?.data || null,
-          });
-        }
-      }
-    }
-
-    return produtosSemMovimentacao;
-  } catch (error) {
-    console.error("Erro ao obter produtos sem movimentação:", error);
-    return [];
-  }
-}
-
-// Função para obter top produtos vendidos
-async function obterTopProdutos(filtroVendas, dataInicio, dataFim) {
-  try {
-    // 1. Obter total de vendas no período
-    const totalVendas = await Venda.aggregate([
-      {
-        $match: {
-          dataVenda: { $gte: dataInicio, $lte: dataFim },
-          ...filtroVendas,
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$quantidade" },
-        },
-      },
-    ]);
-
-    const totalGeral = totalVendas.length > 0 ? totalVendas[0].total : 0;
-
-    // 2. Obter top produtos por quantidade vendida
-    const resultadoProdutos = await Venda.aggregate([
-      {
-        $match: {
-          dataVenda: { $gte: dataInicio, $lte: dataFim },
-          ...filtroVendas,
-        },
-      },
-      {
-        $lookup: {
-          from: "produtos",
-          localField: "produto",
-          foreignField: "_id",
-          as: "produtoInfo",
-        },
-      },
-      { $unwind: "$produtoInfo" },
-      {
-        $group: {
-          _id: "$produto",
-          nome: { $first: "$produtoInfo.nome" },
-          id: { $first: "$produtoInfo.id" },
-          tipo: { $first: "$produtoInfo.tipo" },
-          categoria: { $first: "$produtoInfo.categoria" },
-          subcategoria: { $first: "$produtoInfo.subcategoria" },
-          quantidade: { $sum: "$quantidade" },
-        },
-      },
-      { $sort: { quantidade: -1 } },
-      { $limit: 20 },
-    ]);
-
-    // 3. Calcular percentual para cada produto
-    return resultadoProdutos.map((produto) => ({
-      ...produto,
-      percentual:
-        totalGeral > 0
-          ? parseFloat(((produto.quantidade / totalGeral) * 100).toFixed(1))
-          : 0,
-    }));
-  } catch (error) {
-    console.error("Erro ao obter top produtos:", error);
-    return [];
-  }
-}
-
-// Função para calcular distribuição de produtos sem movimentação por local
-async function calcularEstoqueSemMovimentacao(produtosSemMovimentacao) {
-  try {
-    // Agrupar por local
-    const locais = {};
-
-    produtosSemMovimentacao.forEach((produto) => {
-      if (!locais[produto.local]) {
-        locais[produto.local] = 0;
-      }
-      locais[produto.local]++;
-    });
-
-    // Converter para o formato esperado pelo frontend
-    const labels = Object.keys(locais);
-    const dados = labels.map((local) => locais[local]);
-
-    return { labels, dados };
-  } catch (error) {
-    console.error(
-      "Erro ao calcular distribuição de produtos sem movimentação:",
-      error
-    );
-    return { labels: [], dados: [] };
-  }
-}
-
-// Gerar PDF com relatório completo
-exports.gerarPDF = async (req, res) => {
-  try {
-    // Parâmetros do relatório
-    const { dataInicio, dataFim, tipo, categoria, subcategoria, local } =
-      req.query;
-
-    // Obter dados do resumo para o PDF
-    // Data de início e fim para filtros
-    const dataInicioObj = new Date(dataInicio);
-    const dataFimObj = new Date(dataFim);
-    dataFimObj.setHours(23, 59, 59, 999); // Incluir o dia inteiro
-
-    // Construir filtros igual à função gerarResumo
-    const filtroVendas = {
-      dataVenda: {
-        $gte: dataInicioObj,
-        $lte: dataFimObj,
-      },
-    };
-
-    const filtroProdutos = {};
-
-    if (tipo) filtroProdutos.tipo = tipo;
-    if (categoria) filtroProdutos.categoria = categoria;
-    if (subcategoria) filtroProdutos.subcategoria = subcategoria;
-
-    // Obter produtos filtrados
-    if (Object.keys(filtroProdutos).length > 0) {
-      const produtosFiltrados = await Produto.find(filtroProdutos).select(
-        "_id"
+      const vendasPorCategoriaBuffer = await canvasRenderService.renderToBuffer(
+        vendasPorCategoriaConfig
       );
-      const idsProdutos = produtosFiltrados.map((p) => p._id);
-
-      filtroVendas.produto = { $in: idsProdutos };
+      const vendasPorCategoriaFile = path.join(
+        tempDir,
+        `vendas-por-categoria-${Date.now()}.png`
+      );
+      fs.writeFileSync(vendasPorCategoriaFile, vendasPorCategoriaBuffer);
+      tempFiles.push(vendasPorCategoriaFile);
     }
 
-    if (local) filtroVendas.local = local;
+    // Gráfico de Pizza - Estoque por Local
+    if (estoquePorLocal.labels.length > 0) {
+      const estoquePorLocalConfig = {
+        type: "pie",
+        data: {
+          labels: estoquePorLocal.labels,
+          datasets: [
+            {
+              data: estoquePorLocal.dados,
+              backgroundColor: [
+                "rgba(54, 162, 235, 0.6)",
+                "rgba(255, 99, 132, 0.6)",
+                "rgba(255, 206, 86, 0.6)",
+                "rgba(75, 192, 192, 0.6)",
+                "rgba(153, 102, 255, 0.6)",
+                "rgba(255, 159, 64, 0.6)",
+              ],
+              borderWidth: 1,
+            },
+          ],
+        },
+        options: {
+          plugins: {
+            title: {
+              display: true,
+              text: "Estoque por Local",
+              font: {
+                size: 16,
+              },
+            },
+          },
+        },
+      };
 
-    // Calcular dados reais para o PDF
-    const totalProdutos = await Produto.countDocuments(filtroProdutos);
-    const totalVendas = await Venda.countDocuments(filtroVendas);
-    const estatisticas = await calcularEstatisticas(
-      filtroVendas,
-      dataInicioObj,
-      dataFimObj
-    );
-    const topProdutos = await obterTopProdutos(
-      filtroVendas,
-      dataInicioObj,
-      dataFimObj
-    );
-    const produtosSemMovimentacao = await obterProdutosSemMovimentacao(
-      dataInicioObj,
-      dataFimObj,
-      filtroProdutos,
-      local
-    );
+      const estoquePorLocalBuffer = await canvasRenderService.renderToBuffer(
+        estoquePorLocalConfig
+      );
+      const estoquePorLocalFile = path.join(
+        tempDir,
+        `estoque-por-local-${Date.now()}.png`
+      );
+      fs.writeFileSync(estoquePorLocalFile, estoquePorLocalBuffer);
+      tempFiles.push(estoquePorLocalFile);
+    }
 
-    // Inicializar PDF
+    // Inicializar PDF com opções avançadas
     const doc = new PDFDocument({
       margin: 50,
       size: "A4",
+      info: {
+        Title: "Relatório de Estoque e Vendas - Estoque Fácil",
+        Author: req.usuario?.nome || "Sistema Estoque Fácil",
+        Subject: "Relatório de Estoque e Vendas",
+        Keywords: "estoque, vendas, relatório",
+        Creator: "Estoque Fácil",
+      },
     });
 
     // Configurar resposta HTTP para download do PDF
@@ -541,18 +221,52 @@ exports.gerarPDF = async (req, res) => {
       }.pdf`
     );
     res.setHeader("Content-Type", "application/pdf");
-
-    // Pipe o PDF diretamente para a resposta
     doc.pipe(res);
 
-    // Título do relatório
-    doc
-      .fontSize(20)
-      .font("Helvetica-Bold")
-      .text("Relatório de Estoque e Vendas", { align: "center" });
-    doc.moveDown();
+    // Função auxiliar para cabeçalho das páginas
+    const addHeader = () => {
+      doc
+        .fontSize(8)
+        .font("Helvetica")
+        .text("Estoque Fácil - Sistema de Gestão de Estoque", 50, 20, {
+          align: "left",
+        })
+        .text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 400, 20, {
+          align: "right",
+        });
+      doc.moveTo(50, 35).lineTo(550, 35).stroke();
+      doc.moveDown(2);
+    };
 
-    // Informações do período
+    // Função auxiliar para rodapé das páginas
+    const addFooter = (pageNum) => {
+      const totalPages = "{{totalPages}}"; // Placeholder a ser substituído
+      doc
+        .fontSize(8)
+        .text(`Página ${pageNum} de ${totalPages}`, 50, doc.page.height - 50, {
+          align: "center",
+          width: doc.page.width - 100,
+        });
+    };
+
+    // Contador de páginas
+    let pageNumber = 1;
+
+    // ===== PÁGINA DE CAPA =====
+    addHeader();
+
+    // Logo ou título da empresa (substitua pelo caminho real do logo se disponível)
+    doc
+      .fontSize(24)
+      .font("Helvetica-Bold")
+      .text("ESTOQUE FÁCIL", { align: "center" });
+
+    doc.moveDown();
+    doc.fontSize(20).text("Relatório de Estoque e Vendas", { align: "center" });
+
+    doc.moveDown(2);
+
+    // Informações do relatório
     doc
       .fontSize(12)
       .font("Helvetica")
@@ -569,150 +283,1029 @@ exports.gerarPDF = async (req, res) => {
       doc.text(`Subcategoria: ${subcategoria}`, { align: "center" });
     if (local) doc.text(`Local: ${local}`, { align: "center" });
 
-    doc.moveDown(2);
+    // Adicionar informação do método de cálculo
+    doc.text(
+      `Método de cálculo: ${
+        metodoCalculo === "transacoes"
+          ? "Número de vendas"
+          : "Quantidade vendida"
+      }`,
+      { align: "center" }
+    );
 
-    // Resumo
+    doc.moveDown(4);
+
+    // Data do relatório
+    doc.fontSize(10).text(`Gerado por: ${req.usuario?.nome || "Usuário"}`, {
+      align: "center",
+    });
+    doc.text(`Data: ${new Date().toLocaleDateString("pt-BR")}`, {
+      align: "center",
+    });
+
+    // Adicionar rodapé
+    addFooter(pageNumber);
+
+    // ===== PÁGINA DE RESUMO =====
+    doc.addPage();
+    pageNumber++;
+    addHeader();
+
     doc
-      .fontSize(16)
+      .fontSize(18)
       .font("Helvetica-Bold")
-      .text("Resumo Geral", { underline: true });
+      .text("Resumo Geral", { align: "center" });
     doc.moveDown();
 
-    doc
-      .fontSize(12)
-      .font("Helvetica")
-      .text(`Total de Produtos: ${totalProdutos}`);
-    doc.text(`Total de Vendas: ${totalVendas}`);
-    doc.text(`Produtos sem Movimentação: ${produtosSemMovimentacao.length}`);
-    doc.text(
-      `Média de Vendas Diárias: ${estatisticas.mediaVendasDiarias.toFixed(2)}`
+    // Criar um layout com 2 colunas para os indicadores
+    const boxWidth = 240;
+    const boxHeight = 80;
+    const margin = 20;
+    let yPos = doc.y;
+
+    // Função para desenhar uma caixa de indicador
+    const drawIndicatorBox = (title, value, x, y, color = "#2c3e50") => {
+      doc.roundedRect(x, y, boxWidth, boxHeight, 5).fillAndStroke(color, color);
+
+      doc
+        .fillColor("white")
+        .fontSize(10)
+        .font("Helvetica")
+        .text(title, x + 10, y + 10, { width: boxWidth - 20 });
+
+      doc
+        .fontSize(24)
+        .font("Helvetica-Bold")
+        .text(value, x + 10, y + 30, { width: boxWidth - 20, align: "center" });
+
+      doc.fillColor("black"); // Resetar cor
+    };
+
+    // Primeira linha de indicadores
+    drawIndicatorBox("Total de Produtos", totalProdutos, 50, yPos, "#3498db");
+    drawIndicatorBox(
+      "Total de Vendas",
+      totalVendas,
+      50 + boxWidth + margin,
+      yPos,
+      "#2ecc71"
     );
-    doc.text(`Total de Itens Vendidos: ${estatisticas.totalItensVendidos}`);
 
-    if (estatisticas.diaMaiorVenda) {
-      doc.text(
-        `Dia com Maior Venda: ${estatisticas.diaMaiorVenda.toLocaleDateString(
-          "pt-BR"
-        )}`
-      );
-    }
+    yPos += boxHeight + margin;
 
-    doc.text(
-      `Produtos com Estoque Crítico: ${estatisticas.produtosEstoqueCritico}`
+    // Segunda linha de indicadores
+    drawIndicatorBox(
+      "Média de Vendas Diárias",
+      estatisticas.mediaVendasDiarias.toFixed(2),
+      50,
+      yPos,
+      "#e74c3c"
+    );
+    drawIndicatorBox(
+      "Produtos Sem Movimentação",
+      produtosSemMovimentacao.length,
+      50 + boxWidth + margin,
+      yPos,
+      "#f39c12"
     );
 
-    doc.moveDown(2);
+    yPos += boxHeight + margin + 20;
 
-    // Top Produtos
+    // Gráficos
     doc
       .fontSize(16)
       .font("Helvetica-Bold")
-      .text("Top Produtos Vendidos", { underline: true });
+      .text("Visualização de Dados", 50, yPos);
+    doc.moveDown();
+
+    // Verificar se os gráficos foram gerados
+    if (tempFiles.length > 0 && fs.existsSync(tempFiles[0])) {
+      doc.image(tempFiles[0], 50, doc.y, { width: 500 });
+      doc.moveDown(2);
+    }
+
+    if (tempFiles.length > 1 && fs.existsSync(tempFiles[1])) {
+      // Se não couber na página atual, adicionar nova página
+      if (doc.y + 300 > doc.page.height - 100) {
+        doc.addPage();
+        pageNumber++;
+        addHeader();
+      }
+
+      doc.image(tempFiles[1], 50, doc.y, { width: 500 });
+    }
+
+    // Adicionar rodapé
+    addFooter(pageNumber);
+
+    // ===== PÁGINA TOP PRODUTOS =====
+    doc.addPage();
+    pageNumber++;
+    addHeader();
+
+    // Título baseado no método de cálculo
+    const tituloTopProdutos =
+      metodoCalculo === "transacoes"
+        ? "Top Produtos por Número de Vendas"
+        : "Top Produtos por Quantidade Vendida";
+
+    doc
+      .fontSize(18)
+      .font("Helvetica-Bold")
+      .text(tituloTopProdutos, { align: "center" });
+
+    // Adicionar explicação sobre o método
+    doc
+      .fontSize(10)
+      .font("Helvetica")
+      .text(
+        metodoCalculo === "transacoes"
+          ? "Classificação baseada no número de transações, independente da quantidade vendida em cada uma."
+          : "Classificação baseada na quantidade total de itens vendidos.",
+        { align: "center", oblique: 0.3 }
+      );
+
     doc.moveDown();
 
     if (topProdutos.length > 0) {
-      // Cabeçalho da tabela
-      doc.fontSize(10).font("Helvetica-Bold");
-      doc.text("ID", 50, doc.y, { width: 60 });
-      doc.text("Produto", 110, doc.y, { width: 150 });
-      doc.text("Tipo", 260, doc.y, { width: 70 });
-      doc.text("Categoria", 330, doc.y, { width: 90 });
-      doc.text("Qtd", 420, doc.y, { width: 40 });
-      doc.text("%", 460, doc.y, { width: 40 });
-      doc.moveDown();
+      // Cabeçalho da tabela com estilo melhorado
+      const drawTableHeader = () => {
+        doc.fontSize(10).font("Helvetica-Bold");
 
-      // Linha separadora
-      doc.moveTo(50, doc.y).lineTo(500, doc.y).stroke();
-      doc.moveDown(0.5);
+        // Retângulo de fundo para o cabeçalho
+        doc.rect(50, doc.y, 500, 20).fill("#2c3e50");
 
-      // Dados da tabela
+        // Texto do cabeçalho em branco
+        doc.fillColor("white");
+        doc.text("ID", 55, doc.y - 15, { width: 60 });
+        doc.text("Produto", 120, doc.y - 15, { width: 150 });
+        doc.text("Tipo", 275, doc.y - 15, { width: 70 });
+        doc.text("Categoria", 350, doc.y - 15, { width: 90 });
+
+        // Coluna de quantidade com nome baseado no método
+        if (metodoCalculo === "transacoes") {
+          doc.text("Nº Vendas", 445, doc.y - 15, { width: 40 });
+        } else {
+          doc.text("Qtd", 445, doc.y - 15, { width: 40 });
+        }
+
+        doc.text("%", 490, doc.y - 15, { width: 40 });
+
+        // Restaurar cor
+        doc.fillColor("black");
+        doc.moveDown(1.5);
+      };
+
+      drawTableHeader();
+
+      // Dados da tabela com linhas alternadas
       doc.fontSize(10).font("Helvetica");
 
-      // Adicionar linhas
-      topProdutos.slice(0, 10).forEach((produto) => {
-        // Limitar aos 10 primeiros
-        doc.text(produto.id, 50, doc.y, { width: 60 });
-        doc.text(produto.nome, 110, doc.y, { width: 150 });
-        doc.text(produto.tipo, 260, doc.y, { width: 70 });
-        doc.text(produto.categoria, 330, doc.y, { width: 90 });
-        doc.text(produto.quantidade.toString(), 420, doc.y, { width: 40 });
-        doc.text(produto.percentual.toString() + "%", 460, doc.y, {
+      topProdutos.slice(0, 15).forEach((produto, index) => {
+        // Cor de fundo alternada
+        if (index % 2 === 0) {
+          doc.rect(50, doc.y - 5, 500, 20).fill("#f8f9fa");
+          doc.fillColor("black");
+        }
+
+        doc.text(produto.id, 55, doc.y, { width: 60 });
+        doc.text(produto.nome, 120, doc.y, { width: 150 });
+        doc.text(produto.tipo, 275, doc.y, { width: 70 });
+        doc.text(produto.categoria, 350, doc.y, { width: 90 });
+
+        // Use o campo apropriado baseado no método
+        const valorQtd =
+          metodoCalculo === "transacoes"
+            ? produto.transacoes || produto.quantidadeVendas
+            : produto.quantidade;
+
+        doc.text(valorQtd.toString(), 445, doc.y, { width: 40 });
+        doc.text(produto.percentual.toString() + "%", 490, doc.y, {
           width: 40,
         });
         doc.moveDown();
       });
+
+      // Informações adicionais
+      if (topProdutos.length > 15) {
+        doc.moveDown();
+        doc
+          .fontSize(9)
+          .font("Helvetica")
+          .text(`* Exibindo 15 de ${topProdutos.length} produtos.`, {
+            oblique: 0.3,
+          });
+      }
     } else {
-      doc.text("Nenhuma venda registrada no período selecionado.");
+      doc
+        .fontSize(12)
+        .font("Helvetica")
+        .text("Nenhuma venda registrada no período selecionado.", {
+          align: "center",
+          oblique: 0.3,
+        });
     }
 
-    doc.moveDown(2);
+    // Adicionar rodapé
+    addFooter(pageNumber);
 
-    // Produtos sem movimentação
-    doc
-      .fontSize(16)
-      .font("Helvetica-Bold")
-      .text("Produtos sem Movimentação", { underline: true });
-    doc.moveDown();
-
+    // ===== PÁGINA PRODUTOS SEM MOVIMENTAÇÃO =====
     if (produtosSemMovimentacao.length > 0) {
-      // Cabeçalho da tabela
-      doc.fontSize(10).font("Helvetica-Bold");
-      doc.text("ID", 50, doc.y, { width: 60 });
-      doc.text("Produto", 110, doc.y, { width: 150 });
-      doc.text("Local", 260, doc.y, { width: 70 });
-      doc.text("Estoque", 330, doc.y, { width: 60 });
+      doc.addPage();
+      pageNumber++;
+      addHeader();
+
+      doc
+        .fontSize(18)
+        .font("Helvetica-Bold")
+        .text("Produtos sem Movimentação", { align: "center" });
       doc.moveDown();
 
-      // Linha separadora
-      doc.moveTo(50, doc.y).lineTo(500, doc.y).stroke();
-      doc.moveDown(0.5);
+      // Cabeçalho da tabela
+      doc.fontSize(10).font("Helvetica-Bold");
+      doc.rect(50, doc.y, 500, 20).fill("#2c3e50");
+      doc.fillColor("white");
+      doc.text("ID", 55, doc.y - 15, { width: 60 });
+      doc.text("Produto", 120, doc.y - 15, { width: 150 });
+      doc.text("Local", 275, doc.y - 15, { width: 90 });
+      doc.text("Estoque", 370, doc.y - 15, { width: 60 });
+      doc.text("Última Movimentação", 435, doc.y - 15, { width: 100 });
+      doc.fillColor("black");
+      doc.moveDown(1.5);
 
       // Dados da tabela
       doc.fontSize(10).font("Helvetica");
 
-      // Adicionar linhas (limitando aos primeiros 10 para não sobrecarregar o PDF)
-      produtosSemMovimentacao.slice(0, 10).forEach((produto) => {
-        doc.text(produto.id, 50, doc.y, { width: 60 });
-        doc.text(produto.nome, 110, doc.y, { width: 150 });
-        doc.text(produto.local, 260, doc.y, { width: 70 });
-        doc.text(produto.quantidade.toString(), 330, doc.y, { width: 60 });
+      produtosSemMovimentacao.slice(0, 20).forEach((produto, index) => {
+        // Cor de fundo alternada
+        if (index % 2 === 0) {
+          doc.rect(50, doc.y - 5, 500, 20).fill("#f8f9fa");
+          doc.fillColor("black");
+        }
+
+        const ultimaMovimentacao = produto.ultimaMovimentacao
+          ? new Date(produto.ultimaMovimentacao).toLocaleDateString("pt-BR")
+          : "Nunca";
+
+        doc.text(produto.id, 55, doc.y, { width: 60 });
+        doc.text(produto.nome, 120, doc.y, { width: 150 });
+        doc.text(produto.local, 275, doc.y, { width: 90 });
+        doc.text(produto.quantidade.toString(), 370, doc.y, { width: 60 });
+        doc.text(ultimaMovimentacao, 435, doc.y, { width: 100 });
         doc.moveDown();
+
+        // Se estiver no final da página, adicionar nova
+        if (
+          doc.y > doc.page.height - 120 &&
+          index < produtosSemMovimentacao.length - 1
+        ) {
+          addFooter(pageNumber);
+          doc.addPage();
+          pageNumber++;
+          addHeader();
+
+          // Redesenhar cabeçalho da tabela
+          doc.fontSize(10).font("Helvetica-Bold");
+          doc.rect(50, doc.y, 500, 20).fill("#2c3e50");
+          doc.fillColor("white");
+          doc.text("ID", 55, doc.y - 15, { width: 60 });
+          doc.text("Produto", 120, doc.y - 15, { width: 150 });
+          doc.text("Local", 275, doc.y - 15, { width: 90 });
+          doc.text("Estoque", 370, doc.y - 15, { width: 60 });
+          doc.text("Última Movimentação", 435, doc.y - 15, { width: 100 });
+          doc.fillColor("black");
+          doc.moveDown(1.5);
+        }
       });
 
-      // Se houver mais de 10 itens, mostrar mensagem
-      if (produtosSemMovimentacao.length > 10) {
-        doc.moveDown(0.5);
-        doc.text(
-          `... e mais ${
-            produtosSemMovimentacao.length - 10
-          } produtos sem movimentação.`
-        );
+      // Informações adicionais
+      if (produtosSemMovimentacao.length > 20) {
+        doc.moveDown();
+        doc
+          .fontSize(9)
+          .font("Helvetica")
+          .text(
+            `* Exibindo 20 de ${produtosSemMovimentacao.length} produtos sem movimentação.`,
+            {
+              oblique: 0.3,
+            }
+          );
       }
-    } else {
-      doc.text(
-        "Todos os produtos tiveram movimentação no período selecionado."
-      );
     }
 
-    // Rodapé
-    doc.moveDown(2);
-    doc
-      .fontSize(10)
-      .font("Helvetica-Oblique")
-      .text(
-        `Relatório gerado por ${
-          req.usuario?.nome || "Usuário"
-        } em ${new Date().toLocaleString("pt-BR")}`,
-        { align: "center" }
-      );
+    // Adicionar rodapé à última página
+    addFooter(pageNumber);
 
-    // Finalizar documento
+    // Substitui os placeholders do número total de páginas
+    const totalPages = pageNumber;
+
+    // Finalizar o documento
     doc.end();
+
+    // Limpar arquivos temporários
+    setTimeout(() => {
+      tempFiles.forEach((file) => {
+        try {
+          if (fs.existsSync(file)) {
+            fs.unlinkSync(file);
+          }
+        } catch (err) {
+          console.error(`Erro ao excluir arquivo temporário ${file}:`, err);
+        }
+      });
+    }, 1000);
   } catch (error) {
     console.error("Erro ao gerar PDF:", error);
     res.status(500).json({
       sucesso: false,
       mensagem: "Erro ao gerar PDF",
+      erro: error.message,
+    });
+  }
+};
+
+// Adicione estas funções auxiliares no seu arquivo relatorioController.js
+
+/**
+ * Calcula estatísticas gerais de vendas para um período
+ * @param {Object} filtro - Filtro para as vendas
+ * @param {Date} dataInicio - Data de início do período
+ * @param {Date} dataFim - Data de fim do período
+ * @param {String} metodoCalculo - Método de cálculo: "transacoes" ou "quantidade"
+ */
+async function calcularEstatisticas(
+  filtro,
+  dataInicio,
+  dataFim,
+  metodoCalculo = "quantidade"
+) {
+  try {
+    // Calcular total de itens vendidos (sempre útil independente do método)
+    const resultadoQuantidade = await Venda.aggregate([
+      { $match: filtro },
+      { $group: { _id: null, total: { $sum: "$quantidade" } } },
+    ]);
+
+    const totalItensVendidos =
+      resultadoQuantidade.length > 0 ? resultadoQuantidade[0].total : 0;
+
+    // Calcular o número total de transações (vendas)
+    const resultadoTransacoes = await Venda.aggregate([
+      { $match: filtro },
+      { $group: { _id: null, total: { $count: {} } } }, // Conta o número de documentos
+    ]);
+
+    const totalTransacoes =
+      resultadoTransacoes.length > 0 ? resultadoTransacoes[0].total : 0;
+
+    // Calcular a média diária com base no método de cálculo
+    const dataInicioUTC = new Date(dataInicio);
+    const dataFimUTC = new Date(dataFim);
+
+    // Calcular diferença em milissegundos e converter para dias
+    const diferencaEmMilissegundos = dataFimUTC - dataInicioUTC;
+    const diferencaEmDias = diferencaEmMilissegundos / (1000 * 60 * 60 * 24);
+
+    // Garantir que temos pelo menos 1 dia para evitar divisão por zero
+    const numeroDias = Math.max(1, Math.ceil(diferencaEmDias));
+
+    // Média baseada no método de cálculo
+    const mediaVendasDiarias =
+      metodoCalculo === "transacoes"
+        ? totalTransacoes / numeroDias
+        : totalItensVendidos / numeroDias;
+
+    // Encontrar o dia com maior volume (baseado no método de cálculo)
+    const agregarPor =
+      metodoCalculo === "transacoes"
+        ? { $count: {} } // Contagem de documentos
+        : { $sum: "$quantidade" }; // Soma das quantidades
+
+    const vendasPorDia = await Venda.aggregate([
+      { $match: filtro },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$dataVenda" } },
+          total: agregarPor,
+        },
+      },
+      { $sort: { total: -1 } },
+      { $limit: 1 },
+    ]);
+
+    const diaMaiorVenda = vendasPorDia.length > 0 ? vendasPorDia[0]._id : null;
+
+    return {
+      totalItensVendidos,
+      totalTransacoes,
+      mediaVendasDiarias,
+      diaMaiorVenda,
+      numeroDias,
+    };
+  } catch (error) {
+    console.error("Erro ao calcular estatísticas:", error);
+    throw error;
+  }
+}
+
+/**
+ * Obtém os produtos mais vendidos com base na quantidade vendida
+ */
+async function obterTopProdutos(filtroVendas, dataInicio, dataFim) {
+  try {
+    // Agregação para somar vendas por produto
+    const vendasPorProduto = await Venda.aggregate([
+      { $match: filtroVendas },
+      {
+        $group: {
+          _id: "$produto",
+          quantidade: { $sum: "$quantidade" },
+        },
+      },
+      { $sort: { quantidade: -1 } },
+    ]);
+
+    if (vendasPorProduto.length === 0) {
+      return [];
+    }
+
+    // Obter IDs dos produtos
+    const produtosIds = vendasPorProduto.map((venda) => venda._id);
+
+    // Buscar informações completas dos produtos que ainda existem
+    const produtosInfo = await Produto.find({ _id: { $in: produtosIds } });
+
+    // Mapear produtos por ID para acesso rápido
+    const produtosMap = {};
+    produtosInfo.forEach((produto) => {
+      produtosMap[produto._id.toString()] = produto;
+    });
+
+    // Filtrar vendas para incluir apenas produtos que ainda existem
+    const vendasFiltradas = vendasPorProduto.filter(
+      (venda) => produtosMap[venda._id.toString()]
+    );
+
+    // Recalcular o total após a filtragem
+    const totalVendidoGeral = vendasFiltradas.reduce(
+      (sum, item) => sum + item.quantidade,
+      0
+    );
+
+    if (totalVendidoGeral === 0) {
+      return []; // Retorna lista vazia se não houver produtos válidos
+    }
+
+    // Mapear resultados finais (apenas produtos que existem)
+    const topProdutos = vendasFiltradas
+      .slice(0, 20) // Limitar a 20 produtos
+      .map((venda) => {
+        const produtoInfo = produtosMap[venda._id.toString()];
+
+        return {
+          id: produtoInfo.id,
+          nome: produtoInfo.nome,
+          tipo: produtoInfo.tipo,
+          categoria: produtoInfo.categoria,
+          subcategoria: produtoInfo.subcategoria || "",
+          quantidade: venda.quantidade,
+          percentual: parseFloat(
+            ((venda.quantidade / totalVendidoGeral) * 100).toFixed(2)
+          ),
+        };
+      });
+
+    return topProdutos;
+  } catch (error) {
+    console.error("Erro ao obter top produtos:", error);
+    throw error;
+  }
+}
+
+/**
+ * Obtém produtos sem movimentação no período especificado
+ */
+async function obterProdutosSemMovimentacao(
+  dataInicio,
+  dataFim,
+  filtroProdutos,
+  local
+) {
+  try {
+    // Encontrar todos os produtos que correspondem aos filtros
+    const todosProdutos = await Produto.find(filtroProdutos);
+
+    if (todosProdutos.length === 0) {
+      return [];
+    }
+
+    // Obter IDs de todos os produtos
+    const todosProdutosIds = todosProdutos.map((p) => p._id);
+
+    // Filtros para movimentações no período
+    const filtroMovimentacoes = {
+      data: { $gte: dataInicio, $lte: dataFim },
+      produto: { $in: todosProdutosIds },
+    };
+
+    if (local) {
+      filtroMovimentacoes.$or = [
+        { localOrigem: local },
+        { localDestino: local },
+      ];
+    }
+
+    // Encontrar produtos com movimentação no período
+    const movimentacoes = await Movimentacao.find(filtroMovimentacoes).select(
+      "produto"
+    );
+    const produtosComMovimentacao = [
+      ...new Set(movimentacoes.map((m) => m.produto.toString())),
+    ];
+
+    // Encontrar produtos com vendas no período
+    const filtroVendas = {
+      dataVenda: { $gte: dataInicio, $lte: dataFim },
+      produto: { $in: todosProdutosIds },
+    };
+
+    if (local) {
+      filtroVendas.local = local;
+    }
+
+    const vendas = await Venda.find(filtroVendas).select("produto");
+    const produtosComVendas = [
+      ...new Set(vendas.map((v) => v.produto.toString())),
+    ];
+
+    // Combinar produtos com movimentação ou vendas
+    const produtosComAtividade = [
+      ...new Set([...produtosComMovimentacao, ...produtosComVendas]),
+    ];
+
+    // Produtos que não tiveram atividade no período
+    const produtosSemAtividade = todosProdutos.filter(
+      (produto) => !produtosComAtividade.includes(produto._id.toString())
+    );
+
+    // Obter informações de estoque
+    const produtosSemMovimentacao = [];
+
+    for (const produto of produtosSemAtividade) {
+      // Filtrar estoque por local se necessário
+      const filtroEstoque = { produto: produto._id };
+      if (local) {
+        filtroEstoque.local = local;
+      }
+
+      // Obter a última movimentação (antes do período)
+      const ultimaMovimentacao = await Movimentacao.findOne({
+        produto: produto._id,
+        data: { $lt: dataInicio },
+      }).sort({ data: -1 });
+
+      // Obter estoque atual
+      const estoques = await Estoque.find(filtroEstoque);
+
+      // Adicionar cada combinação de produto+local
+      for (const estoque of estoques) {
+        produtosSemMovimentacao.push({
+          id: produto.id,
+          nome: produto.nome,
+          tipo: produto.tipo,
+          categoria: produto.categoria,
+          subcategoria: produto.subcategoria,
+          local: estoque.local,
+          quantidade: estoque.quantidade,
+          ultimaMovimentacao: ultimaMovimentacao?.data,
+        });
+      }
+    }
+
+    return produtosSemMovimentacao;
+  } catch (error) {
+    console.error("Erro ao obter produtos sem movimentação:", error);
+    throw error;
+  }
+}
+
+/**
+ * Calcula vendas agrupadas por categoria
+ */
+async function calcularVendasPorCategoria(filtroVendas, dataInicio, dataFim) {
+  try {
+    // Obter vendas com o filtro especificado
+    const vendas = await Venda.find(filtroVendas).select("produto quantidade");
+
+    // Extrair os IDs dos produtos para uma consulta em massa
+    const produtosIds = [...new Set(vendas.map((venda) => venda.produto))];
+
+    // Buscar informações de todos os produtos vendidos
+    const produtosInfo = await Produto.find({ _id: { $in: produtosIds } });
+
+    // Criar um mapa para lookup rápido
+    const produtosMap = {};
+    produtosInfo.forEach((produto) => {
+      produtosMap[produto._id.toString()] = produto;
+    });
+
+    // Agrupar vendas por categoria, ignorando produtos excluídos
+    const categorias = {};
+
+    vendas.forEach((venda) => {
+      // Verificar se o produto ainda existe no sistema
+      const produtoExiste = produtosMap[venda.produto.toString()];
+
+      // Se o produto não existir mais, ignorar esta venda
+      if (!produtoExiste) {
+        return; // Pula esta iteração
+      }
+
+      const categoria = produtoExiste.categoria;
+
+      if (!categorias[categoria]) {
+        categorias[categoria] = 0;
+      }
+
+      categorias[categoria] += venda.quantidade;
+    });
+
+    // Converter para arrays para uso em gráficos
+    const labels = Object.keys(categorias);
+    const dados = labels.map((label) => categorias[label]);
+
+    return { labels, dados };
+  } catch (error) {
+    console.error("Erro ao calcular vendas por categoria:", error);
+    throw error;
+  }
+}
+
+/**
+ * Calcula distribuição de estoque por local
+ */
+async function calcularEstoquePorLocal(filtroEstoque) {
+  try {
+    // Agregar estoque por local
+    const estoquePorLocal = await Estoque.aggregate([
+      { $match: filtroEstoque },
+      {
+        $group: {
+          _id: "$local",
+          total: { $sum: "$quantidade" },
+        },
+      },
+      { $sort: { total: -1 } },
+    ]);
+
+    // Converter para arrays para uso em gráficos
+    const labels = estoquePorLocal.map((item) => item._id);
+    const dados = estoquePorLocal.map((item) => item.total);
+
+    return { labels, dados };
+  } catch (error) {
+    console.error("Erro ao calcular estoque por local:", error);
+    throw error;
+  }
+}
+
+/**
+ * Calcula estoque de produtos sem movimentação por local
+ */
+async function calcularEstoqueSemMovimentacao(produtosSemMovimentacao) {
+  try {
+    // Agrupar por local
+    const locais = {};
+
+    produtosSemMovimentacao.forEach((produto) => {
+      const local = produto.local || "Sem local";
+
+      if (!locais[local]) {
+        locais[local] = 0;
+      }
+
+      locais[local] += produto.quantidade;
+    });
+
+    // Converter para arrays para uso em gráficos
+    const labels = Object.keys(locais);
+    const dados = labels.map((label) => locais[label]);
+
+    return { labels, dados };
+  } catch (error) {
+    console.error("Erro ao calcular estoque sem movimentação:", error);
+    throw error;
+  }
+}
+
+/**
+ * Obtém produtos com estoque considerado crítico
+ */
+async function obterProdutosEstoqueCritico(filtroEstoque) {
+  try {
+    // Definir limiar de estoque crítico (pode ser personalizado)
+    const LIMIAR_CRITICO = 5;
+
+    // Encontrar produtos com estoque abaixo do limiar
+    const estoqueBaixo = await Estoque.find({
+      ...filtroEstoque,
+      quantidade: { $lte: LIMIAR_CRITICO, $gt: 0 },
+    }).populate("produto");
+
+    return estoqueBaixo.map((estoque) => ({
+      id: estoque.produto?.id || "N/A",
+      nome: estoque.produto?.nome || "Produto não disponível",
+      local: estoque.local,
+      quantidade: estoque.quantidade,
+    }));
+  } catch (error) {
+    console.error("Erro ao obter produtos com estoque crítico:", error);
+    throw error;
+  }
+}
+
+// Implementação da função obterTopProdutosPorTransacoes
+async function obterTopProdutosPorTransacoes(
+  filtroVendas,
+  dataInicio,
+  dataFim
+) {
+  try {
+    // Agregação para contar vendas por produto (número de transações)
+    const vendasPorProduto = await Venda.aggregate([
+      { $match: filtroVendas },
+      {
+        $group: {
+          _id: "$produto",
+          transacoes: { $sum: 1 },
+        },
+      },
+      { $sort: { transacoes: -1 } },
+    ]);
+
+    if (vendasPorProduto.length === 0) {
+      return [];
+    }
+
+    // Obter IDs dos produtos
+    const produtosIds = vendasPorProduto.map((venda) => venda._id);
+
+    // Buscar informações completas dos produtos que ainda existem
+    const produtosInfo = await Produto.find({ _id: { $in: produtosIds } });
+
+    // Mapear produtos por ID para acesso rápido
+    const produtosMap = {};
+    produtosInfo.forEach((produto) => {
+      produtosMap[produto._id.toString()] = produto;
+    });
+
+    // Filtrar vendas para incluir apenas produtos que ainda existem
+    const vendasFiltradas = vendasPorProduto.filter(
+      (venda) => produtosMap[venda._id.toString()]
+    );
+
+    // Recalcular o total após a filtragem
+    const totalTransacoesGeral = vendasFiltradas.reduce(
+      (sum, item) => sum + item.transacoes,
+      0
+    );
+
+    if (totalTransacoesGeral === 0) {
+      return []; // Retorna lista vazia se não houver produtos válidos
+    }
+
+    // Mapear resultados finais (apenas produtos que existem)
+    const topProdutos = vendasFiltradas
+      .slice(0, 20) // Limitar a 20 produtos
+      .map((venda) => {
+        const produtoInfo = produtosMap[venda._id.toString()];
+
+        return {
+          id: produtoInfo.id,
+          nome: produtoInfo.nome,
+          tipo: produtoInfo.tipo,
+          categoria: produtoInfo.categoria,
+          subcategoria: produtoInfo.subcategoria || "",
+          transacoes: venda.transacoes,
+          percentual: parseFloat(
+            ((venda.transacoes / totalTransacoesGeral) * 100).toFixed(2)
+          ),
+        };
+      });
+
+    return topProdutos;
+  } catch (error) {
+    console.error("Erro ao obter top produtos por transações:", error);
+    throw error;
+  }
+}
+
+/**
+ * Método para obter resumo do relatório
+ */
+exports.getResumo = async (req, res) => {
+  try {
+    // Parâmetros do relatório
+    const {
+      dataInicio,
+      dataFim,
+      tipo,
+      categoria,
+      subcategoria,
+      local,
+      metodoCalculo = "transacoes",
+    } = req.query;
+
+    // Validar parâmetros obrigatórios
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Datas de início e fim são obrigatórias",
+      });
+    }
+
+    // Converter datas
+    const dataInicioObj = new Date(dataInicio);
+    const dataFimObj = new Date(dataFim);
+    dataFimObj.setHours(23, 59, 59, 999);
+
+    // Construir filtros
+    const filtroVendas = {
+      dataVenda: {
+        $gte: dataInicioObj,
+        $lte: dataFimObj,
+      },
+    };
+
+    const filtroProdutos = {};
+    const filtroEstoque = {};
+    const filtroMovimentacoes = {
+      data: {
+        $gte: dataInicioObj,
+        $lte: dataFimObj,
+      },
+    };
+
+    if (tipo) {
+      filtroProdutos.tipo = tipo;
+    }
+    if (categoria) {
+      filtroProdutos.categoria = categoria;
+    }
+    if (subcategoria) {
+      filtroProdutos.subcategoria = subcategoria;
+    }
+
+    // Aplicar filtros de produto à consulta de vendas e movimentações
+    if (Object.keys(filtroProdutos).length > 0) {
+      const produtosFiltrados = await Produto.find(filtroProdutos).select(
+        "_id"
+      );
+      const idsProdutos = produtosFiltrados.map((p) => p._id);
+
+      filtroVendas.produto = { $in: idsProdutos };
+      filtroEstoque.produto = { $in: idsProdutos };
+      filtroMovimentacoes.produto = { $in: idsProdutos };
+    }
+
+    if (local) {
+      filtroVendas.local = local;
+      filtroEstoque.local = local;
+      filtroMovimentacoes.$or = [
+        { localOrigem: local },
+        { localDestino: local },
+      ];
+    }
+
+    // Calcular dados para o relatório
+    const totalProdutos = await Produto.countDocuments(filtroProdutos);
+    const totalVendas = await Venda.countDocuments(filtroVendas);
+
+    // Obter top produtos com base no método de cálculo escolhido
+    const topProdutos =
+      metodoCalculo === "transacoes"
+        ? await obterTopProdutosPorTransacoes(
+            filtroVendas,
+            dataInicioObj,
+            dataFimObj
+          )
+        : await obterTopProdutos(filtroVendas, dataInicioObj, dataFimObj);
+
+    const estatisticas = await calcularEstatisticas(
+      filtroVendas,
+      dataInicioObj,
+      dataFimObj,
+      metodoCalculo
+    );
+    const vendasPorCategoria = await calcularVendasPorCategoria(
+      filtroVendas,
+      dataInicioObj,
+      dataFimObj
+    );
+    const produtosSemMovimentacao = await obterProdutosSemMovimentacao(
+      dataInicioObj,
+      dataFimObj,
+      filtroProdutos,
+      local
+    );
+    const produtosEstoqueCritico = await obterProdutosEstoqueCritico(
+      filtroEstoque
+    );
+    const estoquePorLocal = await calcularEstoquePorLocal(filtroEstoque);
+    const estoqueSemMovimentacao = await calcularEstoqueSemMovimentacao(
+      produtosSemMovimentacao
+    );
+
+    // Montar e retornar o resumo
+    res.json({
+      totalProdutos,
+      totalVendas,
+      totalItensVendidos: estatisticas.totalItensVendidos,
+      mediaVendasDiarias: estatisticas.mediaVendasDiarias,
+      diaMaiorVenda: estatisticas.diaMaiorVenda,
+      semMovimentacao: produtosSemMovimentacao.length,
+      produtosEstoqueCritico: produtosEstoqueCritico.length,
+      topProdutos,
+      vendasPorCategoria,
+      produtosSemMovimentacao,
+      estoquePorLocal,
+      estoqueSemMovimentacao,
+    });
+  } catch (error) {
+    console.error("Erro ao gerar resumo:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao gerar resumo",
+      erro: error.message,
+    });
+  }
+};
+
+/**
+ * Obtém os produtos mais vendidos baseados na quantidade de transações/vendas
+ * e não na quantidade total de itens vendidos
+ */
+exports.getTopProdutosPorVendas = async (req, res) => {
+  try {
+    // Parâmetros do relatório
+    const { dataInicio, dataFim, tipo, categoria, subcategoria, local } =
+      req.query;
+
+    // Validar parâmetros de data
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Datas de início e fim são obrigatórias",
+      });
+    }
+
+    // Criar filtros
+    const dataInicioObj = new Date(dataInicio);
+    const dataFimObj = new Date(dataFim);
+    dataFimObj.setHours(23, 59, 59, 999);
+
+    const filtroVendas = {
+      dataVenda: {
+        $gte: dataInicioObj,
+        $lte: dataFimObj,
+      },
+    };
+
+    // Aplicar filtros adicionais se fornecidos
+    const filtroProdutos = {};
+    if (tipo) filtroProdutos.tipo = tipo;
+    if (categoria) filtroProdutos.categoria = categoria;
+    if (subcategoria) filtroProdutos.subcategoria = subcategoria;
+
+    // Aplicar filtros de produto à consulta de vendas
+    if (Object.keys(filtroProdutos).length > 0) {
+      const produtosFiltrados = await Produto.find(filtroProdutos).select(
+        "_id"
+      );
+      const idsProdutos = produtosFiltrados.map((p) => p._id);
+      filtroVendas.produto = { $in: idsProdutos };
+    }
+
+    if (local) {
+      filtroVendas.local = local;
+    }
+
+    // Usar função compartilhada para obter top produtos por transações
+    const topProdutos = await obterTopProdutosPorTransacoes(
+      filtroVendas,
+      dataInicioObj,
+      dataFimObj
+    );
+
+    res.json({
+      sucesso: true,
+      topProdutos,
+    });
+  } catch (error) {
+    console.error("Erro ao obter top produtos por vendas:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao obter top produtos",
       erro: error.message,
     });
   }

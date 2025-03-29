@@ -1,5 +1,5 @@
-const jwt = require('jsonwebtoken');
-const Usuario = require('../models/Usuario');
+const jwt = require("jsonwebtoken");
+const Usuario = require("../models/Usuario");
 
 exports.proteger = async (req, res, next) => {
   try {
@@ -7,27 +7,30 @@ exports.proteger = async (req, res, next) => {
     let token;
     if (
       req.headers.authorization &&
-      req.headers.authorization.startsWith('Bearer')
+      req.headers.authorization.startsWith("Bearer")
     ) {
-      token = req.headers.authorization.split(' ')[1];
+      token = req.headers.authorization.split(" ")[1];
     }
 
     if (!token) {
       return res.status(401).json({
         sucesso: false,
-        mensagem: 'Acesso negado. É necessário fazer login.'
+        mensagem: "Acesso negado. É necessário fazer login.",
       });
     }
 
     // Verificar token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'seu_jwt_secret');
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "seu_jwt_secret"
+    );
 
     // Verificar se o usuário ainda existe
     const usuarioAtual = await Usuario.findById(decoded.id);
     if (!usuarioAtual) {
       return res.status(401).json({
         sucesso: false,
-        mensagem: 'O usuário associado a este token não existe mais'
+        mensagem: "O usuário associado a este token não existe mais",
       });
     }
 
@@ -35,22 +38,22 @@ exports.proteger = async (req, res, next) => {
     req.usuario = usuarioAtual;
     next();
   } catch (error) {
-    console.error('Erro na autenticação:', error);
+    console.error("Erro na autenticação:", error);
     return res.status(401).json({
       sucesso: false,
-      mensagem: 'Token inválido ou expirado'
+      mensagem: "Token inválido ou expirado",
     });
   }
 };
 
 // Middleware para verificar se o usuário é administrador
 exports.admin = (req, res, next) => {
-  if (req.usuario && req.usuario.perfil === 'admin') {
+  if (req.usuario && req.usuario.perfil === "admin") {
     next();
   } else {
     res.status(403).json({
       sucesso: false,
-      mensagem: 'Acesso negado. É necessário ter permissão de administrador.'
+      mensagem: "Acesso negado. É necessário ter permissão de administrador.",
     });
   }
 };
