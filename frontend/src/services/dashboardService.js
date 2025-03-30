@@ -1,34 +1,165 @@
-import api from ".//api";
+import api from "./api";
+
+// Função auxiliar para adicionar timeout em qualquer promessa
+const withTimeout = (promise, timeoutMs = 5000) => {
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(
+      () => reject(new Error(`Timeout após ${timeoutMs}ms`)),
+      timeoutMs
+    );
+  });
+
+  return Promise.race([promise, timeoutPromise]);
+};
 
 // Obter estatísticas de produtos
 export const getProductStats = async () => {
   try {
-    const response = await api.get("/products/stats");
-    return response.data;
+    console.log("🔍 Buscando estatísticas de produtos...");
+
+    // Usar a rota específica de estatísticas com timeout
+    const estatisticasPromise = api.get("/api/produtos/estatisticas");
+    const estatisticasResponse = await withTimeout(estatisticasPromise);
+
+    if (estatisticasResponse?.data?.total) {
+      console.log(
+        "✅ Estatísticas de produtos obtidas com sucesso:",
+        estatisticasResponse.data
+      );
+      return estatisticasResponse.data;
+    }
+
+    // Fallback: Buscar usando a API normal de produtos
+    console.log("⚠️ Usando fallback para obter total de produtos...");
+    const produtosPromise = api.get("/api/produtos?limit=1");
+    const produtosResponse = await withTimeout(produtosPromise);
+
+    console.log("Resposta da API de produtos:", produtosResponse.data);
+
+    // Extrair o total dependendo do formato da resposta
+    let total = 0;
+    let quantidadeTotal = 0;
+
+    if (produtosResponse.data && typeof produtosResponse.data === "object") {
+      // Formato 1: { total: X, produtos: [...] }
+      if (typeof produtosResponse.data.total === "number") {
+        total = produtosResponse.data.total;
+        console.log(`Total de produtos encontrado na resposta: ${total}`);
+      }
+      // Formato 2: produtos é um array diretamente
+      else if (Array.isArray(produtosResponse.data)) {
+        total = produtosResponse.data.length;
+        console.log(`Total de produtos inferido do tamanho do array: ${total}`);
+      }
+    }
+
+    return { total, quantidadeTotal };
   } catch (error) {
-    console.error("Erro ao obter estatísticas de produtos:", error);
-    // Fallback para valores de exemplo em caso de erro
-    return {
-      total: 150,
-      trend: 5,
-      lowStockTrend: -3,
-    };
+    console.error("❌ Erro ao buscar estatísticas de produtos:", error);
+    throw error;
   }
 };
 
 // Obter estatísticas de vendas
 export const getSalesStats = async () => {
   try {
-    const response = await api.get("/sales/stats");
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao obter estatísticas de vendas:", error);
-    // Fallback para valores de exemplo em caso de erro
+    console.log("🔍 Iniciando busca de estatísticas de vendas");
+
+    // Obter data atual
+    const hoje = new Date();
+    // Converter para string no formato YYYY-MM-DD
+    const dataHoje = hoje.toISOString().split("T")[0];
+
+    // Calcular o dia seguinte para capturar vendas em todos os fusos horários
+    const amanha = new Date(hoje);
+    amanha.setDate(amanha.getDate() + 1);
+    const dataAmanha = amanha.toISOString().split("T")[0];
+
+    console.log(`Buscando vendas entre: ${dataHoje} e ${dataAmanha}`);
+
+    // SOLUÇÃO: Consultar ambas as fontes usando tanto o dia atual quanto o próximo dia
+
+    // 1. Fonte 1: Coleção Venda
+    let totalVendasHoje = 0;
+    try {
+      const vendasResponse = await withTimeout(
+        api.get("/api/vendas/historico", {
+          params: {
+            dataInicio: dataHoje,
+            dataFim: dataAmanha, // Incluir o próximo dia para compensar fuso horário
+          },
+        })
+      );
+
+      const vendasDePeriodo = vendasResponse?.data?.vendas || [];
+      console.log(
+        `Vendas encontradas na coleção Venda: ${vendasDePeriodo.length}`
+      );
+
+      // Filtrar apenas vendas de hoje
+      const vendasHoje = vendasDePeriodo.filter((venda) => {
+        if (!venda.dataVenda) return false;
+
+        // Converter para data local para comparação
+        const dataVenda = new Date(venda.dataVenda);
+        return dataVenda.toISOString().split("T")[0] === dataHoje;
+      });
+
+      totalVendasHoje = vendasHoje.length;
+      console.log(
+        `Vendas filtradas para hoje da coleção Venda: ${totalVendasHoje}`
+      );
+    } catch (error) {
+      console.error("Erro ao buscar vendas:", error);
+    }
+
+    // 2. Fonte 2: Coleção Movimentacao
+    try {
+      const movResponse = await withTimeout(
+        api.get("/api/movimentacoes/historico", {
+          params: {
+            tipo: "venda",
+            dataInicio: dataHoje,
+            dataFim: dataAmanha, // Incluir o próximo dia para compensar fuso horário
+          },
+        })
+      );
+
+      const movimentacoesDePeriodo = movResponse?.data?.movimentacoes || [];
+      console.log(
+        `Movimentações encontradas: ${movimentacoesDePeriodo.length}`
+      );
+
+      // Filtrar apenas movimentações de hoje
+      const movimentacoesHoje = movimentacoesDePeriodo.filter((mov) => {
+        if (!mov.data) return false;
+
+        // Converter para data local para comparação
+        const dataMov = new Date(mov.data);
+        return dataMov.toISOString().split("T")[0] === dataHoje;
+      });
+
+      console.log(
+        `Movimentações filtradas para hoje: ${movimentacoesHoje.length}`
+      );
+      totalVendasHoje += movimentacoesHoje.length;
+    } catch (error) {
+      console.error("Erro ao buscar movimentações:", error);
+    }
+
+    console.log(`Total combinado de vendas hoje: ${totalVendasHoje}`);
+
     return {
-      totalSales: 247,
-      totalRevenue: 32750.5,
-      salesTrend: 8,
-      revenueTrend: 12,
+      vendasHoje: totalVendasHoje,
+      vendasDiarias: totalVendasHoje,
+      tendenciaVendas: 0,
+    };
+  } catch (error) {
+    console.error("❌ Erro ao buscar estatísticas de vendas:", error);
+    return {
+      vendasHoje: 0,
+      vendasDiarias: 0,
+      tendenciaVendas: 0,
     };
   }
 };
@@ -36,384 +167,253 @@ export const getSalesStats = async () => {
 // Obter top produtos mais vendidos
 export const getTopProducts = async (limit = 5) => {
   try {
-    const response = await api.get(`/products/top?limit=${limit}`);
-    return response.data;
+    console.log(`🔍 Iniciando busca dos top ${limit} produtos`);
+
+    // Definir período de 3 meses
+    const dataFim = new Date();
+    const dataInicio = new Date();
+    dataInicio.setMonth(dataInicio.getMonth() - 3);
+
+    // Buscar histórico com timeout
+    const historicoResponse = await withTimeout(
+      api.get("/api/vendas/historico", {
+        params: {
+          dataInicio: dataInicio.toISOString().split("T")[0],
+          dataFim: dataFim.toISOString().split("T")[0],
+          limit: 1000,
+        },
+      })
+    );
+
+    // Processar vendas
+    let vendas = [];
+    if (historicoResponse?.data) {
+      if (Array.isArray(historicoResponse.data)) {
+        vendas = historicoResponse.data;
+      } else if (
+        historicoResponse.data.vendas &&
+        Array.isArray(historicoResponse.data.vendas)
+      ) {
+        vendas = historicoResponse.data.vendas;
+      }
+    }
+
+    console.log(`✅ Vendas analisadas: ${vendas.length}`);
+
+    // Se não houver vendas, retornar array vazio
+    if (vendas.length === 0) {
+      return [];
+    }
+
+    // Agrupar vendas por produto
+    const produtosMap = {};
+    vendas.forEach((venda) => {
+      const produtoId = venda.produto?._id || venda.produto;
+      if (!produtoId) return;
+
+      const produtoNome = venda.produto?.nome || "Produto";
+
+      if (!produtosMap[produtoId]) {
+        produtosMap[produtoId] = {
+          id: produtoId,
+          nome: produtoNome,
+          quantidadeVendas: 0,
+        };
+      }
+
+      produtosMap[produtoId].quantidadeVendas += 1;
+    });
+
+    // Converter para array, ordenar e limitar
+    return Object.values(produtosMap)
+      .sort((a, b) => b.quantidadeVendas - a.quantidadeVendas)
+      .slice(0, limit);
   } catch (error) {
-    console.error("Erro ao obter produtos mais vendidos:", error);
-    // Fallback para valores de exemplo em caso de erro
-    return [
-      {
-        id: 1,
-        name: "Smartphone Galaxy S21",
-        salesCount: 125,
-        revenue: 187500.0,
-      },
-      {
-        id: 2,
-        name: "Notebook Dell Inspiron",
-        salesCount: 85,
-        revenue: 255000.0,
-      },
-      { id: 3, name: 'Smart TV 55"', salesCount: 67, revenue: 201000.0 },
-      {
-        id: 4,
-        name: "Fone de Ouvido Bluetooth",
-        salesCount: 54,
-        revenue: 5400.0,
-      },
-      { id: 5, name: "Tablet Samsung", salesCount: 42, revenue: 42000.0 },
-    ];
+    console.error("❌ Erro ao buscar top produtos:", error);
+    return [];
   }
 };
 
 // Obter produtos com estoque baixo
 export const getLowStockProducts = async () => {
   try {
-    const response = await api.get("/products/low-stock");
-    return response.data;
+    console.log("🔍 Iniciando busca de produtos com estoque baixo");
+
+    // Buscar produtos com timeout
+    const produtosResponse = await withTimeout(api.get("/api/produtos"));
+
+    // Processar produtos
+    let produtos = [];
+    if (produtosResponse?.data) {
+      if (Array.isArray(produtosResponse.data)) {
+        produtos = produtosResponse.data;
+      } else if (
+        produtosResponse.data.produtos &&
+        Array.isArray(produtosResponse.data.produtos)
+      ) {
+        produtos = produtosResponse.data.produtos;
+      }
+    }
+
+    console.log(`✅ Produtos analisados: ${produtos.length}`);
+
+    // Se não houver produtos, retornar array vazio
+    if (produtos.length === 0) {
+      return [];
+    }
+
+    // Buscar dados de estoque
+    let produtosComEstoque = [...produtos];
+
+    try {
+      // Tentar obter estoque direto
+      const estoqueResponse = await withTimeout(api.get("/api/estoque"));
+
+      if (estoqueResponse?.data) {
+        let estoques = [];
+        if (Array.isArray(estoqueResponse.data)) {
+          estoques = estoqueResponse.data;
+        } else if (
+          estoqueResponse.data.estoques &&
+          Array.isArray(estoqueResponse.data.estoques)
+        ) {
+          estoques = estoqueResponse.data.estoques;
+        }
+
+        // Relacionar estoque com produtos
+        produtosComEstoque = produtos.map((produto) => {
+          const estoquesDoProduto = estoques.filter(
+            (e) => e.produto === produto._id || e.produto?._id === produto._id
+          );
+
+          const estoqueTotal = estoquesDoProduto.reduce(
+            (total, e) => total + (Number(e.quantidade) || 0),
+            0
+          );
+
+          return {
+            ...produto,
+            estoqueAtual: estoqueTotal,
+            estoqueMinimo: produto.estoqueMinimo || 10,
+          };
+        });
+      }
+    } catch (error) {
+      console.log("⚠️ Usando dados de estoque dos próprios produtos");
+
+      // Se falhar, usar estoque do próprio produto
+      produtosComEstoque = produtos.map((produto) => ({
+        ...produto,
+        estoqueAtual:
+          Number(produto.estoque) || Number(produto.quantidade) || 0,
+        estoqueMinimo: produto.estoqueMinimo || 10,
+      }));
+    }
+
+    // Filtrar produtos com estoque baixo
+    return produtosComEstoque
+      .filter((p) => {
+        const estoqueAtual = p.estoqueAtual || 0;
+        const estoqueMinimo = p.estoqueMinimo || 10;
+        return estoqueAtual <= estoqueMinimo;
+      })
+      .map((p) => ({
+        id: p._id || p.id,
+        nome: p.nome,
+        estoqueAtual: p.estoqueAtual || 0,
+        estoqueMinimo: p.estoqueMinimo || 10,
+        local: p.local || "Depósito Principal",
+      }))
+      .slice(0, 10);
   } catch (error) {
-    console.error("Erro ao obter produtos com estoque baixo:", error);
-    // Fallback para valores de exemplo em caso de erro
-    return [
-      { id: 1, name: "Smartphone Galaxy S21", currentStock: 3, minStock: 10 },
-      { id: 2, name: "Notebook Dell Inspiron", currentStock: 2, minStock: 5 },
-      { id: 3, name: 'Smart TV 55"', currentStock: 0, minStock: 3 },
-      {
-        id: 4,
-        name: "Fone de Ouvido Bluetooth",
-        currentStock: 4,
-        minStock: 15,
-      },
-    ];
+    console.error("❌ Erro ao buscar produtos com estoque baixo:", error);
+    return [];
   }
 };
 
 // Obter distribuição de categorias
 export const getCategoryDistribution = async () => {
   try {
-    const response = await api.get("/products/categories/distribution");
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao obter distribuição de categorias:", error);
-    // Fallback para valores de exemplo em caso de erro
-    return [
-      { name: "Eletrônicos", count: 56 },
-      { name: "Informática", count: 42 },
-      { name: "Acessórios", count: 38 },
-      { name: "Audio & Video", count: 25 },
-      { name: "Smartphones", count: 18 },
-    ];
-  }
-};
+    console.log("🔍 Iniciando busca de distribuição de categorias");
 
-// Obter últimas transações
-export const getRecentTransactions = async (limit = 5) => {
-  try {
-    const response = await api.get(`/transactions/recent?limit=${limit}`);
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao obter transações recentes:", error);
-    // Fallback para valores de exemplo em caso de erro
-    return [
-      {
-        id: 1012,
-        customerName: "João Silva",
-        date: "2025-03-28T14:22:30Z",
-        total: 1250.5,
-        status: "Concluída",
-      },
-      {
-        id: 1011,
-        customerName: "Maria Oliveira",
-        date: "2025-03-28T10:15:23Z",
-        total: 856.75,
-        status: "Concluída",
-      },
-      {
-        id: 1010,
-        customerName: "Pedro Santos",
-        date: "2025-03-27T16:42:18Z",
-        total: 2340.0,
-        status: "Pendente",
-      },
-      {
-        id: 1009,
-        customerName: "Ana Costa",
-        date: "2025-03-27T09:30:45Z",
-        total: 450.25,
-        status: "Concluída",
-      },
-      {
-        id: 1008,
-        customerName: "Carlos Ferreira",
-        date: "2025-03-26T11:20:38Z",
-        total: 1875.6,
-        status: "Cancelada",
-      },
-    ];
-  }
-};
+    // Buscar produtos com timeout
+    const response = await withTimeout(api.get("/api/produtos"));
 
-// Obter dados históricos de vendas (para gráficos de tendência)
-export const getSalesHistory = async (period = "month") => {
-  try {
-    const response = await api.get(`/sales/history?period=${period}`);
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao obter histórico de vendas:", error);
-    // Fallback para valores de exemplo em caso de erro
-    const today = new Date("2025-03-29");
-    const data = [];
-
-    // Gerar dados de exemplo para os últimos 30 dias
-    if (period === "month") {
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - i);
-        const formattedDate = date.toISOString().split("T")[0];
-
-        data.push({
-          date: formattedDate,
-          sales: Math.floor(Math.random() * 15) + 5,
-          revenue: ((Math.floor(Math.random() * 1500) + 500) / 100) * 100,
-        });
-      }
-    }
-    // Gerar dados de exemplo para os últimos 12 meses
-    else if (period === "year") {
-      for (let i = 11; i >= 0; i--) {
-        const date = new Date(today);
-        date.setMonth(today.getMonth() - i);
-        const formattedDate = `${date.getFullYear()}-${String(
-          date.getMonth() + 1
-        ).padStart(2, "0")}`;
-
-        data.push({
-          date: formattedDate,
-          sales: Math.floor(Math.random() * 150) + 50,
-          revenue: ((Math.floor(Math.random() * 15000) + 5000) / 100) * 100,
-        });
+    // Processar produtos
+    let produtos = [];
+    if (response?.data) {
+      if (Array.isArray(response.data)) {
+        produtos = response.data;
+      } else if (
+        response.data.produtos &&
+        Array.isArray(response.data.produtos)
+      ) {
+        produtos = response.data.produtos;
       }
     }
 
-    return data;
+    console.log(`✅ Produtos analisados: ${produtos.length}`);
+
+    // Se não houver produtos, retornar array vazio
+    if (produtos.length === 0) {
+      return [];
+    }
+
+    // Agrupar por categoria
+    const categorias = {};
+    produtos.forEach((produto) => {
+      const categoria = produto.categoria || "Sem categoria";
+
+      if (!categorias[categoria]) {
+        categorias[categoria] = 0;
+      }
+
+      categorias[categoria]++;
+    });
+
+    // Converter para array e ordenar
+    return Object.keys(categorias)
+      .map((categoria) => ({
+        nome: categoria,
+        quantidade: categorias[categoria],
+      }))
+      .sort((a, b) => b.quantidade - a.quantidade);
+  } catch (error) {
+    console.error("❌ Erro ao buscar distribuição de categorias:", error);
+    return [];
   }
 };
 
-// Obter vendas por período
-export const getSalesByPeriod = async (startDate, endDate) => {
+// Obter movimentações recentes
+export const getRecentTransactions = async (limit = 8) => {
   try {
-    const response = await api.get(
-      `/sales/period?start=${startDate}&end=${endDate}`
+    console.log(`🔍 Iniciando busca de ${limit} movimentações recentes`);
+
+    // Buscar movimentações com timeout
+    const response = await withTimeout(
+      api.get("/api/movimentacoes/historico", {
+        params: { limit },
+      })
     );
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao obter vendas por período:", error);
-    // Fallback para dados simulados
-    return {
-      totalSales: 154,
-      totalRevenue: 22450.75,
-      avgTicket: 145.78,
-      topSellingDay: "2025-03-24",
-    };
-  }
-};
 
-// Obter métricas financeiras
-export const getFinancialMetrics = async () => {
-  try {
-    const response = await api.get("/finance/metrics");
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao obter métricas financeiras:", error);
-    // Fallback para dados simulados
-    return {
-      revenue: 157580.5,
-      costs: 98450.25,
-      profit: 59130.25,
-      profitMargin: 37.5,
-      growth: 8.2,
-    };
-  }
-};
-
-// Obter alertas e notificações
-export const getAlerts = async () => {
-  try {
-    const response = await api.get("/alerts");
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao obter alertas:", error);
-    // Fallback para dados simulados
-    const currentDate = new Date("2025-03-29T22:38:10Z");
-
-    return [
-      {
-        id: 1,
-        type: "stock",
-        severity: "high",
-        message: "Smartphone Galaxy S21 está com estoque esgotado",
-        timestamp: new Date(currentDate.getTime() - 35 * 60000).toISOString(),
-      },
-      {
-        id: 2,
-        type: "order",
-        severity: "medium",
-        message: "Pedido #1015 aguardando processamento há mais de 24h",
-        timestamp: new Date(currentDate.getTime() - 90 * 60000).toISOString(),
-      },
-      {
-        id: 3,
-        type: "stock",
-        severity: "medium",
-        message: "Notebook Dell Inspiron está com estoque crítico",
-        timestamp: new Date(currentDate.getTime() - 180 * 60000).toISOString(),
-      },
-      {
-        id: 4,
-        type: "system",
-        severity: "low",
-        message: "Backup diário realizado com sucesso",
-        timestamp: new Date(currentDate.getTime() - 420 * 60000).toISOString(),
-      },
-    ];
-  }
-};
-
-// Obter métricas de clientes
-export const getCustomerMetrics = async () => {
-  try {
-    const response = await api.get("/customers/metrics");
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao obter métricas de clientes:", error);
-    // Fallback para dados simulados
-    return {
-      totalCustomers: 876,
-      newCustomers: 34,
-      returningRate: 68.5,
-      averagePurchaseFrequency: 2.3,
-      topCustomers: [
-        { id: 123, name: "João Silva", totalSpent: 12540.5, purchaseCount: 8 },
-        {
-          id: 145,
-          name: "Empresa ABC Ltda",
-          totalSpent: 8750.25,
-          purchaseCount: 5,
-        },
-        {
-          id: 187,
-          name: "Maria Oliveira",
-          totalSpent: 6430.8,
-          purchaseCount: 7,
-        },
-      ],
-    };
-  }
-};
-
-// Obter evolução do estoque
-export const getStockHistory = async (productId = null, period = "month") => {
-  try {
-    let endpoint = "/stock/history";
-    if (productId) endpoint += `?productId=${productId}`;
-    if (productId) endpoint += `&period=${period}`;
-    else endpoint += `?period=${period}`;
-
-    const response = await api.get(endpoint);
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao obter histórico de estoque:", error);
-    // Fallback para dados simulados
-    const today = new Date("2025-03-29");
-    const data = [];
-
-    // Gerar dados simulados para os últimos 30 dias
-    if (period === "month") {
-      // Simular um produto com estoque inicial de 50 unidades
-      let stock = 50;
-
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - i);
-        const formattedDate = date.toISOString().split("T")[0];
-
-        // Simular mudanças aleatórias no estoque (-3 a +5)
-        const change = Math.floor(Math.random() * 9) - 3;
-        stock += change;
-        if (stock < 0) stock = 0;
-
-        data.push({
-          date: formattedDate,
-          stock: stock,
-          changes: [
-            { type: change > 0 ? "in" : "out", quantity: Math.abs(change) },
-          ],
-        });
+    // Processar movimentações
+    let movimentacoes = [];
+    if (response?.data) {
+      if (Array.isArray(response.data)) {
+        movimentacoes = response.data;
+      } else if (
+        response.data.movimentacoes &&
+        Array.isArray(response.data.movimentacoes)
+      ) {
+        movimentacoes = response.data.movimentacoes;
       }
     }
 
-    return data;
-  }
-};
+    console.log(`✅ Movimentações obtidas: ${movimentacoes.length}`);
 
-// Obter dados para dashboard avançado (combinação de várias métricas)
-export const getDashboardAdvancedData = async () => {
-  try {
-    const response = await api.get("/dashboard/advanced");
-    return response.data;
+    return movimentacoes;
   } catch (error) {
-    console.error("Erro ao obter dados avançados do dashboard:", error);
-
-    // Tentar obter os dados individualmente
-    try {
-      const [
-        productStats,
-        salesStats,
-        topProducts,
-        lowStock,
-        categories,
-        transactions,
-        financialData,
-      ] = await Promise.all([
-        getProductStats(),
-        getSalesStats(),
-        getTopProducts(5),
-        getLowStockProducts(),
-        getCategoryDistribution(),
-        getRecentTransactions(5),
-        getFinancialMetrics(),
-      ]);
-
-      // Retornar os dados combinados
-      return {
-        productStats,
-        salesStats,
-        topProducts,
-        lowStock,
-        categories,
-        transactions,
-        financialData,
-      };
-    } catch (innerError) {
-      console.error("Erro ao obter dados agregados:", innerError);
-
-      // Fallback para versão mínima de dados simulados
-      return {
-        productStats: {
-          total: 150,
-          trend: 5,
-          lowStockTrend: -3,
-        },
-        salesStats: {
-          totalSales: 247,
-          totalRevenue: 32750.5,
-          salesTrend: 8,
-          revenueTrend: 12,
-        },
-        // Dados mínimos necessários para renderizar o dashboard
-        status: "fallback",
-      };
-    }
+    console.error("❌ Erro ao buscar movimentações:", error);
+    return [];
   }
 };
