@@ -123,10 +123,13 @@ const Relatorios = () => {
         return;
     }
 
+    const fim = new Date(hoje);
+    fim.setDate(fim.getDate() + 1);
+
     setFiltros((prev) => ({
       ...prev,
       dataInicio: inicio.toISOString().split("T")[0],
-      dataFim: hoje.toISOString().split("T")[0],
+      dataFim: fim.toISOString().split("T")[0],
     }));
 
     setPeriodoPreDefinido(periodo);
