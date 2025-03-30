@@ -535,3 +535,91 @@ exports.removerProduto = async (req, res) => {
     });
   }
 };
+// Obter produtos mais vendidos
+exports.obterProdutosMaisVendidos = async (req, res) => {
+  try {
+    const limite = parseInt(req.query.limite) || 5;
+
+    // Buscar produtos ordenados por vendas (você precisa ter este campo)
+    const produtos = await Produto.find().sort({ vendas: -1 }).limit(limite);
+
+    // Transformar para o formato esperado
+    const resultado = produtos.map((p) => ({
+      id: p._id,
+      nome: p.nome,
+      quantidadeVendas: p.vendas || 0,
+      receita: (p.preco || 0) * (p.vendas || 0),
+    }));
+
+    res.json(resultado);
+  } catch (error) {
+    console.error("Erro ao buscar produtos mais vendidos:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao buscar produtos mais vendidos",
+      erro: error.message,
+    });
+  }
+};
+
+// Obter estatísticas de produtos
+exports.obterEstatisticas = async (req, res) => {
+  try {
+    // Contar total de produtos
+    const total = await Produto.countDocuments();
+
+    // Calcular quantidade total em estoque (corrigido para o modelo Estoque)
+    const estoqueAgregado = await Estoque.aggregate([
+      { $group: { _id: null, quantidadeTotal: { $sum: "$quantidade" } } },
+    ]);
+
+    const quantidadeTotal =
+      estoqueAgregado.length > 0 ? estoqueAgregado[0].quantidadeTotal : 0;
+
+    // Contar produtos com estoque baixo
+    const estoqueBaixo = await Produto.countDocuments({
+      $expr: { $lte: ["$quantidade", "$estoqueMinimo"] },
+    });
+
+    res.json({
+      total,
+      quantidadeTotal,
+      estoqueBaixo,
+      tendencia: 0,
+      tendenciaEstoqueBaixo: 0,
+    });
+  } catch (error) {
+    console.error("Erro ao buscar estatísticas de produtos:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao buscar estatísticas de produtos",
+      erro: error.message,
+    });
+  }
+};
+
+exports.obterUltimasTransacoes = async (req, res) => {
+  try {
+    const limite = parseInt(req.query.limite) || 10;
+
+    // Buscar movimentações recentes
+    const movimentacoes = await Movimentacao.find()
+      .populate("produto", "id nome")
+      .populate("realizadoPor", "nome")
+      .sort({ data: -1 })
+      .limit(limite);
+
+    // Transformar para formato simplificado conforme solicitado
+    const transacoes = movimentacoes.map((m) => ({
+      idProduto: m.produto?.id,
+      nomeProduto: m.produto?.nome,
+      local: m.localOrigem,
+      quantidade: m.quantidade,
+      realizadoPor: m.realizadoPor?.nome,
+    }));
+
+    res.json(transacoes);
+  } catch (error) {
+    // Tratamento de erro...
+  }
+};
