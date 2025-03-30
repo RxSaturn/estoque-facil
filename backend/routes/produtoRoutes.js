@@ -34,6 +34,12 @@ const upload = multer({
 router.get("/tipos", proteger, produtoController.listarTipos);
 router.get("/categorias", proteger, produtoController.listarCategorias);
 router.get("/subcategorias", proteger, produtoController.listarSubcategorias);
+router.get(
+  "/mais-vendidos",
+  proteger,
+  produtoController.obterProdutosMaisVendidos
+);
+router.get("/estatisticas", proteger, produtoController.obterEstatisticas);
 
 // Rotas CRUD principais
 router.post(
