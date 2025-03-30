@@ -182,3 +182,206 @@ exports.criarMovimentacao = async (req, res) => {
     });
   }
 };
+
+// Excluir uma movimentação
+exports.excluirMovimentacao = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Verificar se a movimentação existe
+    const movimentacao = await Movimentacao.findById(id);
+    if (!movimentacao) {
+      return res.status(404).json({
+        sucesso: false,
+        mensagem: 'Movimentação não encontrada'
+      });
+    }
+    
+    // Verificar se não é uma movimentação muito antiga (regra de negócio)
+    const dataMovimentacao = new Date(movimentacao.data);
+    const dataAtual = new Date();
+    const diferencaDias = Math.floor((dataAtual - dataMovimentacao) / (1000 * 60 * 60 * 24));
+    
+    if (diferencaDias > 30) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: 'Não é possível excluir movimentações com mais de 30 dias'
+      });
+    }
+
+    // Verificar se o produto existe ou foi removido
+    const produtoExiste = movimentacao.produto ? 
+      await Produto.findById(movimentacao.produto) : null;
+    
+    const isProdutoRemovido = !produtoExiste && movimentacao.produto;
+    const isAtualizacaoProduto = movimentacao.tipo === 'atualizacao' || 
+      (movimentacao.tipo === 'entrada' && movimentacao.observacao?.includes('Produto atualizado'));
+    
+    // VERIFICAÇÃO DE ESTOQUE NEGATIVO PARA ENTRADAS
+    if (movimentacao.tipo === 'entrada' && !isProdutoRemovido && !isAtualizacaoProduto) {
+      // Buscar o estoque atual do produto no local de origem
+      const estoqueAtual = await Estoque.findOne({
+        produto: movimentacao.produto,
+        local: movimentacao.localOrigem
+      });
+      
+      // Se o estoque não existir ou for menor que a quantidade da entrada
+      if (!estoqueAtual || estoqueAtual.quantidade < movimentacao.quantidade) {
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: `Não é possível excluir esta entrada de estoque. ${estoqueAtual ? 'O estoque atual é de ' + estoqueAtual.quantidade + ' unidades, mas a entrada foi de ' + movimentacao.quantidade + ' unidades.' : 'O registro de estoque não foi encontrado.'}`,
+          detalhe: 'A exclusão resultaria em estoque negativo, o que indica que os itens já foram consumidos em outras operações.'
+        });
+      }
+    }
+    
+    // VERIFICAÇÃO DE ESTOQUE NEGATIVO PARA TRANSFERÊNCIAS
+    if (movimentacao.tipo === 'transferencia' && !isProdutoRemovido) {
+      // Verificar se há estoque suficiente no local de destino para reverter
+      const estoqueDestino = await Estoque.findOne({
+        produto: movimentacao.produto,
+        local: movimentacao.localDestino
+      });
+      
+      if (!estoqueDestino || estoqueDestino.quantidade < movimentacao.quantidade) {
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: `Não é possível excluir esta transferência. ${estoqueDestino ? 'O estoque atual no destino é de ' + estoqueDestino.quantidade + ' unidades, mas a transferência foi de ' + movimentacao.quantidade + ' unidades.' : 'O registro de estoque no destino não foi encontrado.'}`,
+          detalhe: 'A exclusão resultaria em estoque negativo no local de destino, o que indica que os itens já foram movimentados ou vendidos.'
+        });
+      }
+    }
+    
+    // VERIFICAÇÃO DE DEPENDÊNCIAS DE MOVIMENTAÇÕES
+    // Verificar se existem movimentações subsequentes que dependem desta
+    if (movimentacao.tipo === 'entrada' || movimentacao.tipo === 'transferencia') {
+      // Calcular a data da movimentação + 1 segundo para garantir que pegue apenas as posteriores
+      const dataAposMovimentacao = new Date(movimentacao.data);
+      dataAposMovimentacao.setSeconds(dataAposMovimentacao.getSeconds() + 1);
+      
+      // Buscar movimentações subsequentes do mesmo produto
+      const movimentacoesPosteriores = await Movimentacao.find({
+        produto: movimentacao.produto,
+        data: { $gt: dataAposMovimentacao },
+        _id: { $ne: movimentacao._id } // Excluir a própria movimentação
+      }).sort({ data: 1 }).limit(1); // Pegar a primeira subsequente
+      
+      if (movimentacoesPosteriores.length > 0) {
+        const primeiraMovPosterior = movimentacoesPosteriores[0];
+        const dataFormatada = new Date(primeiraMovPosterior.data).toLocaleDateString();
+        
+        // Podemos escolher bloquear ou apenas avisar
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: `Não é possível excluir esta movimentação porque existem operações posteriores dependentes dela (${dataFormatada}).`,
+          detalhe: 'Para manter a integridade do histórico e da rastreabilidade, exclua as movimentações na ordem inversa da ocorrência.'
+        });
+      }
+    }
+    
+    // APLICAR REGRAS ESPECÍFICAS PARA ATUALIZAÇÃO DE ESTOQUE
+    if (!isProdutoRemovido && 
+        movimentacao.tipo !== 'saida' && 
+        !isAtualizacaoProduto) {
+      
+      // Só atualiza o estoque para entradas e transferências com produto existente
+      if (movimentacao.tipo === 'entrada') {
+        // Se foi uma entrada, remover a quantidade do estoque
+        await Estoque.findOneAndUpdate(
+          { produto: movimentacao.produto, local: movimentacao.localOrigem },
+          { $inc: { quantidade: -movimentacao.quantidade } }
+        );
+      } else if (movimentacao.tipo === 'transferencia') {
+        // Se foi uma transferência, reverter ambas as operações
+        await Estoque.findOneAndUpdate(
+          { produto: movimentacao.produto, local: movimentacao.localOrigem },
+          { $inc: { quantidade: movimentacao.quantidade } }
+        );
+        
+        await Estoque.findOneAndUpdate(
+          { produto: movimentacao.produto, local: movimentacao.localDestino },
+          { $inc: { quantidade: -movimentacao.quantidade } }
+        );
+      }
+    }
+
+    // Remover a movimentação
+    await Movimentacao.findByIdAndDelete(id);
+    
+    // Registrar a ação no log
+    console.log(`Movimentação ${id} excluída por ${req.usuario.id} em ${new Date().toISOString()}`);
+    
+    res.status(200).json({
+      sucesso: true,
+      mensagem: 'Movimentação excluída com sucesso'
+    });
+  } catch (error) {
+    console.error('Erro ao excluir movimentação:', error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: 'Erro ao excluir movimentação',
+      erro: error.message
+    });
+  }
+};
+
+// Exclui todas as movimentações associadas a produtos que não existem mais
+exports.excluirMovimentacoesProdutosRemovidos = async (req, res) => {
+  try {
+    // Primeiro, coletamos todas as movimentações
+    const todasMovimentacoes = await Movimentacao.find({
+      produto: { $ne: null } // Apenas movimentações que têm referência a um produto
+    });
+    
+    // Lista para armazenar IDs de movimentações a serem excluídas
+    const movimentacoesParaExcluir = [];
+    
+    // Para cada movimentação, verificamos se o produto ainda existe
+    for (const movimentacao of todasMovimentacoes) {
+      const produtoExiste = await Produto.findById(movimentacao.produto);
+      
+      if (!produtoExiste) {
+        movimentacoesParaExcluir.push(movimentacao._id);
+      }
+    }
+    
+    // Se não houver movimentações para excluir
+    if (movimentacoesParaExcluir.length === 0) {
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: 'Nenhuma movimentação de produto removido encontrada',
+        quantidade: 0
+      });
+    }
+    
+    // Se apenas estamos verificando a quantidade (preview)
+    if (req.query.preview === 'true') {
+      return res.status(200).json({
+        sucesso: true,
+        mensagem: `Encontradas ${movimentacoesParaExcluir.length} movimentações de produtos removidos`,
+        quantidade: movimentacoesParaExcluir.length
+      });
+    }
+    
+    // Excluir todas as movimentações de uma vez
+    await Movimentacao.deleteMany({
+      _id: { $in: movimentacoesParaExcluir }
+    });
+    
+    // Registrar a ação no log do sistema
+    console.log(`${movimentacoesParaExcluir.length} movimentações de produtos removidos excluídas por ${req.usuario.nome} (${req.usuario.id}) em ${new Date().toISOString()}`);
+    
+    res.status(200).json({
+      sucesso: true,
+      mensagem: `${movimentacoesParaExcluir.length} movimentações de produtos removidos foram excluídas com sucesso`,
+      quantidade: movimentacoesParaExcluir.length
+    });
+  } catch (error) {
+    console.error('Erro ao excluir movimentações de produtos removidos:', error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: 'Erro ao excluir movimentações de produtos removidos',
+      erro: error.message
+    });
+  }
+};
