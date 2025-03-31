@@ -122,16 +122,32 @@ exports.transferir = async (req, res) => {
 // Listar locais disponíveis
 exports.listarLocais = async (req, res) => {
   try {
-    // Implementação simplificada - em produção buscar do banco de dados
-    res
-      .status(200)
-      .json([
-        "Loja Central",
-        "Depósito A",
-        "Depósito B",
-        "Filial 1",
-        "Filial 2",
-      ]);
+    // Importar o modelo Local diretamente aqui para evitar dependência circular
+    const Local = require("../models/Local");
+
+    // Verificar se existem locais no novo sistema
+    const locaisCount = await Local.countDocuments();
+
+    if (locaisCount > 0) {
+      // Usar o novo sistema
+      const locais = await Local.find({ ativo: true })
+        .select("nome")
+        .sort({ nome: 1 });
+
+      const nomesLocais = locais.map((local) => local.nome);
+      return res.status(200).json(nomesLocais);
+    } else {
+      // Fallback para o sistema antigo
+      return res
+        .status(200)
+        .json([
+          "Loja Central",
+          "Depósito A",
+          "Depósito B",
+          "Filial 1",
+          "Filial 2",
+        ]);
+    }
   } catch (error) {
     console.error("Erro ao listar locais:", error);
     res.status(500).json({
