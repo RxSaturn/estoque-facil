@@ -1,0 +1,209 @@
+/* Estilos compartilhados para tabelas de gerenciamento */
+.data-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+/* Cabeçalho da tabela */
+.data-table thead th {
+  position: relative;
+  background-color: #f8f9fa;
+  padding: 12px 8px;
+  vertical-align: middle;
+  text-align: left;
+  font-weight: 600;
+}
+
+/* Alinhamento específico para coluna de ações */
+.data-table thead th:last-child {
+  text-align: right;
+}
+
+/* Células da tabela */
+.data-table tbody td {
+  padding: 12px 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid #e9ecef;
+  height: 60px; /* Altura fixa para todas as células */
+}
+
+/* Container flexível para coluna de ações */
+.acoes-cell-container {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  height: 100%;
+  min-height: 40px;
+  gap: 5px;
+}
+
+/* Ajustes para botões dentro das ações */
+.acoes-cell-container .btn-sm {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  min-width: 30px;
+}
+
+/* Estilo para a tabela de produtos no modal */
+.produtos-local-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Cabeçalho da tabela de produtos */
+.produtos-local-table thead th {
+  background-color: #f8f9fa;
+  padding: 12px 8px;
+  vertical-align: middle;
+  text-align: left;
+  font-weight: 600;
+  position: relative;
+}
+
+/* Estrutura fixa para larguras de colunas */
+.produtos-local-table th:nth-child(1) {
+  width: 40%;
+} /* Produto */
+.produtos-local-table th:nth-child(2) {
+  width: 20%;
+} /* Código */
+.produtos-local-table th:nth-child(3) {
+  width: 20%;
+} /* Categoria */
+.produtos-local-table th:nth-child(4) {
+  width: 20%;
+} /* Quantidade */
+
+/* Células da tabela de produtos */
+.produtos-local-table tbody td {
+  padding: 12px 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid #e9ecef;
+  height: 60px;
+}
+
+/* Container flexível para células de produto */
+.produto-cell-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  overflow: hidden;
+}
+
+/* Imagem de produto */
+.produto-thumbnail {
+  width: 40px;
+  height: 40px;
+  min-width: 40px; /* Impede que a imagem encolha */
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  flex-shrink: 0;
+}
+
+/* Container para texto de produto com truncamento */
+.produto-text-container {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+}
+
+/* Nome do produto com ellipsis */
+.produto-nome {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+/* Info secundária do produto, se necessário */
+.produto-info {
+  font-size: 0.8rem;
+  color: #6c757d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Células de texto com truncamento */
+.cell-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Estilo para filtro no modal de produtos */
+.filter-produtos-container {
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.filter-produtos-container .search-input-wrapper {
+  display: flex;
+  max-width: 400px;
+}
+
+.filter-produtos-container input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px 0 0 4px;
+  outline: none;
+}
+
+.filter-produtos-container .search-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  padding: 8px 15px;
+  cursor: pointer;
+}
+
+.filter-produtos-container .search-button:hover {
+  background-color: var(--primary-dark);
+}
+
+/* Responsividade para tabela de produtos */
+@media (max-width: 768px) {
+  .produtos-local-table th:nth-child(3),
+  .produtos-local-table td:nth-child(3) {
+    display: none; /* Esconde a coluna de categoria em telas pequenas */
+  }
+
+  .produtos-local-table th:nth-child(1) {
+    width: 50%;
+  }
+  .produtos-local-table th:nth-child(2) {
+    width: 25%;
+  }
+  .produtos-local-table th:nth-child(4) {
+    width: 25%;
+  }
+
+  .produto-nome {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .produtos-local-table th:nth-child(2),
+  .produtos-local-table td:nth-child(2) {
+    display: none; /* Esconde a coluna de código em telas muito pequenas */
+  }
+
+  .produtos-local-table th:nth-child(1) {
+    width: 70%;
+  }
+  .produtos-local-table th:nth-child(4) {
+    width: 30%;
+  }
+}

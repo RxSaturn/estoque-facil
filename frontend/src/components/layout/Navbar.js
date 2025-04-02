@@ -1,8 +1,16 @@
-import React, { useContext } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { FaWarehouse, FaBoxOpen, FaExchangeAlt, FaShoppingCart, FaFileAlt, FaUsers, FaSignOutAlt } from 'react-icons/fa';
-import AuthContext from '../../contexts/AuthContext';
-import './Navbar.css';
+import React, { useContext } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  FaWarehouse,
+  FaBoxOpen,
+  FaExchangeAlt,
+  FaShoppingCart,
+  FaFileAlt,
+  FaUsers,
+  FaSignOutAlt,
+} from "react-icons/fa";
+import AuthContext from "../../contexts/AuthContext";
+import "./Navbar.css";
 
 const Navbar = () => {
   const { usuario, logout, isAdmin } = useContext(AuthContext);
@@ -10,7 +18,7 @@ const Navbar = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate("/login");
   };
 
   // Se o usuário não estiver autenticado, não exibe o menu
@@ -56,11 +64,11 @@ const Navbar = () => {
             <FaFileAlt />
             <span>Relatórios</span>
           </Link>
-          
+
           {isAdmin() && (
-            <Link to="/usuarios" className="navbar-item">
+            <Link to="/gerenciamento" className="navbar-item">
               <FaUsers />
-              <span>Usuários</span>
+              <span>Gerenciamento</span>
             </Link>
           )}
         </div>
