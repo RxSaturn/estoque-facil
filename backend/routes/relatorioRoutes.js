@@ -13,4 +13,5 @@ router.get("/pdf", relatorioController.gerarPDF);
 // Para a funcionalidade de top produtos baseada em número de vendas
 router.get("/top-produtos", relatorioController.getTopProdutosPorVendas);
 
+
 module.exports = router;

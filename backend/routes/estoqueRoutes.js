@@ -8,10 +8,11 @@ router.get("/verificar", proteger, estoqueController.verificarEstoque);
 router.post("/transferir", proteger, estoqueController.transferir);
 router.get("/locais", proteger, estoqueController.listarLocais);
 router.get("/", proteger, estoqueController.obterTodoEstoque);
-router.get(
-  "/produtos-baixo-estoque",
-  proteger,
-  estoqueController.obterProdutosBaixoEstoque
-);
+
+// Novas rotas para estoque baixo
+router.get("/produtos-baixo-estoque", proteger, estoqueController.obterProdutosBaixoEstoque);
+router.get("/estatisticas", proteger, estoqueController.obterEstatisticasEstoque);
+router.post("/atualizar-flags", proteger, estoqueController.atualizarFlagsEstoque);
+router.get('/estoque-critico', estoqueController.getEstoqueCritico);
 
 module.exports = router;
