@@ -867,8 +867,99 @@ const Dashboard = () => {
             </Link>
           </div>
 
-          {/* Componente "Últimas Transações" foi removido conforme solicitado */}
-          
+          {/* Últimas Transações */}
+          <div className="dashboard-card">
+            <div className="card-header">
+              <h2>
+                <FaShoppingCart className="header-icon" /> Últimas Transações
+              </h2>
+              <Link to="/movimentacao" className="btn-sm">
+                <FaPlus /> Nova Movimentação
+              </Link>
+            </div>
+
+            <div className="table-responsive">
+              <table className="dashboard-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Cliente</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movimentacoesQuery.data?.filter(
+                    (m) => m.tipo === "venda" || m.type === "sale"
+                  ).length > 0 ? (
+                    movimentacoesQuery.data
+                      .filter((m) => m.tipo === "venda" || m.type === "sale")
+                      .slice(0, 5)
+                      .map((venda, index) => {
+                        // Normalizar campos para diferentes formatos de API
+                        const id = venda.id || venda._id || index + 1000;
+                        const cliente =
+                          venda.cliente ||
+                          venda.nomeCliente ||
+                          venda.customerName ||
+                          "Cliente não especificado";
+                        const valor = venda.valor || venda.total || 0;
+                        const status = venda.status || "Concluída";
+
+                        // Determinar status da venda
+                        let statusClass;
+
+                        switch (status.toLowerCase()) {
+                          case "concluída":
+                          case "concluida":
+                          case "completed":
+                            statusClass = "concluido";
+                            break;
+                          case "pendente":
+                          case "pending":
+                            statusClass = "pendente";
+                            break;
+                          case "cancelada":
+                          case "cancelled":
+                            statusClass = "cancelado";
+                            break;
+                          default:
+                            statusClass = "outro";
+                        }
+
+                        return (
+                          <tr key={id}>
+                            <td>
+                              #
+                              {typeof id === "number" ? id : id.substring(0, 6)}
+                            </td>
+                            <td>{cliente}</td>
+                            <td>R$ {valor.toFixed(2)}</td>
+                            <td>
+                              <span className={`status-badge ${statusClass}`}>
+                                {status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="no-data">
+                        {movimentacoesQuery.isFetching
+                          ? "Carregando transações..."
+                          : "Nenhuma venda recente"}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <Link to="/historico" className="ver-tudo-link">
+              Ver todas as vendas
+            </Link>
+          </div>
         </div>
       </div>
     </div>

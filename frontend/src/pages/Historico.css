@@ -478,15 +478,3 @@
     white-space: nowrap;
   }
 }
-
-/* Adicionar estilo para destacar produtos não disponíveis */
-.produto-indisponivel {
-  background-color: rgba(231, 76, 60, 0.1);
-  border-radius: 4px;
-  padding: 4px 8px;
-}
-
-.produto-indisponivel .produto-nome {
-  color: #e74c3c;
-  font-style: italic;
-}

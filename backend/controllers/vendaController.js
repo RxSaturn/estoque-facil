@@ -1,4 +1,3 @@
-const Produto = require('../models/Produto');
 const Estoque = require('../models/Estoque');
 const Movimentacao = require('../models/Movimentacao');
 const Venda = require('../models/Venda');
@@ -193,67 +192,6 @@ exports.listarHistorico = async (req, res) => {
     res.status(500).json({
       sucesso: false,
       mensagem: 'Erro ao acessar histórico de vendas',
-      erro: error.message
-    });
-  }
-};
-
-// Exclui todas as vendas associadas a produtos que não existem mais
-exports.excluirVendasProdutosRemovidos = async (req, res) => {
-  try {
-    // Primeiro, coletamos todas as vendas
-    const todasVendas = await Venda.find({
-      produto: { $ne: null } // Apenas vendas que têm referência a um produto
-    });
-    
-    // Lista para armazenar IDs de vendas a serem excluídas
-    const vendasParaExcluir = [];
-    
-    // Para cada venda, verificamos se o produto ainda existe
-    for (const venda of todasVendas) {
-      const produtoExiste = await Produto.findById(venda.produto);
-      
-      if (!produtoExiste) {
-        vendasParaExcluir.push(venda._id);
-      }
-    }
-    
-    // Se não houver vendas para excluir
-    if (vendasParaExcluir.length === 0) {
-      return res.status(200).json({
-        sucesso: true,
-        mensagem: 'Nenhuma venda de produto removido encontrada',
-        quantidade: 0
-      });
-    }
-    
-    // Se apenas estamos verificando a quantidade (preview)
-    if (req.query.preview === 'true') {
-      return res.status(200).json({
-        sucesso: true,
-        mensagem: `Encontradas ${vendasParaExcluir.length} vendas de produtos removidos`,
-        quantidade: vendasParaExcluir.length
-      });
-    }
-    
-    // Excluir todas as vendas de uma vez
-    await Venda.deleteMany({
-      _id: { $in: vendasParaExcluir }
-    });
-    
-    // Registrar a ação no log do sistema
-    console.log(`${vendasParaExcluir.length} vendas de produtos removidos excluídas por ${req.usuario.nome} (${req.usuario.id}) em ${new Date().toISOString()}`);
-    
-    res.status(200).json({
-      sucesso: true,
-      mensagem: `${vendasParaExcluir.length} vendas de produtos removidos foram excluídas com sucesso`,
-      quantidade: vendasParaExcluir.length
-    });
-  } catch (error) {
-    console.error('Erro ao excluir vendas de produtos removidos:', error);
-    res.status(500).json({
-      sucesso: false,
-      mensagem: 'Erro ao excluir vendas de produtos removidos',
       erro: error.message
     });
   }

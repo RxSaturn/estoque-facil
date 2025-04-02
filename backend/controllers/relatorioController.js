@@ -1,79 +1,20 @@
 const PDFDocument = require("pdfkit");
+const chartJsPdf = require("chartjs-node-canvas");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const Produto = require("../models/Produto");
 const Venda = require("../models/Venda");
 const Movimentacao = require("../models/Movimentacao");
 const Estoque = require("../models/Estoque");
 
-/**
- * Obtém todos os produtos vendidos no período especificado
- * @param {Object} filtro - Filtro para as vendas
- * @param {Date} dataInicio - Data de início do período
- * @param {Date} dataFim - Data de fim do período
- */
-async function obterTodosProdutosVendidos(filtro, dataInicio, dataFim) {
-  try {
-    // Agregação para obter todos os produtos vendidos com suas quantidades
-    const vendasPorProduto = await Venda.aggregate([
-      { $match: filtro },
-      {
-        $group: {
-          _id: "$produto",
-          quantidadeTotal: { $sum: "$quantidade" },
-          transacoes: { $sum: 1 },
-          valorTotal: { $sum: "$valorTotal" },
-          ultimaVenda: { $max: "$dataVenda" },
-        },
-      },
-      { $sort: { quantidadeTotal: -1 } }, // Ordenar por quantidade vendida (decrescente)
-    ]);
-
-    if (vendasPorProduto.length === 0) {
-      return [];
-    }
-
-    // Obter IDs dos produtos
-    const produtosIds = vendasPorProduto.map((venda) => venda._id);
-
-    // Buscar informações completas dos produtos
-    const produtosInfo = await Produto.find({ _id: { $in: produtosIds } });
-
-    // Mapear produtos por ID para acesso rápido
-    const produtosMap = {};
-    produtosInfo.forEach((produto) => {
-      produtosMap[produto._id.toString()] = produto;
-    });
-
-    // Mapear resultados finais (apenas produtos que existem)
-    const todosProdutos = vendasPorProduto
-      .filter((venda) => produtosMap[venda._id.toString()])
-      .map((venda) => {
-        const produtoInfo = produtosMap[venda._id.toString()];
-
-        return {
-          id: produtoInfo.id || produtoInfo._id.toString().substring(0, 8),
-          nome: produtoInfo.nome,
-          tipo: produtoInfo.tipo || "",
-          categoria: produtoInfo.categoria || "",
-          subcategoria: produtoInfo.subcategoria || "",
-          quantidade: venda.quantidadeTotal,
-          transacoes: venda.transacoes,
-          valorTotal: venda.valorTotal || 0,
-          ultimaVenda: venda.ultimaVenda,
-        };
-      });
-
-    return todosProdutos;
-  } catch (error) {
-    console.error("Erro ao obter produtos vendidos:", error);
-    throw error;
-  }
-}
-
 // Gerar PDF com relatório completo
 exports.gerarPDF = async (req, res) => {
   try {
+    // Temporários para armazenar gráficos
+    const tempDir = os.tmpdir();
+    const tempFiles = [];
+
     // Parâmetros do relatório
     const {
       dataInicio,
@@ -153,19 +94,116 @@ exports.gerarPDF = async (req, res) => {
       dataFimObj
     );
     const estoquePorLocal = await calcularEstoquePorLocal(filtroEstoque);
-
-    // Obter todos os produtos vendidos no período
-    const todosProdutosVendidos = await obterTodosProdutosVendidos(
-      filtroVendas,
-      dataInicioObj,
-      dataFimObj
+    const estoqueSemMovimentacao = await calcularEstoqueSemMovimentacao(
+      produtosSemMovimentacao
     );
 
-    // Inicializar PDF com opções melhoradas
+    // Gerar gráficos para o PDF
+    const chartWidth = 500;
+    const chartHeight = 300;
+    const canvasRenderService = new chartJsPdf.ChartJSNodeCanvas({
+      width: chartWidth,
+      height: chartHeight,
+      backgroundColor: "white",
+    });
+
+    // Gráfico de Barras - Vendas por Categoria
+    if (vendasPorCategoria.labels.length > 0) {
+      const vendasPorCategoriaConfig = {
+        type: "bar",
+        data: {
+          labels: vendasPorCategoria.labels,
+          datasets: [
+            {
+              label: "Quantidade Vendida",
+              data: vendasPorCategoria.dados,
+              backgroundColor: "rgba(54, 162, 235, 0.6)",
+              borderColor: "rgba(54, 162, 235, 1)",
+              borderWidth: 1,
+            },
+          ],
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true,
+            },
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: "Vendas por Categoria",
+              font: {
+                size: 16,
+              },
+            },
+            legend: {
+              display: false,
+            },
+          },
+        },
+      };
+
+      const vendasPorCategoriaBuffer = await canvasRenderService.renderToBuffer(
+        vendasPorCategoriaConfig
+      );
+      const vendasPorCategoriaFile = path.join(
+        tempDir,
+        `vendas-por-categoria-${Date.now()}.png`
+      );
+      fs.writeFileSync(vendasPorCategoriaFile, vendasPorCategoriaBuffer);
+      tempFiles.push(vendasPorCategoriaFile);
+    }
+
+    // Gráfico de Pizza - Estoque por Local
+    if (estoquePorLocal.labels.length > 0) {
+      const estoquePorLocalConfig = {
+        type: "pie",
+        data: {
+          labels: estoquePorLocal.labels,
+          datasets: [
+            {
+              data: estoquePorLocal.dados,
+              backgroundColor: [
+                "rgba(54, 162, 235, 0.6)",
+                "rgba(255, 99, 132, 0.6)",
+                "rgba(255, 206, 86, 0.6)",
+                "rgba(75, 192, 192, 0.6)",
+                "rgba(153, 102, 255, 0.6)",
+                "rgba(255, 159, 64, 0.6)",
+              ],
+              borderWidth: 1,
+            },
+          ],
+        },
+        options: {
+          plugins: {
+            title: {
+              display: true,
+              text: "Estoque por Local",
+              font: {
+                size: 16,
+              },
+            },
+          },
+        },
+      };
+
+      const estoquePorLocalBuffer = await canvasRenderService.renderToBuffer(
+        estoquePorLocalConfig
+      );
+      const estoquePorLocalFile = path.join(
+        tempDir,
+        `estoque-por-local-${Date.now()}.png`
+      );
+      fs.writeFileSync(estoquePorLocalFile, estoquePorLocalBuffer);
+      tempFiles.push(estoquePorLocalFile);
+    }
+
+    // Inicializar PDF com opções avançadas
     const doc = new PDFDocument({
       margin: 50,
       size: "A4",
-      autoFirstPage: false, // Impede página em branco inicial
       info: {
         Title: "Relatório de Estoque e Vendas - Estoque Fácil",
         Author: req.usuario?.nome || "Sistema Estoque Fácil",
@@ -175,20 +213,7 @@ exports.gerarPDF = async (req, res) => {
       },
     });
 
-    // Coletar todos os dados em um buffer
-    const chunks = [];
-    doc.on("data", (chunk) => {
-      chunks.push(chunk);
-    });
-
-    // Quando terminar, enviar para o cliente
-    doc.on("end", () => {
-      const result = Buffer.concat(chunks);
-      res.contentType("application/pdf");
-      res.send(result);
-    });
-
-    // Configurar resposta HTTP
+    // Configurar resposta HTTP para download do PDF
     res.setHeader(
       "Content-Disposition",
       `attachment; filename=relatorio-estoque-${
@@ -196,54 +221,62 @@ exports.gerarPDF = async (req, res) => {
       }.pdf`
     );
     res.setHeader("Content-Type", "application/pdf");
+    doc.pipe(res);
 
-    // Função auxiliar para desenhar cabeçalho de páginas internas
-    const drawHeader = () => {
+    // Função auxiliar para cabeçalho das páginas
+    const addHeader = () => {
       doc
         .fontSize(8)
         .font("Helvetica")
-        .text("Estoque Fácil - Sistema de Gestão de Estoque", 50, 20)
+        .text("Estoque Fácil - Sistema de Gestão de Estoque", 50, 20, {
+          align: "left",
+        })
         .text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 400, 20, {
           align: "right",
         });
       doc.moveTo(50, 35).lineTo(550, 35).stroke();
+      doc.moveDown(2);
     };
 
-    // Função global para truncar texto
-    const truncateText = (text, maxLength) => {
-      if (!text) return "";
-      if (text.length <= maxLength) return text;
-      return text.substring(0, maxLength - 3) + "...";
+    // Função auxiliar para rodapé das páginas
+    const addFooter = (pageNum) => {
+      const totalPages = "{{totalPages}}"; // Placeholder a ser substituído
+      doc
+        .fontSize(8)
+        .text(`Página ${pageNum} de ${totalPages}`, 50, doc.page.height - 50, {
+          align: "center",
+          width: doc.page.width - 100,
+        });
     };
+
+    // Contador de páginas
+    let pageNumber = 1;
 
     // ===== PÁGINA DE CAPA =====
-    doc.addPage();
+    addHeader();
 
-    // Logo ou título da empresa centralizado
-    doc.fontSize(24).font("Helvetica-Bold").text("ESTOQUE FÁCIL", {
-      align: "center",
-    });
+    // Logo ou título da empresa (substitua pelo caminho real do logo se disponível)
+    doc
+      .fontSize(24)
+      .font("Helvetica-Bold")
+      .text("ESTOQUE FÁCIL", { align: "center" });
 
-    // Subtítulo
-    doc.moveDown(0.5).fontSize(20).text("Relatório de Estoque e Vendas", {
-      align: "center",
-    });
+    doc.moveDown();
+    doc.fontSize(20).text("Relatório de Estoque e Vendas", { align: "center" });
+
+    doc.moveDown(2);
 
     // Informações do relatório
     doc
-      .moveDown(2)
       .fontSize(12)
       .font("Helvetica")
       .text(
         `Período: ${new Date(dataInicio).toLocaleDateString(
           "pt-BR"
         )} a ${new Date(dataFim).toLocaleDateString("pt-BR")}`,
-        {
-          align: "center",
-        }
+        { align: "center" }
       );
 
-    // Adicionar filtros aplicados
     if (tipo) doc.text(`Tipo: ${tipo}`, { align: "center" });
     if (categoria) doc.text(`Categoria: ${categoria}`, { align: "center" });
     if (subcategoria)
@@ -257,212 +290,118 @@ exports.gerarPDF = async (req, res) => {
           ? "Número de vendas"
           : "Quantidade vendida"
       }`,
-      {
-        align: "center",
-      }
+      { align: "center" }
     );
 
-    // Data e usuário na parte inferior
-    doc
-      .moveDown(6)
-      .fontSize(10)
-      .text(`Gerado por: ${req.usuario?.nome || "Usuário"}`, {
-        align: "center",
-      })
-      .text(`Data: ${new Date().toLocaleDateString("pt-BR")}`, {
-        align: "center",
-      });
+    doc.moveDown(4);
+
+    // Data do relatório
+    doc.fontSize(10).text(`Gerado por: ${req.usuario?.nome || "Usuário"}`, {
+      align: "center",
+    });
+    doc.text(`Data: ${new Date().toLocaleDateString("pt-BR")}`, {
+      align: "center",
+    });
+
+    // Adicionar rodapé
+    addFooter(pageNumber);
 
     // ===== PÁGINA DE RESUMO =====
     doc.addPage();
-    drawHeader();
+    pageNumber++;
+    addHeader();
 
-    // Título perfeitamente centralizado
-    doc.fontSize(18).font("Helvetica-Bold").text("Resumo Geral", 0, 60, {
-      width: doc.page.width,
-      align: "center",
-    });
+    doc
+      .fontSize(18)
+      .font("Helvetica-Bold")
+      .text("Resumo Geral", { align: "center" });
+    doc.moveDown();
 
-    // Função para desenhar card de métrica
-    const drawMetricCard = (title, value, x, y, width, height, color) => {
-      // Fundo com borda arredondada
-      doc.roundedRect(x, y, width, height, 5).fillAndStroke(color, color);
+    // Criar um layout com 2 colunas para os indicadores
+    const boxWidth = 240;
+    const boxHeight = 80;
+    const margin = 20;
+    let yPos = doc.y;
 
-      // Título em branco
+    // Função para desenhar uma caixa de indicador
+    const drawIndicatorBox = (title, value, x, y, color = "#2c3e50") => {
+      doc.roundedRect(x, y, boxWidth, boxHeight, 5).fillAndStroke(color, color);
+
       doc
         .fillColor("white")
-        .fontSize(12)
+        .fontSize(10)
+        .font("Helvetica")
+        .text(title, x + 10, y + 10, { width: boxWidth - 20 });
+
+      doc
+        .fontSize(24)
         .font("Helvetica-Bold")
-        .text(title, x + 10, y + 10, {
-          width: width - 20,
-          align: "center",
-        });
+        .text(value, x + 10, y + 30, { width: boxWidth - 20, align: "center" });
 
-      // Valor em branco
-      doc.fontSize(20).text(value, x + 10, y + 35, {
-        width: width - 20,
-        align: "center",
-      });
-
-      // Resetar cor
-      doc.fillColor("black");
+      doc.fillColor("black"); // Resetar cor
     };
 
-    // Layout em grid de 2x2 para métricas principais
-    const centerX = doc.page.width / 2;
-    const cardWidth = 210;
-    const cardHeight = 80;
-    const gap = 20;
-
-    // Linha 1: Total de Produtos e Total de Vendas
-    drawMetricCard(
-      "Total de Produtos",
-      totalProdutos,
-      centerX - cardWidth - gap / 2,
-      100,
-      cardWidth,
-      cardHeight,
-      "#3498db"
-    );
-    drawMetricCard(
+    // Primeira linha de indicadores
+    drawIndicatorBox("Total de Produtos", totalProdutos, 50, yPos, "#3498db");
+    drawIndicatorBox(
       "Total de Vendas",
       totalVendas,
-      centerX + gap / 2,
-      100,
-      cardWidth,
-      cardHeight,
+      50 + boxWidth + margin,
+      yPos,
       "#2ecc71"
     );
 
-    // Linha 2: Média de Vendas e Produtos Sem Movimentação
-    drawMetricCard(
+    yPos += boxHeight + margin;
+
+    // Segunda linha de indicadores
+    drawIndicatorBox(
       "Média de Vendas Diárias",
       estatisticas.mediaVendasDiarias.toFixed(2),
-      centerX - cardWidth - gap / 2,
-      100 + cardHeight + gap,
-      cardWidth,
-      cardHeight,
+      50,
+      yPos,
       "#e74c3c"
     );
-    drawMetricCard(
+    drawIndicatorBox(
       "Produtos Sem Movimentação",
       produtosSemMovimentacao.length,
-      centerX + gap / 2,
-      100 + cardHeight + gap,
-      cardWidth,
-      cardHeight,
+      50 + boxWidth + margin,
+      yPos,
       "#f39c12"
     );
 
-    // Tabela de Vendas por Categoria
-    if (vendasPorCategoria.labels.length > 0) {
-      doc.moveDown(5);
-      doc.fontSize(14).font("Helvetica-Bold").text("Vendas por Categoria", {
-        align: "center",
-      });
+    yPos += boxHeight + margin + 20;
 
-      // Tabela simples e direta
-      const tableWidth = 400;
-      const tableX = (doc.page.width - tableWidth) / 2;
-      let tableY = doc.y + 20;
+    // Gráficos
+    doc
+      .fontSize(16)
+      .font("Helvetica-Bold")
+      .text("Visualização de Dados", 50, yPos);
+    doc.moveDown();
 
-      // Cabeçalho da tabela
-      doc.rect(tableX, tableY, tableWidth, 25).fill("#4472C4");
-
-      doc
-        .fillColor("white")
-        .fontSize(11)
-        .font("Helvetica-Bold")
-        .text("Categoria", tableX + 20, tableY + 7)
-        .text("Quantidade", tableX + tableWidth - 100, tableY + 7);
-
-      tableY += 25;
-      doc.fillColor("black");
-
-      // Corpo da tabela
-      vendasPorCategoria.labels.forEach((categoria, index) => {
-        // Linha alternada
-        if (index % 2 === 0) {
-          doc.rect(tableX, tableY, tableWidth, 25).fill("#F2F2F2");
-        }
-
-        doc
-          .fillColor("black")
-          .fontSize(10)
-          .font("Helvetica")
-          .text(categoria, tableX + 20, tableY + 7)
-          .text(
-            vendasPorCategoria.dados[index].toString(),
-            tableX + tableWidth - 100,
-            tableY + 7
-          );
-
-        tableY += 25;
-      });
+    // Verificar se os gráficos foram gerados
+    if (tempFiles.length > 0 && fs.existsSync(tempFiles[0])) {
+      doc.image(tempFiles[0], 50, doc.y, { width: 500 });
+      doc.moveDown(2);
     }
 
-    // ===== TABELA ESTOQUE POR LOCAL (NOVA PÁGINA) =====
-    doc.addPage();
-    drawHeader();
+    if (tempFiles.length > 1 && fs.existsSync(tempFiles[1])) {
+      // Se não couber na página atual, adicionar nova página
+      if (doc.y + 300 > doc.page.height - 100) {
+        doc.addPage();
+        pageNumber++;
+        addHeader();
+      }
 
-    doc.fontSize(14).font("Helvetica-Bold").text("Estoque por Local", 0, 60, {
-      width: doc.page.width,
-      align: "center",
-    });
-
-    if (estoquePorLocal.labels.length > 0) {
-      // Layout compacto de tabela
-      const tableWidth = 400;
-      const tableX = (doc.page.width - tableWidth) / 2;
-      let tableY = 90;
-
-      // Calcular total para percentuais
-      const total = estoquePorLocal.dados.reduce((sum, val) => sum + val, 0);
-
-      // Cabeçalho da tabela
-      doc.rect(tableX, tableY, tableWidth, 25).fill("#4472C4");
-
-      doc
-        .fillColor("white")
-        .fontSize(11)
-        .font("Helvetica-Bold")
-        .text("Local", tableX + 20, tableY + 7)
-        .text("Quantidade", tableX + tableWidth - 180, tableY + 7)
-        .text("Percentual", tableX + tableWidth - 80, tableY + 7);
-
-      tableY += 25;
-      doc.fillColor("black");
-
-      // Corpo da tabela
-      estoquePorLocal.labels.forEach((local, index) => {
-        // Linhas alternadas
-        if (index % 2 === 0) {
-          doc.rect(tableX, tableY, tableWidth, 25).fill("#F2F2F2");
-        }
-
-        // Calcular percentual
-        const percentual =
-          ((estoquePorLocal.dados[index] / total) * 100).toFixed(1) + "%";
-
-        doc
-          .fillColor("black")
-          .fontSize(10)
-          .font("Helvetica")
-          .text(local, tableX + 20, tableY + 7)
-          .text(
-            estoquePorLocal.dados[index].toString(),
-            tableX + tableWidth - 180,
-            tableY + 7
-          )
-          .text(percentual, tableX + tableWidth - 80, tableY + 7);
-
-        tableY += 25;
-      });
+      doc.image(tempFiles[1], 50, doc.y, { width: 500 });
     }
+
+    // Adicionar rodapé
+    addFooter(pageNumber);
 
     // ===== PÁGINA TOP PRODUTOS =====
     doc.addPage();
-    drawHeader();
+    pageNumber++;
+    addHeader();
 
     // Título baseado no método de cálculo
     const tituloTopProdutos =
@@ -470,145 +409,81 @@ exports.gerarPDF = async (req, res) => {
         ? "Top Produtos por Número de Vendas"
         : "Top Produtos por Quantidade Vendida";
 
-    doc.fontSize(18).font("Helvetica-Bold").text(tituloTopProdutos, 0, 60, {
-      width: doc.page.width,
-      align: "center",
-    });
+    doc
+      .fontSize(18)
+      .font("Helvetica-Bold")
+      .text(tituloTopProdutos, { align: "center" });
 
     // Adicionar explicação sobre o método
     doc
       .fontSize(10)
-      .font("Helvetica-Oblique")
+      .font("Helvetica")
       .text(
         metodoCalculo === "transacoes"
           ? "Classificação baseada no número de transações, independente da quantidade vendida em cada uma."
           : "Classificação baseada na quantidade total de itens vendidos.",
-        { align: "center" }
+        { align: "center", oblique: 0.3 }
       );
 
+    doc.moveDown();
+
     if (topProdutos.length > 0) {
-      // Tabela melhorada com linhas coloridas
-      doc.moveDown(1);
-      const tableTop = doc.y;
-      const tableWidth = 500;
+      // Cabeçalho da tabela com estilo melhorado
+      const drawTableHeader = () => {
+        doc.fontSize(10).font("Helvetica-Bold");
 
-      // Definição de larguras de colunas ajustadas
-      const colWidths = {
-        id: 50,
-        nome: 165, // Reduzido ligeiramente
-        tipo: 70,
-        categoria: 80,
-        valor: 60, // Aumentado para acomodar "Nº Vendas" sem sobreposição
-        percentual: 40,
-      };
+        // Retângulo de fundo para o cabeçalho
+        doc.rect(50, doc.y, 500, 20).fill("#2c3e50");
 
-      // Posições X para cada coluna
-      const xPos = {
-        id: 55,
-        nome: 55 + colWidths.id + 5,
-        tipo: 55 + colWidths.id + colWidths.nome + 10,
-        categoria: 55 + colWidths.id + colWidths.nome + colWidths.tipo + 15,
-        valor:
-          55 +
-          colWidths.id +
-          colWidths.nome +
-          colWidths.tipo +
-          colWidths.categoria +
-          20,
-        percentual:
-          55 +
-          colWidths.id +
-          colWidths.nome +
-          colWidths.tipo +
-          colWidths.categoria +
-          colWidths.valor +
-          30, // Adicionado mais espaço
-      };
+        // Texto do cabeçalho em branco
+        doc.fillColor("white");
+        doc.text("ID", 55, doc.y - 15, { width: 60 });
+        doc.text("Produto", 120, doc.y - 15, { width: 150 });
+        doc.text("Tipo", 275, doc.y - 15, { width: 70 });
+        doc.text("Categoria", 350, doc.y - 15, { width: 90 });
 
-      // Cabeçalho com fundo azul
-      doc.rect(50, tableTop, tableWidth, 25).fill("#4472C4");
-      doc.fillColor("white").fontSize(11).font("Helvetica-Bold");
-
-      // Textos do cabeçalho
-      doc.text("ID", xPos.id, tableTop + 8);
-      doc.text("Produto", xPos.nome, tableTop + 8);
-      doc.text("Tipo", xPos.tipo, tableTop + 8);
-      doc.text("Categoria", xPos.categoria, tableTop + 8);
-
-      // Coluna de quantidade com nome baseado no método
-      if (metodoCalculo === "transacoes") {
-        doc.text("Nº Vendas", xPos.valor, tableTop + 8, {
-          width: colWidths.valor,
-          align: "center",
-        });
-      } else {
-        doc.text("Qtd", xPos.valor, tableTop + 8, {
-          width: colWidths.valor,
-          align: "center",
-        });
-      }
-
-      doc.text("%", xPos.percentual, tableTop + 8, {
-        width: colWidths.percentual,
-        align: "center",
-      });
-
-      // Restaurar cor
-      doc.fillColor("black");
-      let tableY = tableTop + 25;
-
-      // Dados da tabela com linhas alternadas
-      doc.fontSize(9).font("Helvetica");
-
-      topProdutos.slice(0, 15).forEach((produto, index) => {
-        // Altura da linha fixa
-        const rowHeight = 25;
-
-        // Cor de fundo alternada
-        if (index % 2 === 0) {
-          doc.rect(50, tableY, tableWidth, rowHeight).fill("#F8F9FA");
+        // Coluna de quantidade com nome baseado no método
+        if (metodoCalculo === "transacoes") {
+          doc.text("Nº Vendas", 445, doc.y - 15, { width: 40 });
+        } else {
+          doc.text("Qtd", 445, doc.y - 15, { width: 40 });
         }
 
-        // Usar o campo apropriado baseado no método
+        doc.text("%", 490, doc.y - 15, { width: 40 });
+
+        // Restaurar cor
+        doc.fillColor("black");
+        doc.moveDown(1.5);
+      };
+
+      drawTableHeader();
+
+      // Dados da tabela com linhas alternadas
+      doc.fontSize(10).font("Helvetica");
+
+      topProdutos.slice(0, 15).forEach((produto, index) => {
+        // Cor de fundo alternada
+        if (index % 2 === 0) {
+          doc.rect(50, doc.y - 5, 500, 20).fill("#f8f9fa");
+          doc.fillColor("black");
+        }
+
+        doc.text(produto.id, 55, doc.y, { width: 60 });
+        doc.text(produto.nome, 120, doc.y, { width: 150 });
+        doc.text(produto.tipo, 275, doc.y, { width: 70 });
+        doc.text(produto.categoria, 350, doc.y, { width: 90 });
+
+        // Use o campo apropriado baseado no método
         const valorQtd =
           metodoCalculo === "transacoes"
             ? produto.transacoes || produto.quantidadeVendas
             : produto.quantidade;
 
-        // Textos da linha com cor preta explícita
-        doc.fillColor("black");
-
-        // ID
-        doc.text(produto.id, xPos.id, tableY + 8);
-
-        // Nome do produto truncado
-        doc.text(truncateText(produto.nome, 40), xPos.nome, tableY + 8);
-
-        // Tipo
-        doc.text(produto.tipo, xPos.tipo, tableY + 8);
-
-        // Categoria
-        doc.text(
-          truncateText(produto.categoria, 15),
-          xPos.categoria,
-          tableY + 8
-        );
-
-        // Quantidade
-        doc.text(valorQtd.toString(), xPos.valor, tableY + 8, {
-          width: colWidths.valor,
-          align: "center",
+        doc.text(valorQtd.toString(), 445, doc.y, { width: 40 });
+        doc.text(produto.percentual.toString() + "%", 490, doc.y, {
+          width: 40,
         });
-
-        // Percentual
-        doc.text(
-          produto.percentual.toString() + "%",
-          xPos.percentual,
-          tableY + 8,
-          { width: colWidths.percentual, align: "center" }
-        );
-
-        tableY += rowHeight;
+        doc.moveDown();
       });
 
       // Informações adicionais
@@ -616,8 +491,10 @@ exports.gerarPDF = async (req, res) => {
         doc.moveDown();
         doc
           .fontSize(9)
-          .font("Helvetica-Oblique")
-          .text(`* Exibindo 15 de ${topProdutos.length} produtos.`);
+          .font("Helvetica")
+          .text(`* Exibindo 15 de ${topProdutos.length} produtos.`, {
+            oblique: 0.3,
+          });
       }
     } else {
       doc
@@ -625,461 +502,118 @@ exports.gerarPDF = async (req, res) => {
         .font("Helvetica")
         .text("Nenhuma venda registrada no período selecionado.", {
           align: "center",
+          oblique: 0.3,
         });
     }
+
+    // Adicionar rodapé
+    addFooter(pageNumber);
 
     // ===== PÁGINA PRODUTOS SEM MOVIMENTAÇÃO =====
     if (produtosSemMovimentacao.length > 0) {
       doc.addPage();
-      drawHeader();
+      pageNumber++;
+      addHeader();
 
       doc
         .fontSize(18)
         .font("Helvetica-Bold")
-        .text("Produtos sem Movimentação", 0, 60, {
-          width: doc.page.width,
-          align: "center",
-        });
+        .text("Produtos sem Movimentação", { align: "center" });
+      doc.moveDown();
 
-      // Tabela com cores alternadas
-      doc.moveDown(1);
-      const tableTop = doc.y;
-      const tableWidth = 500;
+      // Cabeçalho da tabela
+      doc.fontSize(10).font("Helvetica-Bold");
+      doc.rect(50, doc.y, 500, 20).fill("#2c3e50");
+      doc.fillColor("white");
+      doc.text("ID", 55, doc.y - 15, { width: 60 });
+      doc.text("Produto", 120, doc.y - 15, { width: 150 });
+      doc.text("Local", 275, doc.y - 15, { width: 90 });
+      doc.text("Estoque", 370, doc.y - 15, { width: 60 });
+      doc.text("Última Movimentação", 435, doc.y - 15, { width: 100 });
+      doc.fillColor("black");
+      doc.moveDown(1.5);
 
-      // Definição de larguras de colunas
-      const colWidths = {
-        id: 50,
-        nome: 175,
-        local: 100,
-        quantidade: 50,
-        ultimaMovimentacao: 90,
-      };
+      // Dados da tabela
+      doc.fontSize(10).font("Helvetica");
 
-      // Posições X para cada coluna
-      const xPos = {
-        id: 55,
-        nome: 55 + colWidths.id + 5,
-        local: 55 + colWidths.id + colWidths.nome + 10,
-        quantidade: 55 + colWidths.id + colWidths.nome + colWidths.local + 15,
-        ultimaMovimentacao:
-          55 +
-          colWidths.id +
-          colWidths.nome +
-          colWidths.local +
-          colWidths.quantidade +
-          20,
-      };
+      produtosSemMovimentacao.slice(0, 20).forEach((produto, index) => {
+        // Cor de fundo alternada
+        if (index % 2 === 0) {
+          doc.rect(50, doc.y - 5, 500, 20).fill("#f8f9fa");
+          doc.fillColor("black");
+        }
 
-      // Altura do cabeçalho
-      const headerHeight = 30;
+        const ultimaMovimentacao = produto.ultimaMovimentacao
+          ? new Date(produto.ultimaMovimentacao).toLocaleDateString("pt-BR")
+          : "Nunca";
 
-      // Cabeçalho com fundo colorido
-      doc.rect(50, tableTop, tableWidth, headerHeight).fill("#4472C4");
-      doc.fillColor("white").fontSize(11).font("Helvetica-Bold");
+        doc.text(produto.id, 55, doc.y, { width: 60 });
+        doc.text(produto.nome, 120, doc.y, { width: 150 });
+        doc.text(produto.local, 275, doc.y, { width: 90 });
+        doc.text(produto.quantidade.toString(), 370, doc.y, { width: 60 });
+        doc.text(ultimaMovimentacao, 435, doc.y, { width: 100 });
+        doc.moveDown();
 
-      // Textos do cabeçalho
-      doc.text("ID", xPos.id, tableTop + headerHeight / 2 - 5);
-      doc.text("Produto", xPos.nome, tableTop + headerHeight / 2 - 5);
-      doc.text("Local", xPos.local, tableTop + headerHeight / 2 - 5);
-      doc.text("Estoque", xPos.quantidade, tableTop + headerHeight / 2 - 5);
+        // Se estiver no final da página, adicionar nova
+        if (
+          doc.y > doc.page.height - 120 &&
+          index < produtosSemMovimentacao.length - 1
+        ) {
+          addFooter(pageNumber);
+          doc.addPage();
+          pageNumber++;
+          addHeader();
 
-      // Ajuste de "Última Movimentação" para garantir que caiba
-      doc.text("Última\nMovimentação", xPos.ultimaMovimentacao, tableTop + 5, {
-        width: colWidths.ultimaMovimentacao,
-        align: "left",
-        lineGap: 2,
+          // Redesenhar cabeçalho da tabela
+          doc.fontSize(10).font("Helvetica-Bold");
+          doc.rect(50, doc.y, 500, 20).fill("#2c3e50");
+          doc.fillColor("white");
+          doc.text("ID", 55, doc.y - 15, { width: 60 });
+          doc.text("Produto", 120, doc.y - 15, { width: 150 });
+          doc.text("Local", 275, doc.y - 15, { width: 90 });
+          doc.text("Estoque", 370, doc.y - 15, { width: 60 });
+          doc.text("Última Movimentação", 435, doc.y - 15, { width: 100 });
+          doc.fillColor("black");
+          doc.moveDown(1.5);
+        }
       });
 
-      // Restaurar cor
-      doc.fillColor("black");
-      let tableY = tableTop + headerHeight;
-
-      // Limitar o número de itens por página
-      const itemsPerPage = 20;
-      const startIndex = 0;
-      const endIndex = Math.min(itemsPerPage, produtosSemMovimentacao.length);
-
-      // Dados da tabela com linhas alternadas
-      produtosSemMovimentacao
-        .slice(startIndex, endIndex)
-        .forEach((produto, index) => {
-          // Altura fixa da linha
-          const rowHeight = 25;
-
-          // Cor de fundo alternada
-          if (index % 2 === 0) {
-            doc.rect(50, tableY, tableWidth, rowHeight).fill("#F8F9FA");
-          }
-
-          const ultimaMovimentacao = produto.ultimaMovimentacao
-            ? new Date(produto.ultimaMovimentacao).toLocaleDateString("pt-BR")
-            : "Nunca";
-
-          // Textos da linha
-          doc.fillColor("black").fontSize(9).font("Helvetica");
-
-          doc.text(produto.id, xPos.id, tableY + 8);
-          doc.text(truncateText(produto.nome, 40), xPos.nome, tableY + 8);
-          doc.text(produto.local, xPos.local, tableY + 8);
-          doc.text(produto.quantidade.toString(), xPos.quantidade, tableY + 8);
-          doc.text(ultimaMovimentacao, xPos.ultimaMovimentacao, tableY + 8);
-
-          tableY += rowHeight;
-        });
-
-      // Se houver mais itens, adicionar indicação
-      if (produtosSemMovimentacao.length > itemsPerPage) {
+      // Informações adicionais
+      if (produtosSemMovimentacao.length > 20) {
         doc.moveDown();
         doc
           .fontSize(9)
-          .font("Helvetica-Oblique")
+          .font("Helvetica")
           .text(
-            `* Exibindo ${endIndex} de ${produtosSemMovimentacao.length} produtos sem movimentação.`
-          );
-      }
-
-      // Se houver muitos produtos sem movimentação, adicionar páginas adicionais
-      if (produtosSemMovimentacao.length > itemsPerPage) {
-        // Calcular número de páginas adicionais necessárias
-        const remainingItems = produtosSemMovimentacao.length - itemsPerPage;
-        const additionalPages = Math.ceil(remainingItems / itemsPerPage);
-
-        for (let page = 0; page < additionalPages; page++) {
-          doc.addPage();
-          drawHeader();
-
-          doc
-            .fontSize(18)
-            .font("Helvetica-Bold")
-            .text("Produtos sem Movimentação (continuação)", 0, 60, {
-              width: doc.page.width,
-              align: "center",
-            });
-
-          // Cabeçalho da tabela
-          const tableTop = doc.y + 15;
-
-          doc.rect(50, tableTop, tableWidth, headerHeight).fill("#4472C4");
-          doc.fillColor("white").fontSize(11).font("Helvetica-Bold");
-
-          doc.text("ID", xPos.id, tableTop + headerHeight / 2 - 5);
-          doc.text("Produto", xPos.nome, tableTop + headerHeight / 2 - 5);
-          doc.text("Local", xPos.local, tableTop + headerHeight / 2 - 5);
-          doc.text("Estoque", xPos.quantidade, tableTop + headerHeight / 2 - 5);
-
-          // Ajuste de "Última Movimentação" para garantir que caiba
-          doc.text(
-            "Última\nMovimentação",
-            xPos.ultimaMovimentacao,
-            tableTop + 5,
+            `* Exibindo 20 de ${produtosSemMovimentacao.length} produtos sem movimentação.`,
             {
-              width: colWidths.ultimaMovimentacao,
-              align: "left",
-              lineGap: 2,
+              oblique: 0.3,
             }
           );
-
-          // Restaurar cor
-          doc.fillColor("black");
-          let tableY = tableTop + headerHeight;
-
-          // Índices para esta página
-          const pageStartIndex = itemsPerPage + page * itemsPerPage;
-          const pageEndIndex = Math.min(
-            pageStartIndex + itemsPerPage,
-            produtosSemMovimentacao.length
-          );
-
-          // Dados da tabela
-          produtosSemMovimentacao
-            .slice(pageStartIndex, pageEndIndex)
-            .forEach((produto, index) => {
-              // Altura fixa da linha
-              const rowHeight = 25;
-
-              // Cor de fundo alternada
-              if (index % 2 === 0) {
-                doc.rect(50, tableY, tableWidth, rowHeight).fill("#F8F9FA");
-              }
-
-              const ultimaMovimentacao = produto.ultimaMovimentacao
-                ? new Date(produto.ultimaMovimentacao).toLocaleDateString(
-                    "pt-BR"
-                  )
-                : "Nunca";
-
-              // Textos da linha
-              doc.fillColor("black").fontSize(9).font("Helvetica");
-
-              doc.text(produto.id, xPos.id, tableY + 8);
-              doc.text(truncateText(produto.nome, 40), xPos.nome, tableY + 8);
-              doc.text(produto.local, xPos.local, tableY + 8);
-              doc.text(
-                produto.quantidade.toString(),
-                xPos.quantidade,
-                tableY + 8
-              );
-              doc.text(ultimaMovimentacao, xPos.ultimaMovimentacao, tableY + 8);
-
-              tableY += rowHeight;
-            });
-        }
       }
     }
 
-    // ===== PÁGINA TODOS OS PRODUTOS VENDIDOS =====
-    if (todosProdutosVendidos.length > 0) {
-      doc.addPage();
-      drawHeader();
+    // Adicionar rodapé à última página
+    addFooter(pageNumber);
 
-      doc
-        .fontSize(18)
-        .font("Helvetica-Bold")
-        .text("Todos os Produtos Vendidos no Período", 0, 60, {
-          width: doc.page.width,
-          align: "center",
-        });
-
-      // Tabela com cores alternadas
-      doc.moveDown(1);
-      const tableTop = doc.y;
-      const tableWidth = 500;
-
-      // Definição de larguras de colunas - AJUSTADO: removida coluna valorTotal e redistribuído espaço
-      const colWidths = {
-        id: 45,
-        nome: 160, // Aumentado para usar parte do espaço liberado
-        tipo: 65, // Ligeiramente aumentado
-        categoria: 90, // Aumentado para usar parte do espaço liberado
-        quantidade: 60,
-        transacoes: 60,
-      };
-
-      // Posições X para cada coluna - MODIFICADO: removido valorTotal e recalculado
-      const xPos = {
-        id: 55,
-        nome: 55 + colWidths.id + 5,
-        tipo: 55 + colWidths.id + colWidths.nome + 10,
-        categoria: 55 + colWidths.id + colWidths.nome + colWidths.tipo + 15,
-        quantidade:
-          55 +
-          colWidths.id +
-          colWidths.nome +
-          colWidths.tipo +
-          colWidths.categoria +
-          20,
-        transacoes:
-          55 +
-          colWidths.id +
-          colWidths.nome +
-          colWidths.tipo +
-          colWidths.categoria +
-          colWidths.quantidade +
-          25,
-      };
-
-      // Altura do cabeçalho
-      const headerHeight = 30;
-
-      // Cabeçalho com fundo colorido
-      doc.rect(50, tableTop, tableWidth, headerHeight).fill("#4472C4");
-      doc.fillColor("white").fontSize(11).font("Helvetica-Bold");
-
-      // Textos do cabeçalho - MODIFICADO: removido o cabeçalho de Valor Total
-      doc.text("ID", xPos.id, tableTop + headerHeight / 2 - 5, {
-        width: colWidths.id,
-        align: "left",
-      });
-      doc.text("Produto", xPos.nome, tableTop + headerHeight / 2 - 5, {
-        width: colWidths.nome,
-        align: "left",
-      });
-      doc.text("Tipo", xPos.tipo, tableTop + headerHeight / 2 - 5, {
-        width: colWidths.tipo,
-        align: "left",
-      });
-      doc.text("Categoria", xPos.categoria, tableTop + headerHeight / 2 - 5, {
-        width: colWidths.categoria,
-        align: "left",
-      });
-      doc.text("Qtd\nVendida", xPos.quantidade, tableTop + 5, {
-        width: colWidths.quantidade,
-        align: "center",
-        lineGap: 2,
-      });
-      doc.text("Nº\nVendas", xPos.transacoes, tableTop + 5, {
-        width: colWidths.transacoes,
-        align: "center",
-        lineGap: 2,
-      });
-
-      // Restaurar cor
-      doc.fillColor("black");
-      let tableY = tableTop + headerHeight;
-
-      // Limitar o número de itens por página
-      const itemsPerPage = 18;
-      const totalPages = Math.ceil(todosProdutosVendidos.length / itemsPerPage);
-
-      // Loop para criar tabelas em múltiplas páginas conforme necessário
-      for (let pagina = 0; pagina < totalPages; pagina++) {
-        if (pagina > 0) {
-          // Nova página para produtos adicionais
-          doc.addPage();
-          drawHeader();
-
-          doc
-            .fontSize(18)
-            .font("Helvetica-Bold")
-            .text(
-              "Todos os Produtos Vendidos no Período (continuação)",
-              0,
-              60,
-              {
-                width: doc.page.width,
-                align: "center",
-              }
-            );
-
-          // Redesenhar cabeçalho da tabela
-          const tableTop = doc.y + 15;
-
-          doc.rect(50, tableTop, tableWidth, headerHeight).fill("#4472C4");
-          doc.fillColor("white").fontSize(11).font("Helvetica-Bold");
-
-          // Textos do cabeçalho - MODIFICADO: removido o cabeçalho de Valor Total
-          doc.text("ID", xPos.id, tableTop + headerHeight / 2 - 5, {
-            width: colWidths.id,
-            align: "left",
-          });
-          doc.text("Produto", xPos.nome, tableTop + headerHeight / 2 - 5, {
-            width: colWidths.nome,
-            align: "left",
-          });
-          doc.text("Tipo", xPos.tipo, tableTop + headerHeight / 2 - 5, {
-            width: colWidths.tipo,
-            align: "left",
-          });
-          doc.text(
-            "Categoria",
-            xPos.categoria,
-            tableTop + headerHeight / 2 - 5,
-            { width: colWidths.categoria, align: "left" }
-          );
-          doc.text("Qtd\nVendida", xPos.quantidade, tableTop + 5, {
-            width: colWidths.quantidade,
-            align: "center",
-            lineGap: 2,
-          });
-          doc.text("Nº\nVendas", xPos.transacoes, tableTop + 5, {
-            width: colWidths.transacoes,
-            align: "center",
-            lineGap: 2,
-          });
-
-          // Restaurar cor
-          doc.fillColor("black");
-          tableY = tableTop + headerHeight;
-        }
-
-        // Índices para esta página
-        const startIndex = pagina * itemsPerPage;
-        const endIndex = Math.min(
-          (pagina + 1) * itemsPerPage,
-          todosProdutosVendidos.length
-        );
-
-        // Mostrar produtos desta página
-        todosProdutosVendidos
-          .slice(startIndex, endIndex)
-          .forEach((produto, index) => {
-            // Altura fixa da linha
-            const rowHeight = 25;
-
-            // Cor de fundo alternada
-            if (index % 2 === 0) {
-              doc.rect(50, tableY, tableWidth, rowHeight).fill("#F8F9FA");
-            }
-
-            // Textos da linha - MODIFICADO: removido o valor total
-            doc.fillColor("black").fontSize(9).font("Helvetica");
-
-            doc.text(produto.id, xPos.id, tableY + 8, {
-              width: colWidths.id,
-              align: "left",
-            });
-            doc.text(truncateText(produto.nome, 40), xPos.nome, tableY + 8, {
-              width: colWidths.nome,
-              align: "left",
-            });
-            doc.text(truncateText(produto.tipo, 15), xPos.tipo, tableY + 8, {
-              width: colWidths.tipo,
-              align: "left",
-            });
-            doc.text(
-              truncateText(produto.categoria, 20),
-              xPos.categoria,
-              tableY + 8,
-              { width: colWidths.categoria, align: "left" }
-            );
-            doc.text(
-              produto.quantidade.toString(),
-              xPos.quantidade,
-              tableY + 8,
-              { width: colWidths.quantidade, align: "center" }
-            );
-            doc.text(
-              produto.transacoes.toString(),
-              xPos.transacoes,
-              tableY + 8,
-              { width: colWidths.transacoes, align: "center" }
-            );
-
-            tableY += rowHeight;
-          });
-
-        // Adicionar total da página
-        if (pagina === totalPages - 1) {
-          // Calcular totais gerais - MODIFICADO: removido totalValor
-          const totalQuantidade = todosProdutosVendidos.reduce(
-            (sum, p) => sum + p.quantidade,
-            0
-          );
-          const totalTransacoes = todosProdutosVendidos.reduce(
-            (sum, p) => sum + p.transacoes,
-            0
-          );
-
-          // Linha de totais
-          tableY += 5;
-          doc.rect(50, tableY, tableWidth, 30).fill("#E8EAF6");
-
-          doc
-            .fillColor("#1A237E")
-            .fontSize(10)
-            .font("Helvetica-Bold")
-            .text("TOTAL", xPos.nome, tableY + 10, {
-              width: colWidths.nome,
-              align: "left",
-            });
-
-          doc.text(totalQuantidade.toString(), xPos.quantidade, tableY + 10, {
-            width: colWidths.quantidade,
-            align: "center",
-          });
-          doc.text(totalTransacoes.toString(), xPos.transacoes, tableY + 10, {
-            width: colWidths.transacoes,
-            align: "center",
-          });
-
-          // Restaurar cor
-          doc.fillColor("black");
-        }
-      }
-    }
+    // Substitui os placeholders do número total de páginas
+    const totalPages = pageNumber;
 
     // Finalizar o documento
     doc.end();
+
+    // Limpar arquivos temporários
+    setTimeout(() => {
+      tempFiles.forEach((file) => {
+        try {
+          if (fs.existsSync(file)) {
+            fs.unlinkSync(file);
+          }
+        } catch (err) {
+          console.error(`Erro ao excluir arquivo temporário ${file}:`, err);
+        }
+      });
+    }, 1000);
   } catch (error) {
     console.error("Erro ao gerar PDF:", error);
     res.status(500).json({
@@ -1089,8 +623,6 @@ exports.gerarPDF = async (req, res) => {
     });
   }
 };
-
-// Manter funções auxiliares existentes...
 
 // Adicione estas funções auxiliares no seu arquivo relatorioController.js
 
@@ -1149,24 +681,11 @@ async function calcularEstatisticas(
         ? { $count: {} } // Contagem de documentos
         : { $sum: "$quantidade" }; // Soma das quantidades
 
-    // CORREÇÃO: Utilizar a data como string no formato "YYYY-MM-DD" para evitar problemas de fuso horário
     const vendasPorDia = await Venda.aggregate([
       { $match: filtro },
       {
-        $addFields: {
-          // Converter a data para string no formato YYYY-MM-DD usando operadores do MongoDB
-          dataString: {
-            $dateToString: {
-              format: "%Y-%m-%d",
-              date: "$dataVenda",
-              timezone: "UTC", // Garantir que estamos usando UTC consistentemente
-            },
-          },
-        },
-      },
-      {
         $group: {
-          _id: "$dataString",
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$dataVenda" } },
           total: agregarPor,
         },
       },
@@ -1174,43 +693,7 @@ async function calcularEstatisticas(
       { $limit: 1 },
     ]);
 
-    // Log para depuração
-    console.log(
-      "Vendas por dia (após agregação):",
-      JSON.stringify(vendasPorDia, null, 2)
-    );
-
     const diaMaiorVenda = vendasPorDia.length > 0 ? vendasPorDia[0]._id : null;
-
-    // Log adicional para verificar
-    if (diaMaiorVenda) {
-      console.log(
-        `Dia com maior venda: ${diaMaiorVenda}, dentro do período ${
-          dataInicio.toISOString().split("T")[0]
-        } a ${dataFim.toISOString().split("T")[0]}`
-      );
-    }
-
-    // Verificar se a data está dentro do período filtrado
-    if (diaMaiorVenda) {
-      const dataStr = diaMaiorVenda;
-      const dataInStr = dataInicio.toISOString().split("T")[0];
-      const dataFimStr = dataFim.toISOString().split("T")[0];
-
-      // Se a data não estiver no período, ignorar
-      if (dataStr < dataInStr || dataStr > dataFimStr) {
-        console.warn(
-          `Aviso: Dia com maior venda (${dataStr}) está fora do período filtrado (${dataInStr} a ${dataFimStr}). Ignorando.`
-        );
-        return {
-          totalItensVendidos,
-          totalTransacoes,
-          mediaVendasDiarias,
-          diaMaiorVenda: null,
-          numeroDias,
-        };
-      }
-    }
 
     return {
       totalItensVendidos,
@@ -1631,7 +1114,6 @@ exports.getResumo = async (req, res) => {
       subcategoria,
       local,
       metodoCalculo = "transacoes",
-      useExactDates = false,
     } = req.query;
 
     // Validar parâmetros obrigatórios
@@ -1642,43 +1124,12 @@ exports.getResumo = async (req, res) => {
       });
     }
 
-    // Log para depuração
-    console.log("Datas recebidas:", {
-      dataInicio,
-      dataFim,
-      useExactDates,
-    });
+    // Converter datas
+    const dataInicioObj = new Date(dataInicio);
+    const dataFimObj = new Date(dataFim);
+    dataFimObj.setHours(23, 59, 59, 999);
 
-    // Converter datas com extremo cuidado
-    let dataInicioObj, dataFimObj;
-
-    if (useExactDates === "true") {
-      // Usar as datas exatamente como foram enviadas, apenas ajustando para início e fim do dia
-      dataInicioObj = new Date(`${dataInicio}T00:00:00.000Z`);
-      dataFimObj = new Date(`${dataFim}T23:59:59.999Z`);
-    } else {
-      // Abordagem anterior
-      dataInicioObj = new Date(dataInicio);
-      dataInicioObj.setHours(0, 0, 0, 0);
-
-      dataFimObj = new Date(dataFim);
-      dataFimObj.setHours(23, 59, 59, 999);
-    }
-
-    // Verificar se as datas são válidas
-    if (isNaN(dataInicioObj.getTime()) || isNaN(dataFimObj.getTime())) {
-      console.error("Datas inválidas:", { dataInicio, dataFim });
-      return res.status(400).json({
-        sucesso: false,
-        mensagem: "Datas inválidas",
-      });
-    }
-
-    console.log(
-      `DEBUG - Período após processamento: ${dataInicioObj.toISOString()} a ${dataFimObj.toISOString()}`
-    );
-
-    // Construir filtros com as datas ajustadas
+    // Construir filtros
     const filtroVendas = {
       dataVenda: {
         $gte: dataInicioObj,
