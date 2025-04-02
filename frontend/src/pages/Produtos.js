@@ -1,31 +1,39 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { FaPlus, FaEdit, FaTrash, FaSearch, FaFilter, FaTimes, FaExclamationTriangle } from 'react-icons/fa';
-import api from '../services/api';
-import { toast } from 'react-toastify';
-import Paginacao from '../components/Paginacao';
-import './Produtos.css';
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { Link } from "react-router-dom";
+import {
+  FaPlus,
+  FaEdit,
+  FaTrash,
+  FaSearch,
+  FaFilter,
+  FaTimes,
+  FaExclamationTriangle,
+} from "react-icons/fa";
+import api from "../services/api";
+import { toast } from "react-toastify";
+import Paginacao from "../components/Paginacao";
+import "./Produtos.css";
 
 const Produtos = () => {
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [carregando, setCarregando] = useState(true);
-  const [busca, setBusca] = useState('');
-  
+  const [busca, setBusca] = useState("");
+
   // Filtro avançado visível por padrão
   const [filtroAvancado, setFiltroAvancado] = useState(true);
-  
+
   // Arrays para as opções de filtro (extraídos dos próprios produtos)
   const [tipos, setTipos] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [subcategorias, setSubcategorias] = useState([]);
-  
+
   // Filtros selecionados
   const [filtros, setFiltros] = useState({
-    tipo: '',
-    categoria: '',
-    subcategoria: ''
+    tipo: "",
+    categoria: "",
+    subcategoria: "",
   });
-  
+
   // Estado para modal de exclusão avançado
   const [excluirId, setExcluirId] = useState(null);
   const [produtoExcluir, setProdutoExcluir] = useState(null);
@@ -37,27 +45,27 @@ const Produtos = () => {
   const [paginacao, setPaginacao] = useState({
     currentPage: 1,
     itemsPerPage: 20,
-    totalItems: 0
+    totalItems: 0,
   });
-  
+
   // Refs para controlar carregamentos e evitar ciclos
   const shouldFetchData = useRef(true);
   const fetchRequested = useRef(false);
   const requestInProgress = useRef(false);
-  
+
   // Controle avançado de estados de paginação
   const paginacaoRef = useRef({
     currentPage: 1,
     itemsPerPage: 20,
-    totalItems: 0
+    totalItems: 0,
   });
-  
+
   // Referência aos filtros atuais para evitar ciclos
   const filtrosRef = useRef({
-    tipo: '',
-    categoria: '',
-    subcategoria: '',
-    busca: ''
+    tipo: "",
+    categoria: "",
+    subcategoria: "",
+    busca: "",
   });
 
   // Função para carregar produtos sem depender de estados
@@ -67,10 +75,10 @@ const Produtos = () => {
       fetchRequested.current = true;
       return;
     }
-    
+
     requestInProgress.current = true;
     setCarregando(true);
-    
+
     try {
       const mergedParams = {
         page: paginacaoRef.current.currentPage,
@@ -79,60 +87,63 @@ const Produtos = () => {
         categoria: filtrosRef.current.categoria,
         subcategoria: filtrosRef.current.subcategoria,
         busca: filtrosRef.current.busca || undefined,
-        ...params
+        ...params,
       };
-      
-      console.log('Buscando produtos com params:', mergedParams);
-      
-      const resposta = await api.get('/api/produtos', { params: mergedParams });
-      
-      console.log('Resposta recebida:', resposta.data);
-      
+
+      console.log("Buscando produtos com params:", mergedParams);
+
+      const resposta = await api.get("/api/produtos", { params: mergedParams });
+
+      console.log("Resposta recebida:", resposta.data);
+
       let dadosProdutos = [];
-      
+
       if (resposta.data && Array.isArray(resposta.data)) {
         dadosProdutos = resposta.data;
-      } else if (resposta.data && resposta.data.produtos && Array.isArray(resposta.data.produtos)) {
+      } else if (
+        resposta.data &&
+        resposta.data.produtos &&
+        Array.isArray(resposta.data.produtos)
+      ) {
         dadosProdutos = resposta.data.produtos;
       }
-      
+
       // Atualizar dados sem disparar ciclos de renderização
       setProdutosFiltrados(dadosProdutos);
-      
+
       // Atualizar total sem causar renderização em cascata
       if (resposta.data.total) {
         paginacaoRef.current.totalItems = resposta.data.total;
-        setPaginacao(prev => ({
+        setPaginacao((prev) => ({
           ...prev,
-          totalItems: resposta.data.total
+          totalItems: resposta.data.total,
         }));
       }
-      
+
       // Extrair opções de filtro
       const tiposSet = new Set();
       const categoriasSet = new Set();
       const subcategoriasSet = new Set();
-      
-      dadosProdutos.forEach(produto => {
+
+      dadosProdutos.forEach((produto) => {
         if (produto.tipo) tiposSet.add(produto.tipo);
         if (produto.categoria) categoriasSet.add(produto.categoria);
         if (produto.subcategoria) subcategoriasSet.add(produto.subcategoria);
       });
-      
+
       setTipos(Array.from(tiposSet).sort());
       setCategorias(Array.from(categoriasSet).sort());
       setSubcategorias(Array.from(subcategoriasSet).sort());
-      
     } catch (error) {
-      console.error('Erro ao carregar produtos:', error);
-      toast.error('Erro ao carregar produtos. Tente novamente.', {
-        toastId: 'erro-carregar-produtos'
+      console.error("Erro ao carregar produtos:", error);
+      toast.error("Erro ao carregar produtos. Tente novamente.", {
+        toastId: "erro-carregar-produtos",
       });
       setProdutosFiltrados([]);
     } finally {
       setCarregando(false);
       requestInProgress.current = false;
-      
+
       // Se uma nova requisição foi solicitada durante esta, executar após um pequeno delay
       if (fetchRequested.current) {
         fetchRequested.current = false;
@@ -144,53 +155,59 @@ const Produtos = () => {
   }, []);
 
   // Handler de mudança de página - versão segura
-  const handlePageChange = useCallback((page) => {
-    console.log(`Mudando para página ${page}`);
-    
-    if (page === paginacaoRef.current.currentPage) return;
-    
-    // Atualizar ref antes do estado
-    paginacaoRef.current.currentPage = page;
-    
-    // Atualizar estado
-    setPaginacao(prev => ({ ...prev, currentPage: page }));
-    
-    // Carregar novos dados com a página atualizada
-    carregarProdutosFn({ page });
-  }, [carregarProdutosFn]);
+  const handlePageChange = useCallback(
+    (page) => {
+      console.log(`Mudando para página ${page}`);
+
+      if (page === paginacaoRef.current.currentPage) return;
+
+      // Atualizar ref antes do estado
+      paginacaoRef.current.currentPage = page;
+
+      // Atualizar estado
+      setPaginacao((prev) => ({ ...prev, currentPage: page }));
+
+      // Carregar novos dados com a página atualizada
+      carregarProdutosFn({ page });
+    },
+    [carregarProdutosFn]
+  );
 
   // Handler de mudança de itens por página - versão segura
-  const handleItemsPerPageChange = useCallback((itemsPerPage) => {
-    console.log(`Mudando para ${itemsPerPage} itens por página`);
-    
-    if (itemsPerPage === paginacaoRef.current.itemsPerPage) return;
-    
-    // Atualizar ref antes do estado
-    paginacaoRef.current.itemsPerPage = itemsPerPage;
-    paginacaoRef.current.currentPage = 1;
-    
-    // Atualizar estado
-    setPaginacao(prev => ({ 
-      ...prev, 
-      itemsPerPage, 
-      currentPage: 1 
-    }));
-    
-    // Carregar novos dados com os parâmetros atualizados
-    carregarProdutosFn({ limit: itemsPerPage, page: 1 });
-  }, [carregarProdutosFn]);
+  const handleItemsPerPageChange = useCallback(
+    (itemsPerPage) => {
+      console.log(`Mudando para ${itemsPerPage} itens por página`);
+
+      if (itemsPerPage === paginacaoRef.current.itemsPerPage) return;
+
+      // Atualizar ref antes do estado
+      paginacaoRef.current.itemsPerPage = itemsPerPage;
+      paginacaoRef.current.currentPage = 1;
+
+      // Atualizar estado
+      setPaginacao((prev) => ({
+        ...prev,
+        itemsPerPage,
+        currentPage: 1,
+      }));
+
+      // Carregar novos dados com os parâmetros atualizados
+      carregarProdutosFn({ limit: itemsPerPage, page: 1 });
+    },
+    [carregarProdutosFn]
+  );
 
   // Efeito para carregar dados iniciais - executado apenas UMA vez
   useEffect(() => {
     console.log("Montagem inicial do componente - carregando dados");
-    
+
     // Garantir que as refs estão sincronizadas com os estados iniciais
     paginacaoRef.current = { ...paginacao };
     filtrosRef.current = { ...filtros, busca };
-    
+
     // Carregar produtos apenas uma vez na montagem
     carregarProdutosFn();
-    
+
     // Cleanup function
     return () => {
       shouldFetchData.current = false;
@@ -199,29 +216,32 @@ const Produtos = () => {
   }, []);
 
   // Função para aplicar filtros sem causar loops
-  const aplicarFiltros = useCallback((novosFiltros, novaBusca) => {
-    console.log("Aplicando filtros:", novosFiltros, novaBusca);
-    
-    // Atualizar refs primeiro
-    filtrosRef.current = {
-      ...novosFiltros,
-      busca: novaBusca
-    };
-    
-    paginacaoRef.current.currentPage = 1;
-    
-    // Atualizar estados
-    setFiltros(novosFiltros);
-    setBusca(novaBusca);
-    setPaginacao(prev => ({ ...prev, currentPage: 1 }));
-    
-    // Carregar dados com novos filtros
-    carregarProdutosFn({
-      ...novosFiltros,
-      busca: novaBusca || undefined,
-      page: 1
-    });
-  }, [carregarProdutosFn]);
+  const aplicarFiltros = useCallback(
+    (novosFiltros, novaBusca) => {
+      console.log("Aplicando filtros:", novosFiltros, novaBusca);
+
+      // Atualizar refs primeiro
+      filtrosRef.current = {
+        ...novosFiltros,
+        busca: novaBusca,
+      };
+
+      paginacaoRef.current.currentPage = 1;
+
+      // Atualizar estados
+      setFiltros(novosFiltros);
+      setBusca(novaBusca);
+      setPaginacao((prev) => ({ ...prev, currentPage: 1 }));
+
+      // Carregar dados com novos filtros
+      carregarProdutosFn({
+        ...novosFiltros,
+        busca: novaBusca || undefined,
+        page: 1,
+      });
+    },
+    [carregarProdutosFn]
+  );
 
   // Função para atualizar busca
   const handleBuscaChange = (e) => {
@@ -241,7 +261,7 @@ const Produtos = () => {
         aplicarBusca();
       }
     }, 500);
-    
+
     return () => clearTimeout(timeoutId);
   }, [busca, aplicarBusca]);
 
@@ -255,12 +275,12 @@ const Produtos = () => {
   // Limpar todos os filtros
   const limparFiltros = () => {
     const novosFiltros = {
-      tipo: '',
-      categoria: '',
-      subcategoria: ''
+      tipo: "",
+      categoria: "",
+      subcategoria: "",
     };
-    
-    aplicarFiltros(novosFiltros, '');
+
+    aplicarFiltros(novosFiltros, "");
   };
 
   // Função para confirmar exclusão (agora com carregamento dos dados do produto)
@@ -269,32 +289,35 @@ const Produtos = () => {
       // Carregar dados do produto para verificar estoque
       const response = await api.get(`/api/produtos/${id}`);
       const produto = response.data;
-      
+
       // Verificar se tem estoque e se já foi calculado
       let temEstoque = false;
       let quantidadeTotal = 0;
-      
+
       if (produto.estoques && produto.estoques.length > 0) {
-        quantidadeTotal = produto.estoques.reduce((total, estoque) => total + estoque.quantidade, 0);
+        quantidadeTotal = produto.estoques.reduce(
+          (total, estoque) => total + estoque.quantidade,
+          0
+        );
         temEstoque = quantidadeTotal > 0;
       }
-      
+
       // Armazenar dados do produto para usar no modal
       setProdutoExcluir({
         ...produto,
         temEstoque,
-        quantidadeTotal
+        quantidadeTotal,
       });
-      
+
       // Definir ID do produto a ser excluído
       setExcluirId(id);
-      
+
       // Resetar estado do modal
       setEstoqueZerado(false);
       setErroExclusao(null);
     } catch (error) {
-      console.error('Erro ao carregar dados do produto para exclusão:', error);
-      toast.error('Erro ao preparar exclusão do produto. Tente novamente.');
+      console.error("Erro ao carregar dados do produto para exclusão:", error);
+      toast.error("Erro ao preparar exclusão do produto. Tente novamente.");
     }
   };
 
@@ -311,19 +334,21 @@ const Produtos = () => {
     try {
       setExcluindoProduto(true);
       setErroExclusao(null);
-      
+
       // Chamar API para zerar estoque
       await api.post(`/api/produtos/${produtoId}/zerar-estoque`);
-      
+
       setEstoqueZerado(true);
-      toast.success('Estoque do produto zerado com sucesso');
-      
+      toast.success("Estoque do produto zerado com sucesso");
+
       // Continuar com exclusão após zerar estoque
       return true;
     } catch (error) {
-      console.error('Erro ao zerar estoque do produto:', error);
-      setErroExclusao('Não foi possível zerar o estoque do produto. Tente novamente.');
-      toast.error('Erro ao zerar estoque do produto');
+      console.error("Erro ao zerar estoque do produto:", error);
+      setErroExclusao(
+        "Não foi possível zerar o estoque do produto. Tente novamente."
+      );
+      toast.error("Erro ao zerar estoque do produto");
       setExcluindoProduto(false);
       return false;
     }
@@ -332,34 +357,35 @@ const Produtos = () => {
   // Função para excluir o produto
   const excluirProduto = async () => {
     if (!excluirId || !produtoExcluir) return;
-    
+
     try {
       setExcluindoProduto(true);
-      
+
       // Se produto tem estoque e ainda não foi zerado, zerar primeiro
       if (produtoExcluir.temEstoque && !estoqueZerado) {
         const estoqueZeradoComSucesso = await zerarEstoque(excluirId);
         if (!estoqueZeradoComSucesso) return;
       }
-      
+
       // Agora tenta excluir o produto
       await api.delete(`/api/produtos/${excluirId}`);
-      
+
       // Atualizar lista de produtos recarregando os dados
       carregarProdutosFn();
-      
-      toast.success('Produto removido com sucesso!');
-      
+
+      toast.success("Produto removido com sucesso!");
+
       // Fechar o modal
       cancelarExclusao();
     } catch (error) {
-      console.error('Erro ao excluir produto:', error);
-      
-      const mensagemErro = error.response?.data?.mensagem || 
-                          'Erro ao excluir produto. Tente novamente.';
-      
+      console.error("Erro ao excluir produto:", error);
+
+      const mensagemErro =
+        error.response?.data?.mensagem ||
+        "Erro ao excluir produto. Tente novamente.";
+
       setErroExclusao(mensagemErro);
-      toast.error(mensagemErro, { toastId: 'erro-excluir-produto' });
+      toast.error(mensagemErro, { toastId: "erro-excluir-produto" });
       setExcluindoProduto(false);
     }
   };
@@ -388,17 +414,23 @@ const Produtos = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="filter-controls">
           <button
             type="button"
-            className={`btn btn-outline filter-btn ${filtroAvancado ? 'active' : ''}`}
+            className={`btn btn-outline filter-btn ${
+              filtroAvancado ? "active" : ""
+            }`}
             onClick={() => setFiltroAvancado(!filtroAvancado)}
           >
-            <FaFilter /> {filtroAvancado ? 'Ocultar Filtros' : 'Mostrar Filtros'}
+            <FaFilter />{" "}
+            {filtroAvancado ? "Ocultar Filtros" : "Mostrar Filtros"}
           </button>
-          
-          {(busca || filtros.tipo || filtros.categoria || filtros.subcategoria) && (
+
+          {(busca ||
+            filtros.tipo ||
+            filtros.categoria ||
+            filtros.subcategoria) && (
             <button
               type="button"
               className="btn btn-outline clear-btn"
@@ -423,12 +455,14 @@ const Produtos = () => {
               >
                 <option value="">Todos</option>
                 {tipos.map((tipo, index) => (
-                  <option key={index} value={tipo}>{tipo}</option>
+                  <option key={index} value={tipo}>
+                    {tipo}
+                  </option>
                 ))}
               </select>
               <div className="filter-count">{tipos.length} opções</div>
             </div>
-            
+
             <div className="filter-group">
               <label>Categoria</label>
               <select
@@ -438,12 +472,14 @@ const Produtos = () => {
               >
                 <option value="">Todas</option>
                 {categorias.map((categoria, index) => (
-                  <option key={index} value={categoria}>{categoria}</option>
+                  <option key={index} value={categoria}>
+                    {categoria}
+                  </option>
                 ))}
               </select>
               <div className="filter-count">{categorias.length} opções</div>
             </div>
-            
+
             <div className="filter-group">
               <label>Subcategoria</label>
               <select
@@ -453,7 +489,9 @@ const Produtos = () => {
               >
                 <option value="">Todas</option>
                 {subcategorias.map((subcategoria, index) => (
-                  <option key={index} value={subcategoria}>{subcategoria}</option>
+                  <option key={index} value={subcategoria}>
+                    {subcategoria}
+                  </option>
                 ))}
               </select>
               <div className="filter-count">{subcategorias.length} opções</div>
@@ -465,7 +503,9 @@ const Produtos = () => {
       {/* Indicador de resultados */}
       <div className="resultados-info">
         Exibindo {produtosFiltrados.length} de {paginacao.totalItems} produtos
-        {(busca || filtros.tipo || filtros.categoria || filtros.subcategoria) ? ' (filtrados)' : ''}
+        {busca || filtros.tipo || filtros.categoria || filtros.subcategoria
+          ? " (filtrados)"
+          : ""}
       </div>
 
       {/* Indicador de carregamento */}
@@ -482,31 +522,38 @@ const Produtos = () => {
               {produtosFiltrados.map((produto) => (
                 <div className="produto-card" key={produto._id}>
                   <div className="produto-img">
-                    <img 
-                      src={produto.imagemUrl || '/placeholder-image.png'} 
-                      alt={produto.nome} 
+                    <img
+                      src={produto.imagemUrl || "/placeholder-image.png"}
+                      alt={produto.nome}
                       onError={(e) => {
                         e.target.onerror = null;
-                        e.target.src = '/placeholder-image.png';
+                        e.target.src = "/placeholder-image.png";
                       }}
                     />
                   </div>
-                  
+
                   <div className="produto-info">
-                    <h3>{produto.nome}</h3>
+                    <h3 title={produto.nome}>{produto.nome}</h3>
                     <p className="produto-id">{produto.id}</p>
                     <div className="produto-detalhes">
                       <span className="badge tipo">{produto.tipo}</span>
-                      <span className="badge categoria">{produto.categoria}</span>
+                      <span className="badge categoria">
+                        {produto.categoria}
+                      </span>
                     </div>
-                    <p className="produto-subcategoria">{produto.subcategoria}</p>
+                    <p className="produto-subcategoria">
+                      {produto.subcategoria}
+                    </p>
                   </div>
-                  
+
                   <div className="produto-actions">
-                    <Link to={`/produtos/editar/${produto._id}`} className="btn btn-sm btn-secondary">
+                    <Link
+                      to={`/produtos/editar/${produto._id}`}
+                      className="btn btn-sm btn-secondary"
+                    >
                       <FaEdit /> Editar
                     </Link>
-                    <button 
+                    <button
                       type="button"
                       className="btn btn-sm btn-danger"
                       onClick={() => confirmarExclusao(produto._id)}
@@ -521,11 +568,19 @@ const Produtos = () => {
             <div className="no-data-container">
               <p>Nenhum produto encontrado</p>
               <p className="sub-text">
-                {(busca || filtros.tipo || filtros.categoria || filtros.subcategoria) ? 
-                  'Tente ajustar os filtros ou realizar uma nova busca.' : 
-                  'Comece adicionando seu primeiro produto no sistema.'}
+                {busca ||
+                filtros.tipo ||
+                filtros.categoria ||
+                filtros.subcategoria
+                  ? "Tente ajustar os filtros ou realizar uma nova busca."
+                  : "Comece adicionando seu primeiro produto no sistema."}
               </p>
-              {!(busca || filtros.tipo || filtros.categoria || filtros.subcategoria) && (
+              {!(
+                busca ||
+                filtros.tipo ||
+                filtros.categoria ||
+                filtros.subcategoria
+              ) && (
                 <Link to="/produtos/adicionar" className="btn btn-primary">
                   <FaPlus /> Adicionar Produto
                 </Link>
@@ -550,37 +605,50 @@ const Produtos = () => {
         <div className="modal-backdrop">
           <div className="modal">
             <h3>Confirmar Exclusão</h3>
-            
+
             <div className="produto-excluir-info">
-              <p><strong>Produto:</strong> {produtoExcluir.nome}</p>
-              <p><strong>Código:</strong> {produtoExcluir.id}</p>
-              
+              <p>
+                <strong>Produto:</strong> {produtoExcluir.nome}
+              </p>
+              <p>
+                <strong>Código:</strong> {produtoExcluir.id}
+              </p>
+
               {produtoExcluir.temEstoque && !estoqueZerado && (
                 <div className="estoque-aviso">
                   <FaExclamationTriangle className="aviso-icon" />
-                  <p>Este produto possui {produtoExcluir.quantidadeTotal} unidades em estoque.</p>
-                  <p>Para prosseguir com a exclusão, o estoque será zerado automaticamente.</p>
-                  <p className="aviso-texto">Esta operação não afetará registros históricos ou vendas já realizadas.</p>
+                  <p>
+                    Este produto possui {produtoExcluir.quantidadeTotal}{" "}
+                    unidades em estoque.
+                  </p>
+                  <p>
+                    Para prosseguir com a exclusão, o estoque será zerado
+                    automaticamente.
+                  </p>
+                  <p className="aviso-texto">
+                    Esta operação não afetará registros históricos ou vendas já
+                    realizadas.
+                  </p>
                 </div>
               )}
-              
+
               {estoqueZerado && (
                 <div className="sucesso-estoque">
                   <p>✓ Estoque zerado com sucesso</p>
                 </div>
               )}
-              
+
               {erroExclusao && (
                 <div className="erro-exclusao">
                   <p>{erroExclusao}</p>
                 </div>
               )}
-              
+
               <p className="warning-text">Esta ação não poderá ser desfeita.</p>
             </div>
-            
+
             <div className="modal-actions">
-              <button 
+              <button
                 type="button"
                 className="btn btn-outline"
                 onClick={cancelarExclusao}
@@ -588,7 +656,7 @@ const Produtos = () => {
               >
                 Cancelar
               </button>
-              <button 
+              <button
                 type="button"
                 className="btn btn-danger"
                 onClick={excluirProduto}
@@ -597,10 +665,10 @@ const Produtos = () => {
                 {excluindoProduto ? (
                   <>
                     <span className="spinner-tiny"></span>
-                    {estoqueZerado ? 'Excluindo...' : 'Zerando estoque...'}
+                    {estoqueZerado ? "Excluindo..." : "Zerando estoque..."}
                   </>
                 ) : (
-                  'Confirmar Exclusão'
+                  "Confirmar Exclusão"
                 )}
               </button>
             </div>
