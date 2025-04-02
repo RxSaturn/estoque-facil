@@ -38,32 +38,11 @@ const produtoSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Usuario',
     required: true
-  },
-  // Novos campos
-  temEstoqueBaixo: {
-    type: Boolean,
-    default: false
-  },
-  temEstoqueCritico: {
-    type: Boolean,
-    default: false
-  },
-  temEstoqueEsgotado: {
-    type: Boolean,
-    default: false
-  },
-  statusEspecifico: {
-    type: Boolean,
-    default: false
   }
 });
 
 // Índices para facilitar buscas
 produtoSchema.index({ nome: 'text', tipo: 'text', categoria: 'text', subcategoria: 'text' });
-// Novos índices para as flags de estoque
-produtoSchema.index({ temEstoqueBaixo: 1 });
-produtoSchema.index({ temEstoqueCritico: 1 });
-produtoSchema.index({ temEstoqueEsgotado: 1 });
 
 const Produto = mongoose.model('Produto', produtoSchema);
 
