@@ -1,6 +1,7 @@
 const Produto = require('../models/Produto');
 const Estoque = require('../models/Estoque');
 const Movimentacao = require('../models/Movimentacao');
+const EstoqueService = require('../services/EstoqueService');
 
 // Criar movimentação de estoque
 exports.criarMovimentacao = async (req, res) => {
@@ -62,6 +63,8 @@ exports.criarMovimentacao = async (req, res) => {
 
     // Processar movimentação com base no tipo
     let resultadoOperacao;
+
+    await EstoqueService.atualizarFlagsProduto(produto);
 
     // Tratar a data para garantir que seja armazenada corretamente
     const dataMovimentacao = data ? new Date(data) : new Date();
@@ -212,6 +215,11 @@ exports.excluirMovimentacao = async (req, res) => {
     // Verificar se o produto existe ou foi removido
     const produtoExiste = movimentacao.produto ? 
       await Produto.findById(movimentacao.produto) : null;
+    
+    // Após excluir a movimentação, atualizar flags do produto se ele existir
+    if (!isProdutoRemovido && movimentacao.produto) {
+      await EstoqueService.atualizarFlagsProduto(movimentacao.produto);
+    }
     
     const isProdutoRemovido = !produtoExiste && movimentacao.produto;
     const isAtualizacaoProduto = movimentacao.tipo === 'atualizacao' || 
