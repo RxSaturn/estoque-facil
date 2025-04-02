@@ -216,13 +216,53 @@
 }
 
 .status-badge.critico {
-  background-color: rgba(231, 76, 60, 0.15);
-  color: #e74c3c;
+  background-color: rgba(255, 87, 34, 0.15);
+  color: #ff5722;
 }
 
 .status-badge.baixo {
   background-color: rgba(243, 156, 18, 0.15);
   color: #f39c12;
+}
+
+.status-badge.normal {
+  background-color: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+}
+
+/* Estilo para o card de estatísticas */
+.stat-card .card-value .estoque-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 14px;
+  margin-top: 5px;
+}
+
+.estoque-stats .estoque-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: normal;
+}
+
+.estoque-stat .estoque-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.estoque-dot.esgotado {
+  background-color: #e74c3c;
+}
+
+.estoque-dot.critico {
+  background-color: #ff5722;
+}
+
+.estoque-dot.baixo {
+  background-color: #f39c12;
 }
 
 .status-badge.concluido {
