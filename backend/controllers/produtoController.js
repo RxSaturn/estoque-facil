@@ -5,16 +5,16 @@ const { excluirArquivos, excluirArquivo } = require("../utils/fileUtils");
 
 // Função auxiliar para gerar ID do produto - Sistema ilimitado com timestamp+random
 const gerarIdProduto = async (tipo, categoria, subcategoria, nome) => {
-  // Primeiras duas letras de cada campo para formar o prefixo
-  const tipoPrefix = tipo.substring(0, 2).toUpperCase();
-  const categoriaPrefix = categoria.substring(0, 2).toUpperCase();
-  const subcategoriaPrefix = subcategoria.substring(0, 2).toUpperCase();
+  // Primeiras duas letras de cada campo para formar o prefixo (com fallback seguro)
+  const tipoPrefix = (tipo || 'XX').padEnd(2, 'X').substring(0, 2).toUpperCase();
+  const categoriaPrefix = (categoria || 'XX').padEnd(2, 'X').substring(0, 2).toUpperCase();
+  const subcategoriaPrefix = (subcategoria || 'XX').padEnd(2, 'X').substring(0, 2).toUpperCase();
   
   const prefixo = `${tipoPrefix}${categoriaPrefix}${subcategoriaPrefix}`;
   
-  // Gerar sufixo único com base em timestamp + random
-  const timestamp = Date.now().toString(36).slice(-4).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  // Gerar sufixo único com base em timestamp + random (com padding consistente)
+  const timestamp = Date.now().toString(36).toUpperCase().padStart(8, '0').slice(-4);
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase().padEnd(4, '0');
   const sufixo = `${timestamp}${random}`;
   
   const novoId = `${prefixo}-${sufixo}`;
@@ -23,7 +23,7 @@ const gerarIdProduto = async (tipo, categoria, subcategoria, nome) => {
   const existe = await Produto.findOne({ id: novoId }).lean();
   if (existe) {
     // Fallback: gerar outro ID aleatório em caso de colisão
-    const fallbackRandom = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const fallbackRandom = Math.random().toString(36).substring(2, 10).toUpperCase().padEnd(8, '0');
     return `${prefixo}-${fallbackRandom}`;
   }
   
