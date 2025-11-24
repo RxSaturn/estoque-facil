@@ -17,39 +17,70 @@ export const getProductStats = async () => {
   try {
     console.log("🔍 Buscando estatísticas de produtos...");
 
-    // Usar a rota específica de estatísticas com timeout
-    const estatisticasPromise = api.get("/api/produtos/estatisticas");
-    const estatisticasResponse = await withTimeout(estatisticasPromise);
-
-    if (estatisticasResponse?.data?.total) {
-      console.log(
-        "✅ Estatísticas de produtos obtidas com sucesso:",
-        estatisticasResponse.data
-      );
-      return estatisticasResponse.data;
-    }
-
-    // Fallback: Buscar usando a API normal de produtos
-    console.log("⚠️ Usando fallback para obter total de produtos...");
-    const produtosPromise = api.get("/api/produtos?limit=1");
+    // Buscar lista completa de produtos (ignorando limite)
+    // para garantir contagem correta de produtos únicos
+    const produtosPromise = api.get("/api/produtos");
     const produtosResponse = await withTimeout(produtosPromise);
 
+    // Log para debug
     console.log("Resposta da API de produtos:", produtosResponse.data);
 
-    // Extrair o total dependendo do formato da resposta
+    // Extrair e processar a lista de produtos
+    let produtos = [];
     let total = 0;
     let quantidadeTotal = 0;
 
-    if (produtosResponse.data && typeof produtosResponse.data === "object") {
-      // Formato 1: { total: X, produtos: [...] }
-      if (typeof produtosResponse.data.total === "number") {
-        total = produtosResponse.data.total;
-        console.log(`Total de produtos encontrado na resposta: ${total}`);
+    // Processar diferentes formatos de resposta
+    if (produtosResponse.data) {
+      if (Array.isArray(produtosResponse.data)) {
+        produtos = produtosResponse.data;
+      } else if (produtosResponse.data.produtos && Array.isArray(produtosResponse.data.produtos)) {
+        produtos = produtosResponse.data.produtos;
+        // Se vier no formato { total, produtos } e não for de estoque, podemos confiar
+        if (typeof produtosResponse.data.total === 'number' && !produtosResponse.data.estoques) {
+          total = produtosResponse.data.total;
+          console.log(`Total de produtos fornecido pela API: ${total}`);
+        }
       }
-      // Formato 2: produtos é um array diretamente
-      else if (Array.isArray(produtosResponse.data)) {
-        total = produtosResponse.data.length;
-        console.log(`Total de produtos inferido do tamanho do array: ${total}`);
+
+      // Se não tivermos um total confiável da API, contar produtos únicos
+      if (total === 0) {
+        // Extrair IDs únicos para garantir que contamos cada produto apenas uma vez
+        const produtosIds = new Set();
+        produtos.forEach(produto => {
+          const id = produto._id || produto.id;
+          if (id) {
+            produtosIds.add(id);
+          }
+        });
+        
+        total = produtosIds.size;
+        console.log(`Total de produtos únicos calculado: ${total}`);
+      }
+
+      // Calcular a quantidade total em estoque se disponível
+      try {
+        // Buscar estoque total
+        const estoquePromise = api.get("/api/estoque");
+        const estoqueResponse = await withTimeout(estoquePromise);
+        
+        if (estoqueResponse.data) {
+          let estoques = [];
+          
+          if (Array.isArray(estoqueResponse.data)) {
+            estoques = estoqueResponse.data;
+          } else if (estoqueResponse.data.estoques && Array.isArray(estoqueResponse.data.estoques)) {
+            estoques = estoqueResponse.data.estoques;
+          }
+          
+          // Somar todas as quantidades
+          quantidadeTotal = estoques.reduce((sum, item) => sum + (Number(item.quantidade) || 0), 0);
+          console.log(`Quantidade total em estoque: ${quantidadeTotal}`);
+        }
+      } catch (error) {
+        console.log("Não foi possível obter dados de estoque:", error.message);
+        // Usar fallback: somar as quantidades dos produtos diretos (se disponível)
+        quantidadeTotal = produtos.reduce((sum, p) => sum + (Number(p.quantidade) || 0), 0);
       }
     }
 
@@ -239,6 +270,51 @@ export const getLowStockProducts = async () => {
   try {
     console.log("🔍 Iniciando busca de produtos com estoque baixo");
 
+    // Usar o novo endpoint específico para produtos com estoque baixo
+    const estoqueResponse = await withTimeout(
+      api.get("/api/estoque/produtos-baixo-estoque", {
+        params: { 
+          nivel: 'todos',
+          limit: 10 
+        }
+      })
+    );
+
+    // Processar a resposta
+    let produtosEstoqueBaixo = [];
+    if (estoqueResponse?.data?.produtos) {
+      produtosEstoqueBaixo = estoqueResponse.data.produtos.map(item => ({
+        id: item.produto || item._id,
+        nome: item.produtoNome || "Produto",
+        local: item.local || "Local não especificado",
+        estoqueAtual: item.quantidade || 0,
+        estoqueMinimo: 20, // Usar o limite padrão definido no backend
+        status: item.status || (
+          item.quantidade === 0 ? "esgotado" : 
+          item.quantidade < 10 ? "critico" : "baixo"
+        )
+      }));
+    } else {
+      // Fallback para o método antigo se o novo endpoint falhar
+      console.log("⚠️ Endpoint específico falhou, usando método antigo");
+      return getLowStockProductsLegacy();
+    }
+
+    console.log(`✅ Produtos com estoque baixo obtidos: ${produtosEstoqueBaixo.length}`);
+    return produtosEstoqueBaixo;
+  } catch (error) {
+    console.error("❌ Erro ao buscar produtos com estoque baixo:", error);
+    // Fallback para o método antigo em caso de erro
+    console.log("⚠️ Tentando método alternativo");
+    return getLowStockProductsLegacy();
+  }
+};
+
+// Método legado mantido como fallback
+const getLowStockProductsLegacy = async () => {
+  try {
+    console.log("🔍 Iniciando busca legada de produtos com estoque baixo");
+
     // Buscar produtos com timeout
     const produtosResponse = await withTimeout(api.get("/api/produtos"));
 
@@ -311,22 +387,35 @@ export const getLowStockProducts = async () => {
     }
 
     // Filtrar produtos com estoque baixo
-    return produtosComEstoque
+    const produtosBaixoEstoque = produtosComEstoque
       .filter((p) => {
         const estoqueAtual = p.estoqueAtual || 0;
-        const estoqueMinimo = p.estoqueMinimo || 10;
-        return estoqueAtual <= estoqueMinimo;
+        return estoqueAtual <= 20; // Usando o novo limite de 20
       })
-      .map((p) => ({
-        id: p._id || p.id,
-        nome: p.nome,
-        estoqueAtual: p.estoqueAtual || 0,
-        estoqueMinimo: p.estoqueMinimo || 10,
-        local: p.local || "Depósito Principal",
-      }))
+      .map((p) => {
+        const estoqueAtual = p.estoqueAtual || 0;
+        let status = "baixo";
+        
+        if (estoqueAtual === 0) {
+          status = "esgotado";
+        } else if (estoqueAtual <= 10) {
+          status = "critico";
+        }
+        
+        return {
+          id: p._id || p.id,
+          nome: p.nome,
+          estoqueAtual: estoqueAtual,
+          estoqueMinimo: 20, // Novo limite padrão
+          local: p.local || "Depósito Principal",
+          status: status
+        };
+      })
       .slice(0, 10);
+
+    return produtosBaixoEstoque;
   } catch (error) {
-    console.error("❌ Erro ao buscar produtos com estoque baixo:", error);
+    console.error("❌ Erro ao buscar produtos com estoque baixo (legado):", error);
     return [];
   }
 };

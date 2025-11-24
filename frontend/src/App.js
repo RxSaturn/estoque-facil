@@ -18,6 +18,7 @@ import Movimentacao from "./pages/Movimentacao";
 import Historico from "./pages/Historico";
 import Relatorios from "./pages/Relatorios";
 import Gerenciamento from "./pages/Gerenciamento";
+import RedefinirSenha from "./pages/RedefinirSenha";
 
 // Importação de contextos
 import { AuthProvider } from "./contexts/AuthContext";
@@ -46,6 +47,10 @@ function App() {
             <Routes>
               <Route path="/" element={<Login />} />
               <Route path="/login" element={<Login />} />
+              <Route
+                path="/redefinir-senha/:token"
+                element={<RedefinirSenha />}
+              />
               <Route
                 path="/dashboard"
                 element={<PrivateRoute component={Dashboard} />}

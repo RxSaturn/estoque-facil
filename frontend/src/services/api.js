@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import React from 'react';
 
 // Criar instância do axios com configurações padrão
 const api = axios.create({

@@ -167,15 +167,58 @@
   object-fit: contain;
 }
 
-.produto-info {
-  padding: 16px;
-  flex-grow: 1;
-}
-
 .produto-info h3 {
   margin: 0 0 8px 0;
   font-size: 18px;
   color: #212529;
+  /* Para lidar com nomes longos */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  position: relative;
+  cursor: pointer; /* Indicar que há interatividade */
+  /* Garantir que o texto permanece centralizado */
+  text-align: center;
+}
+
+/* Manter o título centralizado também nos demais elementos */
+.produto-info {
+  padding: 16px;
+  flex-grow: 1;
+  text-align: center; /* Centralizar todo o conteúdo da info */
+}
+
+/* Ajustar o tooltip para aparecer centralizado */
+.produto-info h3:hover::after {
+  content: attr(title);
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%); /* Centralizar o tooltip */
+  top: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  white-space: normal;
+  width: max-content;
+  max-width: 250px;
+  z-index: 10;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+/* Para produtos com nomes muito longos, permitir até duas linhas na visualização detalhada */
+.produto-detalhado .produto-info h3 {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  height: auto;
+  max-height: 48px; /* Aproximadamente 2 linhas */
 }
 
 .produto-id {

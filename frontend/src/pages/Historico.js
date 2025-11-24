@@ -64,6 +64,11 @@ const Historico = () => {
     totalItems: 0,
   });
 
+  // Estados para exclusão em lote de vendas
+  const [modalExclusaoEmLoteVendas, setModalExclusaoEmLoteVendas] = useState(false);
+  const [quantidadeExclusaoEmLoteVendas, setQuantidadeExclusaoEmLoteVendas] = useState(0);
+  const [carregandoExclusaoEmLoteVendas, setCarregandoExclusaoEmLoteVendas] = useState(false);
+
   // Estados para a exclusão de movimentações
   const [excluirId, setExcluirId] = useState(null);
   const [movimentacaoExcluir, setMovimentacaoExcluir] = useState(null);
@@ -182,6 +187,54 @@ const Historico = () => {
     } else {
       return <li>Remover este registro do histórico</li>;
     }
+  };
+
+  const verificarVendasProdutosRemovidos = async () => {
+    try {
+      setCarregandoExclusaoEmLoteVendas(true);
+
+      const resposta = await api.delete(
+        "/api/vendas/produtos-removidos?preview=true"
+      );
+
+      setQuantidadeExclusaoEmLoteVendas(resposta.data.quantidade);
+
+      if (resposta.data.quantidade > 0) {
+        setModalExclusaoEmLoteVendas(true);
+      } else {
+        toast.info("Não há vendas de produtos removidos para excluir.");
+      }
+    } catch (error) {
+      console.error("Erro ao verificar vendas:", error);
+      toast.error("Erro ao verificar vendas de produtos removidos.");
+    } finally {
+      setCarregandoExclusaoEmLoteVendas(false);
+    }
+  };
+
+  const excluirVendasProdutosRemovidos = async () => {
+    try {
+      setCarregandoExclusaoEmLoteVendas(true);
+
+      const resposta = await api.delete(
+        "/api/vendas/produtos-removidos"
+      );
+
+      toast.success(resposta.data.mensagem);
+      setModalExclusaoEmLoteVendas(false);
+
+      // Recarregar os dados para atualizar a lista
+      await carregarHistorico();
+    } catch (error) {
+      console.error("Erro ao excluir vendas:", error);
+      toast.error("Erro ao excluir vendas de produtos removidos.");
+    } finally {
+      setCarregandoExclusaoEmLoteVendas(false);
+    }
+  };
+
+  const fecharModalExclusaoEmLoteVendas = () => {
+    setModalExclusaoEmLoteVendas(false);
   };
 
   // Adicione estas novas funções para a exclusão em lote
@@ -900,7 +953,7 @@ const Historico = () => {
                                 </span>
                               </div>
                             ) : (
-                              <div className="produto-info">
+                              <div className="produto-info produto-indisponivel">
                                 <span className="produto-nome">
                                   Produto não disponível
                                 </span>
@@ -914,6 +967,26 @@ const Historico = () => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Botão de exclusão em lote para vendas - NOVO */}
+                <div className="acoes-lote-container">
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={verificarVendasProdutosRemovidos}
+                    disabled={carregandoExclusaoEmLoteVendas}
+                  >
+                    {carregandoExclusaoEmLoteVendas ? (
+                      <>
+                        <span className="spinner-tiny"></span> Verificando...
+                      </>
+                    ) : (
+                      <>
+                        <FaTrash /> Remover Vendas de Produtos Excluídos
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 {/* Componente de Paginação para Vendas */}
@@ -950,7 +1023,7 @@ const Historico = () => {
                         <th>Data</th>
                         <th>Tipo</th>
                         <th>Produto</th>
-                        <th>Quantidade</th>
+                        <th>Qnt</th>
                         <th>Locais</th>
                         <th>Realizado por</th>
                         <th>Ações</th> {/* Nova coluna para ações */}
@@ -1207,6 +1280,65 @@ const Historico = () => {
                   </>
                 ) : (
                   `Confirmar Exclusão de ${quantidadeExclusaoEmLote} Movimentações`
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}{/* Modal de confirmação para exclusão em lote de vendas - NOVO */}
+      {modalExclusaoEmLoteVendas && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <h3>Confirmar Exclusão em Lote de Vendas</h3>
+
+            <div className="exclusao-lote-info">
+              <FaExclamationTriangle className="aviso-icon" />
+              <p>
+                Você está prestes a remover{" "}
+                <strong>{quantidadeExclusaoEmLoteVendas} vendas</strong>{" "}
+                associadas a produtos que já foram excluídos do sistema.
+              </p>
+
+              <div className="exclusao-aviso">
+                <p>Esta ação irá:</p>
+                <ul>
+                  <li>
+                    Remover permanentemente todas as vendas de produtos
+                    que não existem mais no sistema
+                  </li>
+                  <li>
+                    Limpar o histórico para mostrar apenas vendas de
+                    produtos ativos
+                  </li>
+                </ul>
+                <p className="aviso-texto">
+                  Esta operação não pode ser desfeita.
+                </p>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={fecharModalExclusaoEmLoteVendas}
+                disabled={carregandoExclusaoEmLoteVendas}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={excluirVendasProdutosRemovidos}
+                disabled={carregandoExclusaoEmLoteVendas}
+              >
+                {carregandoExclusaoEmLoteVendas ? (
+                  <>
+                    <span className="spinner-tiny"></span>
+                    Excluindo {quantidadeExclusaoEmLoteVendas} vendas...
+                  </>
+                ) : (
+                  `Confirmar Exclusão de ${quantidadeExclusaoEmLoteVendas} Vendas`
                 )}
               </button>
             </div>

@@ -26,10 +26,12 @@ const AdicionarProduto = () => {
   useEffect(() => {
     const carregarLocais = async () => {
       try {
-        const resposta = await api.get('/api/estoque/locais');
-        setLocais(resposta.data);
+        const resposta = await api.get('/api/locais/nomes');
+        console.log('Locais carregados:', resposta.data); // Verificar dados no console
+        setLocais(resposta.data); // Resposta já deve ser um array de nomes
       } catch (error) {
         console.error('Erro ao carregar locais:', error);
+        toast.error('Não foi possível carregar a lista de locais');
       }
     };
     
@@ -69,49 +71,49 @@ const AdicionarProduto = () => {
   };
   
   const handleSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
+  
+  // Validar campos obrigatórios
+  if (!formData.nome || !formData.tipo || !formData.categoria || !formData.subcategoria || !formData.local) {
+    toast.error('Preencha todos os campos obrigatórios');
+    return;
+  }
+  
+  // Validar quantidade
+  if (formData.quantidade <= 0) {
+    toast.error('A quantidade deve ser maior que zero');
+    return;
+  }
+  
+  try {
+    setCarregando(true);
     
-    // Validar campos obrigatórios
-    if (!formData.nome || !formData.tipo || !formData.categoria || !formData.subcategoria || !formData.local) {
-      toast.error('Preencha todos os campos obrigatórios');
-      return;
+    // Criar FormData para enviar imagem junto com os dados do produto
+    const dadosParaEnvio = new FormData();
+    Object.keys(formData).forEach(key => {
+      dadosParaEnvio.append(key, formData[key]);
+    });
+    
+    if (imagem) {
+      dadosParaEnvio.append('imagem', imagem);
     }
     
-    // Validar quantidade
-    if (formData.quantidade <= 0) {
-      toast.error('A quantidade deve ser maior que zero');
-      return;
-    }
-    
-    try {
-      setCarregando(true);
-      
-      // Criar FormData para enviar imagem junto com os dados do produto
-      const dadosParaEnvio = new FormData();
-      Object.keys(formData).forEach(key => {
-        dadosParaEnvio.append(key, formData[key]);
-      });
-      
-      if (imagem) {
-        dadosParaEnvio.append('imagem', imagem);
+    // Enviar requisição para criar produto (sem atribuir a uma variável)
+    await api.post('/api/produtos', dadosParaEnvio, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
       }
-      
-      // Enviar requisição para criar produto
-      const resposta = await api.post('/api/produtos', dadosParaEnvio, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      toast.success('Produto cadastrado com sucesso!');
-      navigate('/produtos');
-    } catch (error) {
-      console.error('Erro ao criar produto:', error);
-      toast.error(error.response?.data?.mensagem || 'Erro ao cadastrar produto');
-    } finally {
-      setCarregando(false);
-    }
-  };
+    });
+    
+    toast.success('Produto cadastrado com sucesso!');
+    navigate('/produtos');
+  } catch (error) {
+    console.error('Erro ao criar produto:', error);
+    toast.error(error.response?.data?.mensagem || 'Erro ao cadastrar produto');
+  } finally {
+    setCarregando(false);
+  }
+};
 
   return (
     <div className="adicionar-produto-container">

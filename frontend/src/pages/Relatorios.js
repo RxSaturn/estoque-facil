@@ -10,6 +10,7 @@ import {
   FaSave,
   FaTimes,
   FaExchangeAlt,
+  FaExclamationCircle,
 } from "react-icons/fa";
 import api from "../services/api";
 import { toast } from "react-toastify";
@@ -74,6 +75,7 @@ const Relatorios = () => {
   const [activeTab, setActiveTab] = useState("geral");
   const [erroCarregamento, setErroCarregamento] = useState(null);
   const [preferenciaSalva, setPreferenciaSalva] = useState(false);
+  const [produtosEstoqueCritico, setProdutosEstoqueCritico] = useState([]);
 
   // Novo estado para selecionar o tipo de cálculo
   const [metodoCalculo, setMetodoCalculo] = useState("transacoes");
@@ -85,32 +87,20 @@ const Relatorios = () => {
 
     switch (periodo) {
       case "ultimaSemana":
-        inicio = new Date(
-          hoje.getFullYear(),
-          hoje.getMonth(),
-          hoje.getDate() - 7
-        );
+        inicio = new Date(hoje);
+        inicio.setDate(hoje.getDate() - 7);
         break;
       case "ultimoMes":
-        inicio = new Date(
-          hoje.getFullYear(),
-          hoje.getMonth() - 1,
-          hoje.getDate()
-        );
+        inicio = new Date(hoje);
+        inicio.setMonth(hoje.getMonth() - 1);
         break;
       case "ultimoTrimestre":
-        inicio = new Date(
-          hoje.getFullYear(),
-          hoje.getMonth() - 3,
-          hoje.getDate()
-        );
+        inicio = new Date(hoje);
+        inicio.setMonth(hoje.getMonth() - 3);
         break;
       case "ultimoAno":
-        inicio = new Date(
-          hoje.getFullYear() - 1,
-          hoje.getMonth(),
-          hoje.getDate()
-        );
+        inicio = new Date(hoje);
+        inicio.setFullYear(hoje.getFullYear() - 1);
         break;
       case "mesAtual":
         inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -119,17 +109,23 @@ const Relatorios = () => {
         inicio = new Date(hoje.getFullYear(), 0, 1);
         break;
       default:
-        // Personalizado - não altera as datas
         return;
     }
 
-    const fim = new Date(hoje);
-    fim.setDate(fim.getDate() + 1);
+    // Converter para string no formato ISO (YYYY-MM-DD) sem manipulações adicionais
+    const dataInicioStr = inicio.toISOString().split("T")[0];
+    const dataFimStr = hoje.toISOString().split("T")[0];
+
+    console.log("Período predefinido:", {
+      periodo,
+      dataInicio: dataInicioStr,
+      dataFim: dataFimStr,
+    });
 
     setFiltros((prev) => ({
       ...prev,
-      dataInicio: inicio.toISOString().split("T")[0],
-      dataFim: fim.toISOString().split("T")[0],
+      dataInicio: dataInicioStr,
+      dataFim: dataFimStr,
     }));
 
     setPeriodoPreDefinido(periodo);
@@ -181,19 +177,31 @@ const Relatorios = () => {
       setCarregando(true);
       setErroCarregamento(null);
 
-      // Construir query string com filtros
+      // Log para depuração
+      console.log("Enviando datas:", {
+        dataInicio: filtros.dataInicio,
+        dataFim: filtros.dataFim,
+      });
+
+      // Garantir que estamos usando o formato ISO (YYYY-MM-DD) diretamente
+      // Construir query string com os valores exatos dos inputs, sem manipulação
       let query = `dataInicio=${filtros.dataInicio}&dataFim=${filtros.dataFim}`;
+
       if (filtros.tipo) query += `&tipo=${filtros.tipo}`;
       if (filtros.categoria) query += `&categoria=${filtros.categoria}`;
       if (filtros.subcategoria)
         query += `&subcategoria=${filtros.subcategoria}`;
       if (filtros.local) query += `&local=${filtros.local}`;
-
-      // Adicionar método de cálculo como parâmetro
       query += `&metodoCalculo=${metodoCalculo}`;
 
+      // Adicionar flag para indicar que queremos usar as datas exatas
+      query += `&useExactDates=true`;
+
+      // Resto do código para buscar produtos e resumo...
       const resposta = await api.get(`/api/relatorios/resumo?${query}`);
       setResumo(resposta.data);
+
+      // Buscar produtos com estoque crítico...
     } catch (error) {
       console.error("Erro ao carregar resumo:", error);
       setErroCarregamento(
@@ -258,6 +266,46 @@ const Relatorios = () => {
   useEffect(() => {
     localStorage.setItem("relatorios_filtros", JSON.stringify(filtros));
   }, [filtros]);
+
+  // Adicione este useEffect logo depois dos outros useEffect existentes
+  useEffect(() => {
+    const carregarProdutosEstoqueCritico = async () => {
+      try {
+        const resposta = await api.get("/api/estoque/estoque-critico");
+
+        // Organizar dados por status
+        const produtos = resposta.data;
+        setProdutosEstoqueCritico(produtos);
+
+        // Calcular estatísticas para uso global
+        const esgotados = produtos.filter(
+          (p) => p.quantidade === 0 || p.status === "esgotado"
+        ).length;
+        const criticos = produtos.filter(
+          (p) =>
+            (p.quantidade > 0 && p.quantidade < 10) || p.status === "critico"
+        ).length;
+        const baixos = produtos.filter(
+          (p) =>
+            (p.quantidade >= 10 && p.quantidade < 20) || p.status === "baixo"
+        ).length;
+
+        // Salvar estatísticas na variável global para uso em diferentes componentes
+        window.estoqueCriticoStats = {
+          esgotado: esgotados,
+          critico: criticos,
+          baixo: baixos,
+          total: esgotados + criticos + baixos,
+        };
+
+        console.log("Estoque crítico carregado:", window.estoqueCriticoStats);
+      } catch (error) {
+        console.error("Erro ao carregar estoque crítico:", error);
+      }
+    };
+
+    carregarProdutosEstoqueCritico();
+  }, []);
 
   const gerarRelatorio = (e) => {
     e.preventDefault();
@@ -445,7 +493,10 @@ const Relatorios = () => {
                 id="dataInicio"
                 name="dataInicio"
                 value={filtros.dataInicio}
-                onChange={handleChangeFiltro}
+                onChange={(e) => {
+                  console.log("Data inicial selecionada:", e.target.value);
+                  handleChangeFiltro(e);
+                }}
                 required
               />
             </div>
@@ -457,7 +508,10 @@ const Relatorios = () => {
                 id="dataFim"
                 name="dataFim"
                 value={filtros.dataFim}
-                onChange={handleChangeFiltro}
+                onChange={(e) => {
+                  console.log("Data final selecionada:", e.target.value);
+                  handleChangeFiltro(e);
+                }}
                 required
                 min={filtros.dataInicio}
               />
@@ -651,6 +705,14 @@ const Relatorios = () => {
             >
               <FaExclamationTriangle /> Sem Movimentação
             </button>
+            <button
+              className={`tab-btn ${
+                activeTab === "estoqueCritico" ? "active" : ""
+              }`}
+              onClick={() => setActiveTab("estoqueCritico")}
+            >
+              <FaExclamationCircle /> Estoque Crítico
+            </button>
           </div>
 
           {/* Conteúdo da tab selecionada */}
@@ -722,50 +784,85 @@ const Relatorios = () => {
                 </div>
 
                 <div className="indicadores">
-                  <div className="indicador-card">
-                    <h3>Estatísticas do Período</h3>
-                    <div className="indicadores-grid">
-                      <div className="indicador">
-                        <p className="indicador-titulo">
-                          Média{" "}
-                          {metodoCalculo === "transacoes"
-                            ? "de Vendas"
-                            : "de Itens Vendidos"}{" "}
-                          Diária
-                        </p>
-                        <p className="indicador-valor">
-                          {resumo.mediaVendasDiarias.toFixed(2)}
-                        </p>
-                      </div>
+                  <h3>Estatísticas do Período</h3>
+                  <div className="indicadores-grid">
+                    <div className="indicador">
+                      <p className="indicador-titulo">
+                        Média{" "}
+                        {metodoCalculo === "transacoes"
+                          ? "de Vendas"
+                          : "de Itens Vendidos"}{" "}
+                        Diária
+                      </p>
+                      <p className="indicador-valor">
+                        {resumo.mediaVendasDiarias.toFixed(2)}
+                      </p>
+                    </div>
 
-                      <div className="indicador">
-                        <p className="indicador-titulo">
-                          Total de Itens Vendidos
-                        </p>
-                        <p className="indicador-valor">
-                          {resumo.totalItensVendidos}
-                        </p>
-                      </div>
+                    <div className="indicador">
+                      <p className="indicador-titulo">
+                        Total de Itens Vendidos
+                      </p>
+                      <p className="indicador-valor">
+                        {resumo.totalItensVendidos}
+                      </p>
+                    </div>
 
-                      <div className="indicador">
-                        <p className="indicador-titulo">Dia com Maior Venda</p>
-                        <p className="indicador-valor">
-                          {resumo.diaMaiorVenda
-                            ? new Date(resumo.diaMaiorVenda).toLocaleDateString(
-                                "pt-BR"
-                              )
-                            : "-"}
-                        </p>
-                      </div>
+                    <div className="indicador">
+                      <p className="indicador-titulo">Dia com Maior Venda</p>
+                      <p className="indicador-valor">
+                        {resumo.diaMaiorVenda
+                          ? (() => {
+                              try {
+                                // CORREÇÃO: Adicionar método que evita problemas de fuso horário
+                                // Usando uma abordagem que preserva a data exata
+                                const [ano, mes, dia] =
+                                  resumo.diaMaiorVenda.split("-");
 
-                      <div className="indicador">
-                        <p className="indicador-titulo">
-                          Produtos com Estoque Crítico
-                        </p>
-                        <p className="indicador-valor">
-                          {resumo.produtosEstoqueCritico}
-                        </p>
-                      </div>
+                                // IMPORTANTE: Usar essa sintaxe para evitar problemas de fuso horário
+                                // Mês no formato MM e não zero-indexed
+                                return `${dia.padStart(2, "0")}/${mes.padStart(
+                                  2,
+                                  "0"
+                                )}/${ano}`;
+                              } catch (e) {
+                                console.error(
+                                  "Erro ao formatar data:",
+                                  e,
+                                  resumo.diaMaiorVenda
+                                );
+                                return resumo.diaMaiorVenda;
+                              }
+                            })()
+                          : "-"}
+                      </p>
+                    </div>
+
+                    <div className="indicador">
+                      <p className="indicador-titulo">
+                        Produtos com Estoque Crítico
+                      </p>
+                      <p className="indicador-valor estoque-critico">
+                        {window.estoqueCriticoStats?.critico +
+                          window.estoqueCriticoStats?.esgotado ||
+                          resumo.produtosEstoqueCritico ||
+                          0}
+                        <span className="indicador-info">
+                          {window.estoqueCriticoStats?.esgotado > 0 && (
+                            <span className="nivel-badge esgotado">
+                              {window.estoqueCriticoStats.esgotado} esgotados
+                            </span>
+                          )}
+                          {window.estoqueCriticoStats?.critico > 0 && (
+                            <span className="nivel-badge critico">
+                              {window.estoqueCriticoStats.critico} críticos
+                            </span>
+                          )}
+                          {!window.estoqueCriticoStats?.esgotado &&
+                            !window.estoqueCriticoStats?.critico &&
+                            "Menos de 10 unidades"}
+                        </span>
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -957,6 +1054,130 @@ const Relatorios = () => {
                       />
                     </div>
                   )}
+              </div>
+            )}
+            {activeTab === "estoqueCritico" && (
+              <div className="tab-estoque-critico">
+                <h3>Produtos com Estoque Crítico</h3>
+
+                <div className="estoque-status-summary">
+                  <div className="estoque-status-card esgotado">
+                    <h4>Esgotado</h4>
+                    <p className="estoque-count">
+                      {
+                        produtosEstoqueCritico.filter(
+                          (p) => p.quantidade === 0 || p.status === "esgotado"
+                        ).length
+                      }
+                    </p>
+                    <p className="estoque-desc">0 unidades</p>
+                  </div>
+                  <div className="estoque-status-card critico">
+                    <h4>Crítico</h4>
+                    <p className="estoque-count">
+                      {
+                        produtosEstoqueCritico.filter(
+                          (p) =>
+                            (p.quantidade > 0 && p.quantidade < 10) ||
+                            p.status === "critico"
+                        ).length
+                      }
+                    </p>
+                    <p className="estoque-desc">Menos de 10 unidades</p>
+                  </div>
+                  <div className="estoque-status-card baixo">
+                    <h4>Baixo</h4>
+                    <p className="estoque-count">
+                      {
+                        produtosEstoqueCritico.filter(
+                          (p) =>
+                            (p.quantidade >= 10 && p.quantidade < 20) ||
+                            p.status === "baixo"
+                        ).length
+                      }
+                    </p>
+                    <p className="estoque-desc">Entre 10 e 19 unidades</p>
+                  </div>
+                </div>
+
+                {produtosEstoqueCritico.length > 0 ? (
+                  <div className="table-responsive">
+                    <table className="relatorio-table">
+                      <thead>
+                        <tr>
+                          <th>Produto</th>
+                          <th>Local</th>
+                          <th>Estoque Atual</th>
+                          <th>Estoque Mínimo</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {produtosEstoqueCritico.map((produto, index) => {
+                          // Normalizar campos
+                          const nome =
+                            produto.produtoNome || produto.nome || "Produto";
+                          const local =
+                            produto.local || "Local não especificado";
+                          const quantidade = produto.quantidade || 0;
+                          const estoqueMinimo = produto.estoqueMinimo || 20;
+
+                          // Determinar status
+                          let status = produto.status || "";
+                          if (!status) {
+                            if (quantidade === 0) {
+                              status = "esgotado";
+                            } else if (quantidade < 10) {
+                              status = "critico";
+                            } else if (quantidade < 20) {
+                              status = "baixo";
+                            } else {
+                              status = "normal";
+                            }
+                          }
+
+                          // Determinar texto do status
+                          let statusText;
+                          switch (status) {
+                            case "esgotado":
+                              statusText = "Esgotado";
+                              break;
+                            case "critico":
+                              statusText = "Crítico";
+                              break;
+                            case "baixo":
+                              statusText = "Baixo";
+                              break;
+                            default:
+                              statusText = "Normal";
+                          }
+
+                          return (
+                            <tr key={index}>
+                              <td>{nome}</td>
+                              <td>{local}</td>
+                              <td className={`quantidade ${status}`}>
+                                {quantidade}
+                              </td>
+                              <td>{estoqueMinimo}</td>
+                              <td>
+                                <span className={`status-badge ${status}`}>
+                                  {statusText}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="no-data-message">
+                    {carregando
+                      ? "Carregando dados de estoque..."
+                      : "Nenhum produto com estoque crítico encontrado."}
+                  </p>
+                )}
               </div>
             )}
           </div>

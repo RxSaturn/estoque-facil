@@ -13,6 +13,8 @@ const relatorioRoutes = require("./routes/relatorioRoutes");
 const usuarioRoutes = require("./routes/usuarioRoutes");
 const localRoutes = require("./routes/localRoutes");
 const movimentacaoRoutes = require("./routes/movimentacaoRoutes");
+const recuperacaoSenhaRoutes = require('./routes/recuperacaoSenhaRoutes');
+
 
 const app = express();
 
@@ -40,6 +42,8 @@ app.use("/api/relatorios", relatorioRoutes);
 app.use("/api/usuarios", usuarioRoutes);
 app.use("/api/locais", localRoutes);
 app.use("/api/movimentacoes", movimentacaoRoutes);
+app.use('/api/recuperacao-senha', recuperacaoSenhaRoutes);
+
 
 // Rota de teste
 app.get("/", (req, res) => {
