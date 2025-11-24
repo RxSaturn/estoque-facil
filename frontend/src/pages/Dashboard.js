@@ -38,12 +38,11 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 2,
-      retryDelay: 1000, // Aumentar delay entre tentativas
-      staleTime: 5 * 60 * 1000, // 5 minutos
-      gcTime: 10 * 60 * 1000, // 10 minutos (era cacheTime no v3)
-      timeout: 15000, // Timeout de 15 segundos
-      networkMode: "always", // Continuar tentando mesmo offline
+      retry: 1, // Reduzido de 2 para 1
+      retryDelay: 500, // Reduzido de 1000ms para 500ms
+      staleTime: 3 * 60 * 1000, // 3 minutos (reduzido de 5)
+      gcTime: 10 * 60 * 1000, // 10 minutos
+      networkMode: "always",
     },
   },
 });
@@ -63,6 +62,9 @@ const Dashboard = () => {
   const { usuario } = useContext(AuthContext);
   const queryClient = useQueryClient();
 
+  // Timeout reduzido de 10s para 8s para queries individuais
+  const QUERY_TIMEOUT = 8000;
+
   // Consultas TanStack Query para cada tipo de dados com promessas com timeout
   const produtosQuery = useQuery({
     queryKey: ["estatisticasProdutos"],
@@ -74,7 +76,7 @@ const Dashboard = () => {
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("Timeout na consulta de produtos")),
-              10000
+              QUERY_TIMEOUT
             )
           ),
         ]);
@@ -103,7 +105,7 @@ const Dashboard = () => {
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("Timeout na consulta de vendas")),
-              10000
+              QUERY_TIMEOUT
             )
           ),
         ]);
@@ -132,7 +134,7 @@ const Dashboard = () => {
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("Timeout na consulta de top produtos")),
-              10000
+              QUERY_TIMEOUT
             )
           ),
         ]);
@@ -160,7 +162,7 @@ const Dashboard = () => {
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("Timeout na consulta de estoque baixo")),
-              10000
+              QUERY_TIMEOUT
             )
           ),
         ]);
@@ -190,7 +192,7 @@ const Dashboard = () => {
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("Timeout na consulta de categorias")),
-              10000
+              QUERY_TIMEOUT
             )
           ),
         ]);
@@ -218,7 +220,7 @@ const Dashboard = () => {
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("Timeout na consulta de movimentações")),
-              10000
+              QUERY_TIMEOUT
             )
           ),
         ]);
@@ -353,7 +355,7 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="loading-info">
-            <FaClock /> Aguarde até 15 segundos para carregamento completo
+            <FaClock /> Aguarde alguns segundos para carregamento completo
           </div>
         </div>
       </div>

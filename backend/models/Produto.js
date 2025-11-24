@@ -64,6 +64,10 @@ produtoSchema.index({ nome: 'text', tipo: 'text', categoria: 'text', subcategori
 produtoSchema.index({ temEstoqueBaixo: 1 });
 produtoSchema.index({ temEstoqueCritico: 1 });
 produtoSchema.index({ temEstoqueEsgotado: 1 });
+// Índices para otimização de queries de listagem e filtros
+produtoSchema.index({ categoria: 1, updatedAt: -1 });
+produtoSchema.index({ tipo: 1, categoria: 1 });
+produtoSchema.index({ updatedAt: -1 });
 
 const Produto = mongoose.model('Produto', produtoSchema);
 

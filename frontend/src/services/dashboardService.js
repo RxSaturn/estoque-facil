@@ -1,7 +1,7 @@
 import api from "./api";
 
-// Função auxiliar para adicionar timeout em qualquer promessa
-const withTimeout = (promise, timeoutMs = 5000) => {
+// Função auxiliar para adicionar timeout em qualquer promessa - REDUZIDO para 8s
+const withTimeout = (promise, timeoutMs = 8000) => {
   const timeoutPromise = new Promise((_, reject) => {
     setTimeout(
       () => reject(new Error(`Timeout após ${timeoutMs}ms`)),
@@ -12,77 +12,24 @@ const withTimeout = (promise, timeoutMs = 5000) => {
   return Promise.race([promise, timeoutPromise]);
 };
 
-// Obter estatísticas de produtos
+// Obter estatísticas de produtos - OTIMIZADO para usar endpoint de contagem
 export const getProductStats = async () => {
   try {
     console.log("🔍 Buscando estatísticas de produtos...");
 
-    // Buscar lista completa de produtos (ignorando limite)
-    // para garantir contagem correta de produtos únicos
-    const produtosPromise = api.get("/api/produtos");
-    const produtosResponse = await withTimeout(produtosPromise);
+    // Buscar contagem e estatísticas em paralelo usando endpoints otimizados
+    const [countResponse, estatisticasResponse] = await Promise.all([
+      withTimeout(api.get("/api/produtos/count")),
+      withTimeout(api.get("/api/produtos/estatisticas"))
+    ]);
 
     // Log para debug
-    console.log("Resposta da API de produtos:", produtosResponse.data);
+    console.log("Resposta da API de contagem:", countResponse.data);
 
-    // Extrair e processar a lista de produtos
-    let produtos = [];
-    let total = 0;
-    let quantidadeTotal = 0;
+    const total = countResponse.data?.total || estatisticasResponse.data?.total || 0;
+    const quantidadeTotal = estatisticasResponse.data?.quantidadeTotal || 0;
 
-    // Processar diferentes formatos de resposta
-    if (produtosResponse.data) {
-      if (Array.isArray(produtosResponse.data)) {
-        produtos = produtosResponse.data;
-      } else if (produtosResponse.data.produtos && Array.isArray(produtosResponse.data.produtos)) {
-        produtos = produtosResponse.data.produtos;
-        // Se vier no formato { total, produtos } e não for de estoque, podemos confiar
-        if (typeof produtosResponse.data.total === 'number' && !produtosResponse.data.estoques) {
-          total = produtosResponse.data.total;
-          console.log(`Total de produtos fornecido pela API: ${total}`);
-        }
-      }
-
-      // Se não tivermos um total confiável da API, contar produtos únicos
-      if (total === 0) {
-        // Extrair IDs únicos para garantir que contamos cada produto apenas uma vez
-        const produtosIds = new Set();
-        produtos.forEach(produto => {
-          const id = produto._id || produto.id;
-          if (id) {
-            produtosIds.add(id);
-          }
-        });
-        
-        total = produtosIds.size;
-        console.log(`Total de produtos únicos calculado: ${total}`);
-      }
-
-      // Calcular a quantidade total em estoque se disponível
-      try {
-        // Buscar estoque total
-        const estoquePromise = api.get("/api/estoque");
-        const estoqueResponse = await withTimeout(estoquePromise);
-        
-        if (estoqueResponse.data) {
-          let estoques = [];
-          
-          if (Array.isArray(estoqueResponse.data)) {
-            estoques = estoqueResponse.data;
-          } else if (estoqueResponse.data.estoques && Array.isArray(estoqueResponse.data.estoques)) {
-            estoques = estoqueResponse.data.estoques;
-          }
-          
-          // Somar todas as quantidades
-          quantidadeTotal = estoques.reduce((sum, item) => sum + (Number(item.quantidade) || 0), 0);
-          console.log(`Quantidade total em estoque: ${quantidadeTotal}`);
-        }
-      } catch (error) {
-        console.log("Não foi possível obter dados de estoque:", error.message);
-        // Usar fallback: somar as quantidades dos produtos diretos (se disponível)
-        quantidadeTotal = produtos.reduce((sum, p) => sum + (Number(p.quantidade) || 0), 0);
-      }
-    }
+    console.log(`Total de produtos: ${total}, Quantidade em estoque: ${quantidadeTotal}`);
 
     return { total, quantidadeTotal };
   } catch (error) {
