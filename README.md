@@ -293,13 +293,6 @@ Contribuições são bem-vindas! Para contribuir:
 4. Envie para a branch (`git push origin feature/nova-funcionalidade`)
 5. Abra um Pull Request
 
-## 📧 Contato
-
-Para dúvidas ou sugestões, entre em contato:
-- [Seu Nome/Empresa]
-- [seu-email@exemplo.com]
-```
-
 Este README fornece uma documentação abrangente do projeto "Estoque Fácil", detalhando a arquitetura, estrutura, endpoints da API, modelos de dados e instruções de uso. É projetado para servir como uma referência completa, facilitando a consulta e futuras modificações, inclusive com assistência de outros agentes de IA.
 
 A documentação está estruturada para dar uma visão clara do sistema completo, desde sua instalação até os detalhes técnicos mais específicos. Isso permitirá que você mantenha o projeto de forma eficiente e desenvolva novas funcionalidades com base no trabalho já realizado.
