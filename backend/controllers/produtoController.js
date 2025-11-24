@@ -3,40 +3,31 @@ const Estoque = require("../models/Estoque");
 const Movimentacao = require("../models/Movimentacao");
 const { excluirArquivos, excluirArquivo } = require("../utils/fileUtils");
 
-// Função auxiliar para gerar ID do produto
+// Função auxiliar para gerar ID do produto - Sistema ilimitado com timestamp+random
 const gerarIdProduto = async (tipo, categoria, subcategoria, nome) => {
-  // Primeira letra de cada campo
-  const tipoPrimLetra = tipo.charAt(0).toUpperCase();
-  const categoriaPrimLetra = categoria.charAt(0).toUpperCase();
-  const subcategoriaPrimLetra = subcategoria.charAt(0).toUpperCase();
-  const nomePrimLetra = nome.charAt(0).toUpperCase();
-
-  // Base do ID
-  const baseId = `${tipoPrimLetra}${categoriaPrimLetra}${subcategoriaPrimLetra}${nomePrimLetra}`;
-
-  // Verificar se já existem produtos com esse prefixo
-  const produtosExistentes = await Produto.find({
-    id: new RegExp(`^${baseId}\\d{2}$`),
-  }).sort({ id: -1 });
-
-  // Se não existir nenhum, começamos com 00
-  if (produtosExistentes.length === 0) {
-    return `${baseId}00`;
+  // Primeiras duas letras de cada campo para formar o prefixo (com fallback seguro)
+  const tipoPrefix = (tipo || 'XX').padEnd(2, 'X').substring(0, 2).toUpperCase();
+  const categoriaPrefix = (categoria || 'XX').padEnd(2, 'X').substring(0, 2).toUpperCase();
+  const subcategoriaPrefix = (subcategoria || 'XX').padEnd(2, 'X').substring(0, 2).toUpperCase();
+  
+  const prefixo = `${tipoPrefix}${categoriaPrefix}${subcategoriaPrefix}`;
+  
+  // Gerar sufixo único com base em timestamp + random (com padding consistente)
+  const timestamp = Date.now().toString(36).toUpperCase().padStart(8, '0').slice(-4);
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase().padEnd(4, '0');
+  const sufixo = `${timestamp}${random}`;
+  
+  const novoId = `${prefixo}-${sufixo}`;
+  
+  // Verificar unicidade (chance mínima de colisão)
+  const existe = await Produto.findOne({ id: novoId }).lean();
+  if (existe) {
+    // Fallback: gerar outro ID aleatório em caso de colisão
+    const fallbackRandom = Math.random().toString(36).substring(2, 10).toUpperCase().padEnd(8, '0');
+    return `${prefixo}-${fallbackRandom}`;
   }
-
-  // Se existir, pegamos o último e incrementamos
-  const ultimoId = produtosExistentes[0].id;
-  const ultimoNumero = parseInt(ultimoId.slice(-2));
-
-  // Verificar se atingiu o limite
-  if (ultimoNumero >= 99) {
-    throw new Error("Limite de IDs atingido para este tipo de produto");
-  }
-
-  // Incrementar e formatar com zero à esquerda
-  const novoNumero = (ultimoNumero + 1).toString().padStart(2, "0");
-
-  return `${baseId}${novoNumero}`;
+  
+  return novoId;
 };
 
 // Criar novo produto
@@ -112,7 +103,7 @@ exports.criarProduto = async (req, res) => {
   }
 };
 
-// Listar produtos com paginação
+// Listar produtos com paginação - OTIMIZADO com .lean() e .select()
 exports.listarProdutos = async (req, res) => {
   try {
     const {
@@ -144,14 +135,16 @@ exports.listarProdutos = async (req, res) => {
       ];
     }
 
-    // Contar total de documentos que correspondem ao filtro
-    const total = await Produto.countDocuments(filtro);
-
-    // Buscar produtos com filtro e paginação
-    const produtos = await Produto.find(filtro)
-      .sort({ updatedAt: -1 })
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum);
+    // Executar contagem e busca em paralelo para melhor performance
+    const [total, produtos] = await Promise.all([
+      Produto.countDocuments(filtro),
+      Produto.find(filtro)
+        .select('id nome categoria tipo subcategoria imagemUrl dataCriacao temEstoqueBaixo temEstoqueCritico temEstoqueEsgotado')
+        .sort({ updatedAt: -1 })
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .lean()
+    ]);
 
     res.status(200).json({
       sucesso: true,
@@ -166,6 +159,29 @@ exports.listarProdutos = async (req, res) => {
     res.status(500).json({
       sucesso: false,
       mensagem: "Erro ao listar produtos",
+      erro: error.message,
+    });
+  }
+};
+
+// Contar produtos - Endpoint otimizado para contagem rápida
+exports.contarProdutos = async (req, res) => {
+  try {
+    const { categoria, tipo, subcategoria } = req.query;
+    
+    const filtro = {};
+    if (categoria) filtro.categoria = categoria;
+    if (tipo) filtro.tipo = tipo;
+    if (subcategoria) filtro.subcategoria = subcategoria;
+    
+    const total = await Produto.countDocuments(filtro);
+    
+    res.json({ sucesso: true, total });
+  } catch (error) {
+    console.error("Erro ao contar produtos:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao contar produtos",
       erro: error.message,
     });
   }
@@ -230,10 +246,10 @@ exports.listarSubcategorias = async (req, res) => {
   }
 };
 
-// Obter produto por ID
+// Obter produto por ID - OTIMIZADO com .lean() para estoques
 exports.obterProdutoPorId = async (req, res) => {
   try {
-    const produto = await Produto.findById(req.params.id);
+    const produto = await Produto.findById(req.params.id).lean();
 
     if (!produto) {
       return res.status(404).json({
@@ -242,8 +258,10 @@ exports.obterProdutoPorId = async (req, res) => {
       });
     }
 
-    // Obter informações de estoque deste produto
-    const estoques = await Estoque.find({ produto: produto._id });
+    // Obter informações de estoque deste produto com .lean()
+    const estoques = await Estoque.find({ produto: produto._id })
+      .select('local quantidade ultimaAtualizacao')
+      .lean();
 
     res.status(200).json({
       sucesso: true,
@@ -535,13 +553,17 @@ exports.removerProduto = async (req, res) => {
     });
   }
 };
-// Obter produtos mais vendidos
+// Obter produtos mais vendidos - OTIMIZADO com .lean() e .select()
 exports.obterProdutosMaisVendidos = async (req, res) => {
   try {
     const limite = parseInt(req.query.limite) || 5;
 
-    // Buscar produtos ordenados por vendas (você precisa ter este campo)
-    const produtos = await Produto.find().sort({ vendas: -1 }).limit(limite);
+    // Buscar produtos ordenados por vendas com .lean() e .select()
+    const produtos = await Produto.find()
+      .select('_id nome vendas preco')
+      .sort({ vendas: -1 })
+      .limit(limite)
+      .lean();
 
     // Transformar para o formato esperado
     const resultado = produtos.map((p) => ({
@@ -562,29 +584,28 @@ exports.obterProdutosMaisVendidos = async (req, res) => {
   }
 };
 
-// Obter estatísticas de produtos
+// Obter estatísticas de produtos - OTIMIZADO com agregação paralela
 exports.obterEstatisticas = async (req, res) => {
   try {
-    // Contar total de produtos
-    const total = await Produto.countDocuments();
-
-    // Calcular quantidade total em estoque (corrigido para o modelo Estoque)
-    const estoqueAgregado = await Estoque.aggregate([
-      { $group: { _id: null, quantidadeTotal: { $sum: "$quantidade" } } },
+    // Executar todas as consultas em paralelo para melhor performance
+    const [total, estoqueAgregado, estoqueBaixoCount] = await Promise.all([
+      // Contar total de produtos
+      Produto.countDocuments(),
+      // Calcular quantidade total em estoque
+      Estoque.aggregate([
+        { $group: { _id: null, quantidadeTotal: { $sum: "$quantidade" } } },
+      ]),
+      // Contar produtos com estoque baixo (quantidade <= 20)
+      Estoque.countDocuments({ quantidade: { $lte: 20, $gt: 0 } })
     ]);
 
     const quantidadeTotal =
       estoqueAgregado.length > 0 ? estoqueAgregado[0].quantidadeTotal : 0;
 
-    // Contar produtos com estoque baixo
-    const estoqueBaixo = await Produto.countDocuments({
-      $expr: { $lte: ["$quantidade", "$estoqueMinimo"] },
-    });
-
     res.json({
       total,
       quantidadeTotal,
-      estoqueBaixo,
+      estoqueBaixo: estoqueBaixoCount,
       tendencia: 0,
       tendenciaEstoqueBaixo: 0,
     });
@@ -602,12 +623,13 @@ exports.obterUltimasTransacoes = async (req, res) => {
   try {
     const limite = parseInt(req.query.limite) || 10;
 
-    // Buscar movimentações recentes
+    // Buscar movimentações recentes com .lean() para performance
     const movimentacoes = await Movimentacao.find()
       .populate("produto", "id nome")
       .populate("realizadoPor", "nome")
       .sort({ data: -1 })
-      .limit(limite);
+      .limit(limite)
+      .lean();
 
     // Transformar para formato simplificado conforme solicitado
     const transacoes = movimentacoes.map((m) => ({

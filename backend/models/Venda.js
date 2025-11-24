@@ -28,6 +28,10 @@ const vendaSchema = new mongoose.Schema({
   }
 });
 
+// Índices para otimização de queries de relatórios
+vendaSchema.index({ dataVenda: -1, produto: 1 });
+vendaSchema.index({ produto: 1, dataVenda: -1 });
+
 const Venda = mongoose.model('Venda', vendaSchema);
 
 module.exports = Venda;

@@ -40,6 +40,7 @@ router.get(
   produtoController.obterProdutosMaisVendidos
 );
 router.get("/estatisticas", proteger, produtoController.obterEstatisticas);
+router.get("/count", proteger, produtoController.contarProdutos); // NOVO: Endpoint otimizado para contagem
 
 // Rotas CRUD principais
 router.post(

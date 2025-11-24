@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -8,22 +8,39 @@ import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
 import PrivateRoute from "./components/PrivateRoute";
 
-// Importação de páginas
+// Importação de páginas críticas (carregamento imediato)
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import Produtos from "./pages/Produtos";
-import AdicionarProduto from "./pages/AdicionarProduto";
-import EditarProduto from "./pages/EditarProduto";
-import Movimentacao from "./pages/Movimentacao";
-import Historico from "./pages/Historico";
-import Relatorios from "./pages/Relatorios";
-import Gerenciamento from "./pages/Gerenciamento";
-import RedefinirSenha from "./pages/RedefinirSenha";
 
 // Importação de contextos
 import { AuthProvider } from "./contexts/AuthContext";
 
 import "./App.css";
+
+// Lazy loading para páginas secundárias (carregamento sob demanda)
+const Produtos = lazy(() => import("./pages/Produtos"));
+const AdicionarProduto = lazy(() => import("./pages/AdicionarProduto"));
+const EditarProduto = lazy(() => import("./pages/EditarProduto"));
+const Movimentacao = lazy(() => import("./pages/Movimentacao"));
+const Historico = lazy(() => import("./pages/Historico"));
+const Relatorios = lazy(() => import("./pages/Relatorios"));
+const Gerenciamento = lazy(() => import("./pages/Gerenciamento"));
+const RedefinirSenha = lazy(() => import("./pages/RedefinirSenha"));
+
+// Componente de loading para Suspense
+const LoadingSpinner = () => (
+  <div className="loading-container" style={{ 
+    display: 'flex', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    height: '100vh',
+    flexDirection: 'column',
+    gap: '1rem'
+  }}>
+    <div className="loading-spinner"></div>
+    <p>Carregando...</p>
+  </div>
+);
 
 function App() {
   return (
@@ -44,52 +61,54 @@ function App() {
           />
           <Navbar />
           <main className="container">
-            <Routes>
-              <Route path="/" element={<Login />} />
-              <Route path="/login" element={<Login />} />
-              <Route
-                path="/redefinir-senha/:token"
-                element={<RedefinirSenha />}
-              />
-              <Route
-                path="/dashboard"
-                element={<PrivateRoute component={Dashboard} />}
-              />
-              <Route
-                path="/produtos"
-                element={<PrivateRoute component={Produtos} />}
-              />
-              <Route
-                path="/produtos/adicionar"
-                element={<PrivateRoute component={AdicionarProduto} />}
-              />
-              <Route
-                path="/produtos/editar/:id"
-                element={<PrivateRoute component={EditarProduto} />}
-              />
-              <Route
-                path="/movimentacao"
-                element={<PrivateRoute component={Movimentacao} />}
-              />
-              <Route
-                path="/movimentacoes/adicionar"
-                element={<Movimentacao />}
-              />
-              <Route
-                path="/historico"
-                element={<PrivateRoute component={Historico} />}
-              />
-              <Route
-                path="/relatorios"
-                element={<PrivateRoute component={Relatorios} />}
-              />
-              <Route
-                path="/gerenciamento"
-                element={
-                  <PrivateRoute component={Gerenciamento} adminOnly={true} />
-                }
-              />
-            </Routes>
+            <Suspense fallback={<LoadingSpinner />}>
+              <Routes>
+                <Route path="/" element={<Login />} />
+                <Route path="/login" element={<Login />} />
+                <Route
+                  path="/redefinir-senha/:token"
+                  element={<RedefinirSenha />}
+                />
+                <Route
+                  path="/dashboard"
+                  element={<PrivateRoute component={Dashboard} />}
+                />
+                <Route
+                  path="/produtos"
+                  element={<PrivateRoute component={Produtos} />}
+                />
+                <Route
+                  path="/produtos/adicionar"
+                  element={<PrivateRoute component={AdicionarProduto} />}
+                />
+                <Route
+                  path="/produtos/editar/:id"
+                  element={<PrivateRoute component={EditarProduto} />}
+                />
+                <Route
+                  path="/movimentacao"
+                  element={<PrivateRoute component={Movimentacao} />}
+                />
+                <Route
+                  path="/movimentacoes/adicionar"
+                  element={<Movimentacao />}
+                />
+                <Route
+                  path="/historico"
+                  element={<PrivateRoute component={Historico} />}
+                />
+                <Route
+                  path="/relatorios"
+                  element={<PrivateRoute component={Relatorios} />}
+                />
+                <Route
+                  path="/gerenciamento"
+                  element={
+                    <PrivateRoute component={Gerenciamento} adminOnly={true} />
+                  }
+                />
+              </Routes>
+            </Suspense>
           </main>
           <Footer />
         </div>
