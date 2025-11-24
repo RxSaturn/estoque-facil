@@ -1,12 +1,10 @@
 import React, { useContext } from 'react';
-import { Navigate } from 'react-router-dom';
-import AuthContext from '../contexts/AuthContext';
+import { Navigate, Outlet } from 'react-router-dom';
+import AuthContext from '../contexts/AuthContext'; // Updated import
 
-// Componente para proteger rotas que necessitam de autenticação
 const PrivateRoute = ({ component: Component, adminOnly = false }) => {
   const { usuario, carregando, isAdmin } = useContext(AuthContext);
 
-  // Enquanto verifica autenticação, exibe um loading
   if (carregando) {
     return (
       <div className="loading-container">
@@ -16,18 +14,15 @@ const PrivateRoute = ({ component: Component, adminOnly = false }) => {
     );
   }
 
-  // Se não estiver autenticado, redireciona para o login
   if (!usuario) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/login" replace />;
   }
 
-  // Se a rota for apenas para admin e o usuário não for admin, redireciona
   if (adminOnly && !isAdmin()) {
-    return <Navigate to="/dashboard" />;
+    return <Navigate to="/dashboard" replace />;
   }
 
-  // Se estiver autenticado e tiver permissão, renderiza o componente
-  return <Component />;
+  return Component ? <Component /> : <Outlet />;
 };
 
 export default PrivateRoute;
