@@ -116,7 +116,7 @@ exports.listarVendas = async (req, res) => {
           dataFimRaw: dataFim,
           dataInicioObj: inicio.toISOString(),
           dataFimObj: fim.toISOString(),
-          fusoHorario: Intl.DateTimeFormat().resolvedOptions().timeZone
+          fusoHorarioServidor: Intl.DateTimeFormat().resolvedOptions().timeZone
         });
         
         // Verificar se as datas são válidas

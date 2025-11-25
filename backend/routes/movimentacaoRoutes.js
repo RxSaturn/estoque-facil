@@ -221,8 +221,8 @@ router.get("/historico", proteger, async (req, res) => {
     // Validar tipo se fornecido
     const tiposValidos = ["entrada", "saida", "transferencia", "venda", "atualizacao"];
     if (tipo && !tiposValidos.includes(tipo)) {
-      console.warn(`Tipo de movimentação inválido: ${tipo}`);
-      // Ignorar tipo inválido em vez de retornar erro (fallback suave)
+      console.warn(`Tipo de movimentação inválido: ${tipo}. Tipos válidos: ${tiposValidos.join(', ')}. Filtro de tipo será ignorado.`);
+      // Não retorna erro, apenas ignora o filtro inválido para não quebrar a experiência do usuário
     }
 
     // Construir filtro

@@ -19,16 +19,21 @@ const ERROR_TYPES = {
   UNKNOWN: 'UNKNOWN'
 };
 
+// Códigos de erro conhecidos para categorização
+const CONNECTION_ERROR_CODES = ['ECONNABORTED', 'ERR_NETWORK', 'ECONNREFUSED'];
+const TIMEOUT_ERROR_CODES = ['TIMEOUT_ERROR', 'ETIMEDOUT'];
+
 // Função para categorizar erros
 const categorizeError = (error) => {
   if (!error) return { type: ERROR_TYPES.UNKNOWN, message: 'Erro desconhecido' };
   
-  // Erros de conexão
+  const errorCode = error.code || '';
+  const errorMessage = error.message || '';
+  
+  // Erros de conexão - verificar por propriedade ou código
   if (error.isConnectionError || 
-      error.code === 'ECONNABORTED' || 
-      error.code === 'ERR_NETWORK' ||
-      error.code === 'ECONNREFUSED' ||
-      error.message?.includes('Network Error')) {
+      CONNECTION_ERROR_CODES.includes(errorCode) ||
+      errorMessage.includes('Network Error')) {
     return { 
       type: ERROR_TYPES.CONNECTION, 
       message: 'Não foi possível conectar ao servidor. Verifique sua conexão de internet.',
@@ -36,10 +41,9 @@ const categorizeError = (error) => {
     };
   }
   
-  // Erros de timeout
-  if (error.message?.includes('timeout') || 
-      error.message?.includes('Timeout') ||
-      error.code === 'TIMEOUT_ERROR') {
+  // Erros de timeout - verificar por código ou mensagem
+  if (TIMEOUT_ERROR_CODES.includes(errorCode) ||
+      errorMessage.toLowerCase().includes('timeout')) {
     return { 
       type: ERROR_TYPES.TIMEOUT, 
       message: 'A conexão demorou muito para responder. Tentando novamente...',
@@ -47,8 +51,9 @@ const categorizeError = (error) => {
     };
   }
   
-  // Erros de autenticação
-  if (error.response?.status === 401 || error.response?.status === 403) {
+  // Erros de autenticação - verificar status HTTP
+  const httpStatus = error.response?.status;
+  if (httpStatus === 401 || httpStatus === 403) {
     return { 
       type: ERROR_TYPES.AUTH, 
       message: 'Sessão expirada. Por favor, faça login novamente.',
@@ -56,8 +61,8 @@ const categorizeError = (error) => {
     };
   }
   
-  // Erros do servidor
-  if (error.response?.status >= 500) {
+  // Erros do servidor - verificar status HTTP 5xx
+  if (httpStatus >= 500) {
     return { 
       type: ERROR_TYPES.SERVER, 
       message: 'Erro interno do servidor. Tente novamente mais tarde.',
@@ -67,7 +72,7 @@ const categorizeError = (error) => {
   
   return { 
     type: ERROR_TYPES.UNKNOWN, 
-    message: error.message || 'Erro desconhecido',
+    message: errorMessage || 'Erro desconhecido',
     canRetry: true
   };
 };
