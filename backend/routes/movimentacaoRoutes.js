@@ -197,6 +197,7 @@ router.get("/historico", proteger, async (req, res) => {
       dataFim,
       produto,
       localOrigem,
+      localDestino,
       tipo,
       page = 1,
       limit = 20,
@@ -211,10 +212,18 @@ router.get("/historico", proteger, async (req, res) => {
       dataFim,
       produto,
       localOrigem,
+      localDestino,
       tipo,
       page: pageNum,
       limit: limitNum,
     });
+
+    // Validar tipo se fornecido
+    const tiposValidos = ["entrada", "saida", "transferencia", "venda", "atualizacao"];
+    if (tipo && !tiposValidos.includes(tipo)) {
+      console.warn(`Tipo de movimentação inválido: ${tipo}. Tipos válidos: ${tiposValidos.join(', ')}. Filtro de tipo será ignorado.`);
+      // Não retorna erro, apenas ignora o filtro inválido para não quebrar a experiência do usuário
+    }
 
     // Construir filtro
     const filtro = {};
@@ -260,6 +269,12 @@ router.get("/historico", proteger, async (req, res) => {
     if (localOrigem) {
       filtro.localOrigem = localOrigem;
       console.log("Filtrando por localOrigem:", localOrigem);
+    }
+
+    // Filtrar por local de destino (para transferências)
+    if (localDestino) {
+      filtro.localDestino = localDestino;
+      console.log("Filtrando por localDestino:", localDestino);
     }
 
     if (tipo) {
@@ -319,9 +334,26 @@ router.get("/historico", proteger, async (req, res) => {
     });
   } catch (error) {
     console.error("Erro ao listar movimentações:", error);
+    
+    // Determinar o tipo de erro para feedback mais detalhado
+    let mensagemErro = "Erro ao listar movimentações";
+    let codigoErro = "UNKNOWN_ERROR";
+    
+    if (error.name === "CastError") {
+      mensagemErro = "Parâmetro inválido fornecido na requisição";
+      codigoErro = "INVALID_PARAMETER";
+    } else if (error.name === "MongoNetworkError" || error.name === "MongoTimeoutError") {
+      mensagemErro = "Erro de conexão com o banco de dados";
+      codigoErro = "DATABASE_CONNECTION_ERROR";
+    } else if (error.message && error.message.includes("timeout")) {
+      mensagemErro = "A consulta demorou muito para responder";
+      codigoErro = "TIMEOUT_ERROR";
+    }
+    
     res.status(500).json({
       sucesso: false,
-      mensagem: "Erro ao listar movimentações",
+      mensagem: mensagemErro,
+      codigo: codigoErro,
       erro: error.message,
     });
   }

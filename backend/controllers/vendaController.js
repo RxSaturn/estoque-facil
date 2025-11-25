@@ -100,11 +100,24 @@ exports.listarVendas = async (req, res) => {
       page: pageNum, limit: limitNum
     });
     
-    // Tratamento de datas com validação
+    // Tratamento de datas com validação melhorada para fusos horários
     if (dataInicio && dataFim) {
       try {
+        // Criar objeto de data para início (começando à meia-noite no horário local)
         const inicio = new Date(dataInicio);
+        inicio.setHours(0, 0, 0, 0);
+        
+        // Criar objeto de data para fim (terminando às 23:59:59.999 no horário local)
         const fim = new Date(dataFim);
+        fim.setHours(23, 59, 59, 999);
+        
+        console.log('Datas processadas para filtro:', {
+          dataInicioRaw: dataInicio,
+          dataFimRaw: dataFim,
+          dataInicioObj: inicio.toISOString(),
+          dataFimObj: fim.toISOString(),
+          fusoHorarioServidor: Intl.DateTimeFormat().resolvedOptions().timeZone
+        });
         
         // Verificar se as datas são válidas
         if (!isNaN(inicio.getTime()) && !isNaN(fim.getTime())) {
@@ -156,9 +169,26 @@ exports.listarVendas = async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao listar histórico de vendas:', error);
+    
+    // Determinar o tipo de erro para feedback mais detalhado
+    let mensagemErro = 'Erro ao listar histórico de vendas';
+    let codigoErro = 'UNKNOWN_ERROR';
+    
+    if (error.name === 'CastError') {
+      mensagemErro = 'Parâmetro inválido fornecido na requisição';
+      codigoErro = 'INVALID_PARAMETER';
+    } else if (error.name === 'MongoNetworkError' || error.name === 'MongoTimeoutError') {
+      mensagemErro = 'Erro de conexão com o banco de dados';
+      codigoErro = 'DATABASE_CONNECTION_ERROR';
+    } else if (error.message && error.message.includes('timeout')) {
+      mensagemErro = 'A consulta demorou muito para responder';
+      codigoErro = 'TIMEOUT_ERROR';
+    }
+    
     res.status(500).json({
       sucesso: false,
-      mensagem: 'Erro ao listar histórico de vendas',
+      mensagem: mensagemErro,
+      codigo: codigoErro,
       erro: error.message
     });
   }
