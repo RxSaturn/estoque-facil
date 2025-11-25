@@ -17,24 +17,23 @@ export const getProductStats = async () => {
   try {
     console.log("🔍 Buscando estatísticas de produtos...");
 
-    // Buscar contagem e estatísticas em paralelo usando endpoints otimizados
+    // Buscar contagem e estatísticas em paralelo
     const [countResponse, estatisticasResponse] = await Promise.all([
       withTimeout(api.get("/api/produtos/count")),
       withTimeout(api.get("/api/produtos/estatisticas"))
     ]);
 
-    // Log para debug
-    console.log("Resposta da API de contagem:", countResponse.data);
+    // Usar countResponse como fonte primária de dados
+    const total = countResponse.data?.total ?? estatisticasResponse.data?.total ?? 0;
+    const quantidadeTotal = estatisticasResponse.data?.quantidadeTotal ?? 0;
 
-    const total = countResponse.data?.total || estatisticasResponse.data?.total || 0;
-    const quantidadeTotal = estatisticasResponse.data?.quantidadeTotal || 0;
-
-    console.log(`Total de produtos: ${total}, Quantidade em estoque: ${quantidadeTotal}`);
+    console.log(`✅ Estatísticas carregadas - Produtos: ${total}, Estoque total: ${quantidadeTotal}`);
 
     return { total, quantidadeTotal };
   } catch (error) {
     console.error("❌ Erro ao buscar estatísticas de produtos:", error);
-    throw error;
+    // Retornar valores padrão ao invés de throw para não quebrar o dashboard
+    return { total: 0, quantidadeTotal: 0 };
   }
 };
 

@@ -95,8 +95,8 @@ api.interceptors.response.use(
       
       connectionErrorCount++;
       
-      // Mostrar toast apenas para o primeiro erro de conexão
-      if (connectionErrorCount === 1) {
+      // Mostrar toast apenas se não existir ainda
+      if (!toast.isActive(connectionErrorToastId)) {
         toast.error(
           <div>
             <strong>Erro de conexão com o servidor</strong>
@@ -111,7 +111,7 @@ api.interceptors.response.use(
         );
       }
       
-      console.error(`Erro de conexão (${connectionErrorCount}):`, error.message || 'Falha na conexão com o servidor');
+      console.error(`Erro de conexão (tentativa ${connectionErrorCount}):`, error.message || 'Falha na conexão com o servidor');
       return Promise.reject({
         isConnectionError: true,
         message: 'Não foi possível conectar ao servidor',

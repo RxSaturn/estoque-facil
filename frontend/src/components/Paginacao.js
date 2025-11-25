@@ -42,16 +42,7 @@ const Paginacao = ({
     }
   }, [prefs, pageName]);
   
-  // Notificar componente pai sobre mudanças - CORRIGIDO com useCallback
-  useEffect(() => {
-    // Chamar apenas quando currentPage ou itemsPerPage mudarem
-    onPageChange(currentPage);
-  }, [currentPage, onPageChange]);
 
-  useEffect(() => {
-    // Chamar apenas quando itemsPerPage mudar
-    onItemsPerPageChange(itemsPerPage);
-  }, [itemsPerPage, onItemsPerPageChange]);
   
   // Retornar à primeira página quando tamanho da página muda
   useEffect(() => {
@@ -60,16 +51,23 @@ const Paginacao = ({
     }
   }, [totalPages, currentPage]);
   
-  // Manipuladores de eventos
+  // Manipuladores de eventos - chamam callbacks diretamente para evitar loops
   const changePage = (page) => {
-    if (page >= 1 && page <= totalPages) {
+    if (page >= 1 && page <= totalPages && page !== currentPage) {
       setPrefs(prev => ({ ...prev, currentPage: page }));
+      // Chamar callback apenas quando página realmente mudar
+      onPageChange(page);
     }
   };
   
   const changeItemsPerPage = (e) => {
     const newItemsPerPage = parseInt(e.target.value, 10);
-    setPrefs({ currentPage: 1, itemsPerPage: newItemsPerPage });
+    if (newItemsPerPage !== itemsPerPage) {
+      setPrefs({ currentPage: 1, itemsPerPage: newItemsPerPage });
+      // Notificar componente pai das mudanças
+      onItemsPerPageChange(newItemsPerPage);
+      onPageChange(1); // Voltar para primeira página
+    }
   };
   
   // Gerar números de página para exibição
