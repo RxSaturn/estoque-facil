@@ -3,11 +3,73 @@ import { toast } from "react-toastify";
 
 // Configurações de timeout e retry otimizadas
 const CONFIG = {
-  TIMEOUT_MS: 10000, // Aumentado para 10s para dar mais tempo em conexões lentas
-  MAX_RETRIES: 2,
-  RETRY_DELAY_BASE_MS: 300, // Delay base reduzido para respostas mais rápidas
+  TIMEOUT_MS: 15000, // Aumentado para 15s para dar mais tempo em conexões lentas
+  MAX_RETRIES: 3, // Aumentado para 3 retries
+  RETRY_DELAY_BASE_MS: 500, // Delay base de 500ms para backoff exponencial
   CACHE_DURATION_MS: 180000, // 3 minutos de cache
   MIN_STOCK_THRESHOLD: 20, // Limite mínimo de estoque
+};
+
+// Tipos de erro para feedback contextual
+const ERROR_TYPES = {
+  CONNECTION: 'CONNECTION',
+  TIMEOUT: 'TIMEOUT',
+  AUTH: 'AUTH',
+  SERVER: 'SERVER',
+  UNKNOWN: 'UNKNOWN'
+};
+
+// Função para categorizar erros
+const categorizeError = (error) => {
+  if (!error) return { type: ERROR_TYPES.UNKNOWN, message: 'Erro desconhecido' };
+  
+  // Erros de conexão
+  if (error.isConnectionError || 
+      error.code === 'ECONNABORTED' || 
+      error.code === 'ERR_NETWORK' ||
+      error.code === 'ECONNREFUSED' ||
+      error.message?.includes('Network Error')) {
+    return { 
+      type: ERROR_TYPES.CONNECTION, 
+      message: 'Não foi possível conectar ao servidor. Verifique sua conexão de internet.',
+      canRetry: true
+    };
+  }
+  
+  // Erros de timeout
+  if (error.message?.includes('timeout') || 
+      error.message?.includes('Timeout') ||
+      error.code === 'TIMEOUT_ERROR') {
+    return { 
+      type: ERROR_TYPES.TIMEOUT, 
+      message: 'A conexão demorou muito para responder. Tentando novamente...',
+      canRetry: true
+    };
+  }
+  
+  // Erros de autenticação
+  if (error.response?.status === 401 || error.response?.status === 403) {
+    return { 
+      type: ERROR_TYPES.AUTH, 
+      message: 'Sessão expirada. Por favor, faça login novamente.',
+      canRetry: false
+    };
+  }
+  
+  // Erros do servidor
+  if (error.response?.status >= 500) {
+    return { 
+      type: ERROR_TYPES.SERVER, 
+      message: 'Erro interno do servidor. Tente novamente mais tarde.',
+      canRetry: true
+    };
+  }
+  
+  return { 
+    type: ERROR_TYPES.UNKNOWN, 
+    message: error.message || 'Erro desconhecido',
+    canRetry: true
+  };
 };
 
 // Cache em memória para dados do dashboard
@@ -60,7 +122,7 @@ const withTimeout = (promise, timeoutMs = CONFIG.TIMEOUT_MS) => {
 };
 
 /**
- * Função para retry com backoff exponencial reduzido
+ * Função para retry com backoff exponencial e feedback de progresso
  */
 const withRetry = async (fn, retries = CONFIG.MAX_RETRIES, context = "operação") => {
   let lastError;
@@ -70,11 +132,27 @@ const withRetry = async (fn, retries = CONFIG.MAX_RETRIES, context = "operação
       return await fn();
     } catch (error) {
       lastError = error;
+      const errorInfo = categorizeError(error);
+      
+      // Se não pode fazer retry, lançar o erro imediatamente
+      if (!errorInfo.canRetry) {
+        console.error(`❌ Erro não recuperável para ${context}:`, errorInfo.message);
+        throw error;
+      }
       
       if (attempt < retries) {
-        // Delay exponencial reduzido: 300ms, 600ms, 1200ms
+        // Delay exponencial: 500ms, 1000ms, 2000ms
         const delay = CONFIG.RETRY_DELAY_BASE_MS * Math.pow(2, attempt);
-        console.log(`⏳ Tentativa ${attempt + 1}/${retries + 1} falhou para ${context}. Retry em ${delay}ms...`);
+        console.log(`⏳ Tentativa ${attempt + 1}/${retries + 1} falhou para ${context}. Tipo: ${errorInfo.type}. Retry em ${delay}ms...`);
+        
+        // Toast informativo apenas na primeira falha
+        if (attempt === 0) {
+          toast.info(`Carregando ${context}... Aguarde.`, {
+            toastId: `retry-${context}`,
+            autoClose: delay + 1000
+          });
+        }
+        
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
@@ -268,6 +346,8 @@ export const getSalesStats = async (useCache = true) => {
   } catch (error) {
     console.error("❌ Erro ao buscar estatísticas de vendas:", error);
     
+    const errorInfo = categorizeError(error);
+    
     // Tentar usar cache expirado como fallback
     const expiredCache = getFromCache(cacheKey);
     if (expiredCache) {
@@ -279,10 +359,17 @@ export const getSalesStats = async (useCache = true) => {
       return expiredCache;
     }
     
+    // Mostrar erro contextualizado
+    toast.error(errorInfo.message, {
+      toastId: "sales-error",
+      autoClose: 5000
+    });
+    
     return {
       vendasHoje: 0,
       vendasDiarias: 0,
       tendenciaVendas: 0,
+      errorType: errorInfo.type
     };
   }
 };
@@ -709,6 +796,8 @@ export const getRecentTransactions = async (limit = 8, useCache = true) => {
   } catch (error) {
     console.error("❌ Erro ao buscar movimentações:", error);
     
+    const errorInfo = categorizeError(error);
+    
     // Tentar usar cache expirado como fallback
     const expiredCache = getFromCache(cacheKey);
     if (expiredCache) {
@@ -719,6 +808,12 @@ export const getRecentTransactions = async (limit = 8, useCache = true) => {
       });
       return expiredCache;
     }
+    
+    // Mostrar erro contextualizado
+    toast.error(`Erro ao carregar movimentações: ${errorInfo.message}`, {
+      toastId: "movements-error",
+      autoClose: 5000
+    });
     
     return [];
   }

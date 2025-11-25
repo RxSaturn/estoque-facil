@@ -35,12 +35,13 @@ import { toast } from "react-toastify";
 import "./Dashboard.css";
 
 // QueryClient configurado com otimizações de retry e cache
-// Nota: retry é 0 pois o serviço dashboardService já implementa retry com backoff
+// Nota: retry é configurado com backoff exponencial para conexões lentas
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 0, // Desabilitado pois dashboardService já implementa retry com backoff
+      retry: 2, // Habilitado retry no React Query para fallback adicional
+      retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 10000), // Backoff: 1s, 2s, 4s, max 10s
       staleTime: 3 * 60 * 1000, // 3 minutos
       gcTime: 10 * 60 * 1000, // 10 minutos
       networkMode: "always",
@@ -63,8 +64,8 @@ const Dashboard = () => {
   const { usuario } = useContext(AuthContext);
   const queryClient = useQueryClient();
 
-  // Timeout reduzido de 10s para 8s para queries individuais
-  const QUERY_TIMEOUT = 8000;
+  // Timeout aumentado de 8s para 15s para redes mais lentas
+  const QUERY_TIMEOUT = 15000;
 
   // Consultas TanStack Query para cada tipo de dados com promessas com timeout
   const produtosQuery = useQuery({
@@ -320,50 +321,53 @@ const Dashboard = () => {
           <div className="loading-progress">
             <div
               className={`loading-item ${
-                !produtosQuery.isLoading ? "loaded" : ""
+                !produtosQuery.isLoading ? "loaded" : produtosQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!produtosQuery.isLoading ? "✓" : "•"} Produtos
+              {!produtosQuery.isLoading ? "✓" : produtosQuery.isFetching ? "⟳" : "•"} Produtos
             </div>
             <div
               className={`loading-item ${
-                !vendasQuery.isLoading ? "loaded" : ""
+                !vendasQuery.isLoading ? "loaded" : vendasQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!vendasQuery.isLoading ? "✓" : "•"} Vendas
+              {!vendasQuery.isLoading ? "✓" : vendasQuery.isFetching ? "⟳" : "•"} Vendas
             </div>
             <div
               className={`loading-item ${
-                !topProdutosQuery.isLoading ? "loaded" : ""
+                !topProdutosQuery.isLoading ? "loaded" : topProdutosQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!topProdutosQuery.isLoading ? "✓" : "•"} Top Produtos
+              {!topProdutosQuery.isLoading ? "✓" : topProdutosQuery.isFetching ? "⟳" : "•"} Top Produtos
             </div>
             <div
               className={`loading-item ${
-                !estoqueBaixoQuery.isLoading ? "loaded" : ""
+                !estoqueBaixoQuery.isLoading ? "loaded" : estoqueBaixoQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!estoqueBaixoQuery.isLoading ? "✓" : "•"} Estoque Baixo
+              {!estoqueBaixoQuery.isLoading ? "✓" : estoqueBaixoQuery.isFetching ? "⟳" : "•"} Estoque Baixo
             </div>
             <div
               className={`loading-item ${
-                !categoriasQuery.isLoading ? "loaded" : ""
+                !categoriasQuery.isLoading ? "loaded" : categoriasQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!categoriasQuery.isLoading ? "✓" : "•"} Categorias
+              {!categoriasQuery.isLoading ? "✓" : categoriasQuery.isFetching ? "⟳" : "•"} Categorias
             </div>
             <div
               className={`loading-item ${
-                !movimentacoesQuery.isLoading ? "loaded" : ""
+                !movimentacoesQuery.isLoading ? "loaded" : movimentacoesQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!movimentacoesQuery.isLoading ? "✓" : "•"} Movimentações
+              {!movimentacoesQuery.isLoading ? "✓" : movimentacoesQuery.isFetching ? "⟳" : "•"} Movimentações
             </div>
           </div>
           <div className="loading-info">
             <FaClock /> Aguarde alguns segundos para carregamento completo
           </div>
+          <p className="loading-hint">
+            Se a conexão estiver lenta, os dados serão carregados automaticamente após algumas tentativas.
+          </p>
         </div>
       </div>
     );
@@ -371,11 +375,70 @@ const Dashboard = () => {
 
   // Tela de erro quando todos os dados essenciais falharam
   if (isError) {
+    // Determinar o tipo de erro para mensagem contextual
+    const getErrorMessage = () => {
+      const prodError = produtosQuery.error;
+      const vendasError = vendasQuery.error;
+      const movError = movimentacoesQuery.error;
+      
+      // Verificar se é erro de conexão
+      if (prodError?.isConnectionError || vendasError?.isConnectionError || movError?.isConnectionError) {
+        return {
+          title: "Erro de conexão",
+          message: "Não foi possível conectar ao servidor. Verifique se o servidor backend está rodando e se sua conexão de internet está funcionando.",
+          icon: "connection"
+        };
+      }
+      
+      // Verificar se é erro de timeout
+      const timeoutError = [prodError, vendasError, movError].find(
+        e => e?.message?.includes('Timeout') || e?.message?.includes('timeout')
+      );
+      if (timeoutError) {
+        return {
+          title: "Conexão lenta",
+          message: "A conexão com o servidor está demorando muito. Isso pode ser causado por uma rede lenta ou servidor sobrecarregado.",
+          icon: "timeout"
+        };
+      }
+      
+      // Verificar se é erro de autenticação
+      const authError = [prodError, vendasError, movError].find(
+        e => e?.response?.status === 401 || e?.response?.status === 403
+      );
+      if (authError) {
+        return {
+          title: "Sessão expirada",
+          message: "Sua sessão expirou. Por favor, faça login novamente para continuar.",
+          icon: "auth"
+        };
+      }
+      
+      return {
+        title: "Erro ao carregar dados",
+        message: "Não foi possível obter os dados essenciais do dashboard. Tente atualizar a página.",
+        icon: "error"
+      };
+    };
+    
+    const errorInfo = getErrorMessage();
+    
     return (
       <div className="error-container">
         <FaExclamationTriangle className="error-icon" />
-        <h2>Erro ao carregar dados</h2>
-        <p>Não foi possível obter os dados essenciais do dashboard.</p>
+        <h2>{errorInfo.title}</h2>
+        <p>{errorInfo.message}</p>
+        <div className="error-details">
+          {produtosQuery.error && (
+            <small className="error-detail">Produtos: {produtosQuery.error.message || 'Erro desconhecido'}</small>
+          )}
+          {vendasQuery.error && (
+            <small className="error-detail">Vendas: {vendasQuery.error.message || 'Erro desconhecido'}</small>
+          )}
+          {movimentacoesQuery.error && (
+            <small className="error-detail">Movimentações: {movimentacoesQuery.error.message || 'Erro desconhecido'}</small>
+          )}
+        </div>
         <button className="btn-reload" onClick={refreshAllData}>
           <FaSync /> Tentar novamente
         </button>
