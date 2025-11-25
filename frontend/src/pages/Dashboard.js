@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   QueryClient,
@@ -29,18 +29,19 @@ import {
   getLowStockProducts,
   getRecentTransactions,
   getCategoryDistribution,
+  clearDashboardCache,
 } from "../services/dashboardService";
 import { toast } from "react-toastify";
 import "./Dashboard.css";
 
-// Crie um QueryClient para gerenciar as queries com configurações otimizadas
+// QueryClient configurado com otimizações de retry e cache
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 1, // Reduzido de 2 para 1
-      retryDelay: 500, // Reduzido de 1000ms para 500ms
-      staleTime: 3 * 60 * 1000, // 3 minutos (reduzido de 5)
+      retry: 2, // Aumentado para 2 com backoff exponencial no serviço
+      retryDelay: (attemptIndex) => Math.min(300 * 2 ** attemptIndex, 2000), // Backoff exponencial: 300ms, 600ms, 1200ms (max 2s)
+      staleTime: 3 * 60 * 1000, // 3 minutos
       gcTime: 10 * 60 * 1000, // 10 minutos
       networkMode: "always",
     },
@@ -257,11 +258,17 @@ const Dashboard = () => {
     estoqueBaixoQuery.isError ||
     categoriasQuery.isError;
 
-  // Função para recarregar todos os dados
-  const refreshAllData = () => {
-    toast.info("Atualizando dados do dashboard...");
+  // Função para recarregar todos os dados com limpeza de cache
+  const refreshAllData = useCallback(() => {
+    toast.info("Atualizando dados do dashboard...", {
+      toastId: "dashboard-refresh",
+      autoClose: 2000
+    });
+    // Limpar cache do serviço de dashboard
+    clearDashboardCache();
+    // Invalidar todas as queries do React Query
     queryClient.invalidateQueries();
-  };
+  }, [queryClient]);
 
   // Construir objeto de resumo a partir dos dados das queries
   const resumo = {

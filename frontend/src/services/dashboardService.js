@@ -1,7 +1,53 @@
 import api from "./api";
+import { toast } from "react-toastify";
 
-// Função auxiliar para adicionar timeout em qualquer promessa - REDUZIDO para 8s
-const withTimeout = (promise, timeoutMs = 8000) => {
+// Configurações de timeout e retry otimizadas
+const CONFIG = {
+  TIMEOUT_MS: 10000, // Aumentado para 10s para dar mais tempo em conexões lentas
+  MAX_RETRIES: 2,
+  RETRY_DELAY_BASE_MS: 300, // Delay base reduzido para respostas mais rápidas
+  CACHE_DURATION_MS: 180000, // 3 minutos de cache
+};
+
+// Cache em memória para dados do dashboard
+const dataCache = new Map();
+
+/**
+ * Verifica se o cache ainda é válido
+ */
+const isCacheValid = (key) => {
+  const cached = dataCache.get(key);
+  if (!cached) return false;
+  return Date.now() - cached.timestamp < CONFIG.CACHE_DURATION_MS;
+};
+
+/**
+ * Obtém dados do cache
+ */
+const getFromCache = (key) => {
+  const cached = dataCache.get(key);
+  return cached ? cached.data : null;
+};
+
+/**
+ * Armazena dados no cache
+ */
+const setCache = (key, data) => {
+  dataCache.set(key, { data, timestamp: Date.now() });
+};
+
+/**
+ * Limpa todo o cache
+ */
+export const clearDashboardCache = () => {
+  dataCache.clear();
+  console.log("🗑️ Cache do dashboard limpo");
+};
+
+/**
+ * Função auxiliar para adicionar timeout em qualquer promessa
+ */
+const withTimeout = (promise, timeoutMs = CONFIG.TIMEOUT_MS) => {
   const timeoutPromise = new Promise((_, reject) => {
     setTimeout(
       () => reject(new Error(`Timeout após ${timeoutMs}ms`)),
@@ -12,33 +58,92 @@ const withTimeout = (promise, timeoutMs = 8000) => {
   return Promise.race([promise, timeoutPromise]);
 };
 
-// Obter estatísticas de produtos - OTIMIZADO para usar endpoint de contagem
-export const getProductStats = async () => {
+/**
+ * Função para retry com backoff exponencial reduzido
+ */
+const withRetry = async (fn, retries = CONFIG.MAX_RETRIES, context = "operação") => {
+  let lastError;
+  
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      
+      if (attempt < retries) {
+        // Delay exponencial reduzido: 300ms, 600ms, 1200ms
+        const delay = CONFIG.RETRY_DELAY_BASE_MS * Math.pow(2, attempt);
+        console.log(`⏳ Tentativa ${attempt + 1}/${retries + 1} falhou para ${context}. Retry em ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError;
+};
+
+// Obter estatísticas de produtos - OTIMIZADO com cache e retry
+export const getProductStats = async (useCache = true) => {
+  const cacheKey = "productStats";
+  
+  // Verificar cache primeiro
+  if (useCache && isCacheValid(cacheKey)) {
+    console.log("📦 Usando cache para estatísticas de produtos");
+    return getFromCache(cacheKey);
+  }
+  
   try {
     console.log("🔍 Buscando estatísticas de produtos...");
 
-    // Buscar contagem e estatísticas em paralelo
-    const [countResponse, estatisticasResponse] = await Promise.all([
-      withTimeout(api.get("/api/produtos/count")),
-      withTimeout(api.get("/api/produtos/estatisticas"))
-    ]);
+    const result = await withRetry(async () => {
+      // Buscar contagem e estatísticas em paralelo
+      const [countResponse, estatisticasResponse] = await Promise.all([
+        withTimeout(api.get("/api/produtos/count")),
+        withTimeout(api.get("/api/produtos/estatisticas"))
+      ]);
 
-    // Usar countResponse como fonte primária de dados
-    const total = countResponse.data?.total ?? estatisticasResponse.data?.total ?? 0;
-    const quantidadeTotal = estatisticasResponse.data?.quantidadeTotal ?? 0;
+      // Usar countResponse como fonte primária de dados
+      const total = countResponse.data?.total ?? estatisticasResponse.data?.total ?? 0;
+      const quantidadeTotal = estatisticasResponse.data?.quantidadeTotal ?? 0;
 
-    console.log(`✅ Estatísticas carregadas - Produtos: ${total}, Estoque total: ${quantidadeTotal}`);
-
-    return { total, quantidadeTotal };
+      return { total, quantidadeTotal };
+    }, CONFIG.MAX_RETRIES, "estatísticas de produtos");
+    
+    console.log(`✅ Estatísticas carregadas - Produtos: ${result.total}, Estoque total: ${result.quantidadeTotal}`);
+    
+    // Armazenar no cache
+    setCache(cacheKey, result);
+    
+    return result;
   } catch (error) {
     console.error("❌ Erro ao buscar estatísticas de produtos:", error);
+    
+    // Tentar usar cache expirado como fallback
+    const expiredCache = getFromCache(cacheKey);
+    if (expiredCache) {
+      console.log("⚠️ Usando cache expirado como fallback para produtos");
+      toast.warning("Usando dados em cache. Algumas informações podem estar desatualizadas.", {
+        toastId: "products-cache-fallback",
+        autoClose: 4000
+      });
+      return expiredCache;
+    }
+    
     // Retornar valores padrão ao invés de throw para não quebrar o dashboard
     return { total: 0, quantidadeTotal: 0 };
   }
 };
 
-// Obter estatísticas de vendas
-export const getSalesStats = async () => {
+// Obter estatísticas de vendas com cache e melhor feedback
+export const getSalesStats = async (useCache = true) => {
+  const cacheKey = "salesStats";
+  
+  // Verificar cache primeiro
+  if (useCache && isCacheValid(cacheKey)) {
+    console.log("📦 Usando cache para estatísticas de vendas");
+    return getFromCache(cacheKey);
+  }
+  
   try {
     console.log("🔍 Iniciando busca de estatísticas de vendas");
 
@@ -54,16 +159,18 @@ export const getSalesStats = async () => {
 
     console.log(`Buscando vendas entre: ${dataHoje} e ${dataAmanha}`);
 
-    // SOLUÇÃO: Consultar ambas as fontes usando tanto o dia atual quanto o próximo dia
+    // Rastrear qual fonte de dados foi usada para feedback
+    let fonteVendas = { venda: false, movimentacao: false };
 
     // 1. Fonte 1: Coleção Venda
     let totalVendasHoje = 0;
+    let vendasDaColecaoVenda = 0;
     try {
       const vendasResponse = await withTimeout(
         api.get("/api/vendas/historico", {
           params: {
             dataInicio: dataHoje,
-            dataFim: dataAmanha, // Incluir o próximo dia para compensar fuso horário
+            dataFim: dataAmanha,
           },
         })
       );
@@ -76,63 +183,101 @@ export const getSalesStats = async () => {
       // Filtrar apenas vendas de hoje
       const vendasHoje = vendasDePeriodo.filter((venda) => {
         if (!venda.dataVenda) return false;
-
-        // Converter para data local para comparação
         const dataVenda = new Date(venda.dataVenda);
         return dataVenda.toISOString().split("T")[0] === dataHoje;
       });
 
-      totalVendasHoje = vendasHoje.length;
+      vendasDaColecaoVenda = vendasHoje.length;
+      totalVendasHoje = vendasDaColecaoVenda;
+      fonteVendas.venda = true;
       console.log(
-        `Vendas filtradas para hoje da coleção Venda: ${totalVendasHoje}`
+        `Vendas filtradas para hoje da coleção Venda: ${vendasDaColecaoVenda}`
       );
     } catch (error) {
-      console.error("Erro ao buscar vendas:", error);
+      console.error("⚠️ Erro ao buscar vendas da coleção Venda:", error.message);
     }
 
-    // 2. Fonte 2: Coleção Movimentacao
+    // 2. Fonte 2: Coleção Movimentacao (fallback e complemento)
+    let vendasDaColecaoMovimentacao = 0;
     try {
       const movResponse = await withTimeout(
         api.get("/api/movimentacoes/historico", {
           params: {
             tipo: "venda",
             dataInicio: dataHoje,
-            dataFim: dataAmanha, // Incluir o próximo dia para compensar fuso horário
+            dataFim: dataAmanha,
           },
         })
       );
 
       const movimentacoesDePeriodo = movResponse?.data?.movimentacoes || [];
       console.log(
-        `Movimentações encontradas: ${movimentacoesDePeriodo.length}`
+        `Movimentações de venda encontradas: ${movimentacoesDePeriodo.length}`
       );
 
       // Filtrar apenas movimentações de hoje
       const movimentacoesHoje = movimentacoesDePeriodo.filter((mov) => {
         if (!mov.data) return false;
-
-        // Converter para data local para comparação
         const dataMov = new Date(mov.data);
         return dataMov.toISOString().split("T")[0] === dataHoje;
       });
 
+      vendasDaColecaoMovimentacao = movimentacoesHoje.length;
+      fonteVendas.movimentacao = true;
       console.log(
-        `Movimentações filtradas para hoje: ${movimentacoesHoje.length}`
+        `Movimentações de venda filtradas para hoje: ${vendasDaColecaoMovimentacao}`
       );
-      totalVendasHoje += movimentacoesHoje.length;
+      
+      // Usar movimentações se não houver vendas da coleção Venda
+      if (vendasDaColecaoVenda === 0) {
+        totalVendasHoje = vendasDaColecaoMovimentacao;
+        console.log("📊 Usando dados de movimentações como fonte primária");
+      }
     } catch (error) {
-      console.error("Erro ao buscar movimentações:", error);
+      console.error("⚠️ Erro ao buscar movimentações de venda:", error.message);
     }
 
-    console.log(`Total combinado de vendas hoje: ${totalVendasHoje}`);
+    // Feedback sobre fonte de dados
+    if (!fonteVendas.venda && !fonteVendas.movimentacao) {
+      console.warn("⚠️ Nenhuma fonte de dados de vendas disponível");
+      toast.warning("Não foi possível carregar dados de vendas. Tente novamente.", {
+        toastId: "sales-no-data",
+        autoClose: 5000
+      });
+    } else if (!fonteVendas.venda && fonteVendas.movimentacao) {
+      console.log("📊 Usando apenas dados de movimentações para vendas");
+    }
 
-    return {
+    console.log(`Total de vendas hoje: ${totalVendasHoje}`);
+
+    const result = {
       vendasHoje: totalVendasHoje,
       vendasDiarias: totalVendasHoje,
       tendenciaVendas: 0,
+      fontes: {
+        vendas: vendasDaColecaoVenda,
+        movimentacoes: vendasDaColecaoMovimentacao
+      }
     };
+    
+    // Armazenar no cache
+    setCache(cacheKey, result);
+    
+    return result;
   } catch (error) {
     console.error("❌ Erro ao buscar estatísticas de vendas:", error);
+    
+    // Tentar usar cache expirado como fallback
+    const expiredCache = getFromCache(cacheKey);
+    if (expiredCache) {
+      console.log("⚠️ Usando cache expirado como fallback para vendas");
+      toast.warning("Usando dados de vendas em cache.", {
+        toastId: "sales-cache-fallback",
+        autoClose: 4000
+      });
+      return expiredCache;
+    }
+    
     return {
       vendasHoje: 0,
       vendasDiarias: 0,
@@ -141,8 +286,16 @@ export const getSalesStats = async () => {
   }
 };
 
-// Obter top produtos mais vendidos
-export const getTopProducts = async (limit = 5) => {
+// Obter top produtos mais vendidos com cache
+export const getTopProducts = async (limit = 5, useCache = true) => {
+  const cacheKey = `topProducts_${limit}`;
+  
+  // Verificar cache primeiro
+  if (useCache && isCacheValid(cacheKey)) {
+    console.log("📦 Usando cache para top produtos");
+    return getFromCache(cacheKey);
+  }
+  
   try {
     console.log(`🔍 Iniciando busca dos top ${limit} produtos`);
 
@@ -151,40 +304,68 @@ export const getTopProducts = async (limit = 5) => {
     const dataInicio = new Date();
     dataInicio.setMonth(dataInicio.getMonth() - 3);
 
-    // Buscar histórico com timeout
-    const historicoResponse = await withTimeout(
-      api.get("/api/vendas/historico", {
-        params: {
-          dataInicio: dataInicio.toISOString().split("T")[0],
-          dataFim: dataFim.toISOString().split("T")[0],
-          limit: 1000,
-        },
-      })
-    );
+    const result = await withRetry(async () => {
+      // Buscar histórico de vendas
+      const historicoResponse = await withTimeout(
+        api.get("/api/vendas/historico", {
+          params: {
+            dataInicio: dataInicio.toISOString().split("T")[0],
+            dataFim: dataFim.toISOString().split("T")[0],
+            limit: 1000,
+          },
+        })
+      );
 
-    // Processar vendas
-    let vendas = [];
-    if (historicoResponse?.data) {
-      if (Array.isArray(historicoResponse.data)) {
-        vendas = historicoResponse.data;
-      } else if (
-        historicoResponse.data.vendas &&
-        Array.isArray(historicoResponse.data.vendas)
-      ) {
-        vendas = historicoResponse.data.vendas;
+      // Processar vendas
+      let vendas = [];
+      if (historicoResponse?.data) {
+        if (Array.isArray(historicoResponse.data)) {
+          vendas = historicoResponse.data;
+        } else if (
+          historicoResponse.data.vendas &&
+          Array.isArray(historicoResponse.data.vendas)
+        ) {
+          vendas = historicoResponse.data.vendas;
+        }
       }
-    }
 
-    console.log(`✅ Vendas analisadas: ${vendas.length}`);
+      // Se não houver vendas na coleção Venda, tentar buscar nas movimentações
+      if (vendas.length === 0) {
+        console.log("📊 Buscando vendas na coleção de movimentações...");
+        
+        const movResponse = await withTimeout(
+          api.get("/api/movimentacoes/historico", {
+            params: {
+              tipo: "venda",
+              dataInicio: dataInicio.toISOString().split("T")[0],
+              dataFim: dataFim.toISOString().split("T")[0],
+              limit: 1000,
+            },
+          })
+        );
+        
+        if (movResponse?.data?.movimentacoes) {
+          vendas = movResponse.data.movimentacoes.map(mov => ({
+            produto: mov.produto,
+            quantidade: mov.quantidade
+          }));
+          console.log(`📊 Vendas obtidas de movimentações: ${vendas.length}`);
+        }
+      }
+
+      return vendas;
+    }, CONFIG.MAX_RETRIES, "top produtos");
+
+    console.log(`✅ Vendas analisadas: ${result.length}`);
 
     // Se não houver vendas, retornar array vazio
-    if (vendas.length === 0) {
+    if (result.length === 0) {
       return [];
     }
 
     // Agrupar vendas por produto
     const produtosMap = {};
-    vendas.forEach((venda) => {
+    result.forEach((venda) => {
       const produtoId = venda.produto?._id || venda.produto;
       if (!produtoId) return;
 
@@ -202,56 +383,93 @@ export const getTopProducts = async (limit = 5) => {
     });
 
     // Converter para array, ordenar e limitar
-    return Object.values(produtosMap)
+    const topProdutos = Object.values(produtosMap)
       .sort((a, b) => b.quantidadeVendas - a.quantidadeVendas)
       .slice(0, limit);
+    
+    // Armazenar no cache
+    setCache(cacheKey, topProdutos);
+    
+    return topProdutos;
   } catch (error) {
     console.error("❌ Erro ao buscar top produtos:", error);
+    
+    // Tentar usar cache expirado como fallback
+    const expiredCache = getFromCache(cacheKey);
+    if (expiredCache) {
+      console.log("⚠️ Usando cache expirado como fallback para top produtos");
+      return expiredCache;
+    }
+    
     return [];
   }
 };
 
-// Obter produtos com estoque baixo
-export const getLowStockProducts = async () => {
+// Obter produtos com estoque baixo com cache e feedback melhorado
+export const getLowStockProducts = async (useCache = true) => {
+  const cacheKey = "lowStockProducts";
+  
+  // Verificar cache primeiro
+  if (useCache && isCacheValid(cacheKey)) {
+    console.log("📦 Usando cache para produtos com estoque baixo");
+    return getFromCache(cacheKey);
+  }
+  
   try {
     console.log("🔍 Iniciando busca de produtos com estoque baixo");
 
-    // Usar o novo endpoint específico para produtos com estoque baixo
-    const estoqueResponse = await withTimeout(
-      api.get("/api/estoque/produtos-baixo-estoque", {
-        params: { 
-          nivel: 'todos',
-          limit: 10 
-        }
-      })
-    );
+    const result = await withRetry(async () => {
+      // Usar o endpoint específico para produtos com estoque baixo
+      const estoqueResponse = await withTimeout(
+        api.get("/api/estoque/produtos-baixo-estoque", {
+          params: { 
+            nivel: 'todos',
+            limit: 10 
+          }
+        })
+      );
 
-    // Processar a resposta
-    let produtosEstoqueBaixo = [];
-    if (estoqueResponse?.data?.produtos) {
-      produtosEstoqueBaixo = estoqueResponse.data.produtos.map(item => ({
-        id: item.produto || item._id,
-        nome: item.produtoNome || "Produto",
-        local: item.local || "Local não especificado",
-        estoqueAtual: item.quantidade || 0,
-        estoqueMinimo: 20, // Usar o limite padrão definido no backend
-        status: item.status || (
-          item.quantidade === 0 ? "esgotado" : 
-          item.quantidade < 10 ? "critico" : "baixo"
-        )
-      }));
-    } else {
-      // Fallback para o método antigo se o novo endpoint falhar
-      console.log("⚠️ Endpoint específico falhou, usando método antigo");
-      return getLowStockProductsLegacy();
-    }
+      // Processar a resposta
+      let produtosEstoqueBaixo = [];
+      if (estoqueResponse?.data?.produtos) {
+        produtosEstoqueBaixo = estoqueResponse.data.produtos.map(item => ({
+          id: item.produto || item._id,
+          nome: item.produtoNome || "Produto",
+          local: item.local || "Local não especificado",
+          estoqueAtual: item.quantidade || 0,
+          estoqueMinimo: 20,
+          status: item.status || (
+            item.quantidade === 0 ? "esgotado" : 
+            item.quantidade < 10 ? "critico" : "baixo"
+          )
+        }));
+      }
+      
+      return produtosEstoqueBaixo;
+    }, CONFIG.MAX_RETRIES, "produtos com estoque baixo");
 
-    console.log(`✅ Produtos com estoque baixo obtidos: ${produtosEstoqueBaixo.length}`);
-    return produtosEstoqueBaixo;
+    console.log(`✅ Produtos com estoque baixo obtidos: ${result.length}`);
+    
+    // Armazenar no cache
+    setCache(cacheKey, result);
+    
+    return result;
   } catch (error) {
     console.error("❌ Erro ao buscar produtos com estoque baixo:", error);
+    
+    // Tentar usar cache expirado como fallback
+    const expiredCache = getFromCache(cacheKey);
+    if (expiredCache) {
+      console.log("⚠️ Usando cache expirado como fallback para estoque baixo");
+      toast.warning("Usando dados de estoque em cache.", {
+        toastId: "stock-cache-fallback",
+        autoClose: 4000
+      });
+      return expiredCache;
+    }
+    
     // Fallback para o método antigo em caso de erro
-    console.log("⚠️ Tentando método alternativo");
+    console.log("⚠️ Tentando método alternativo para estoque baixo");
     return getLowStockProductsLegacy();
   }
 };
@@ -366,89 +584,139 @@ const getLowStockProductsLegacy = async () => {
   }
 };
 
-// Obter distribuição de categorias
-export const getCategoryDistribution = async () => {
+// Obter distribuição de categorias com cache
+export const getCategoryDistribution = async (useCache = true) => {
+  const cacheKey = "categoryDistribution";
+  
+  // Verificar cache primeiro
+  if (useCache && isCacheValid(cacheKey)) {
+    console.log("📦 Usando cache para distribuição de categorias");
+    return getFromCache(cacheKey);
+  }
+  
   try {
     console.log("🔍 Iniciando busca de distribuição de categorias");
 
-    // Buscar produtos com timeout
-    const response = await withTimeout(api.get("/api/produtos"));
+    const result = await withRetry(async () => {
+      // Buscar produtos com timeout
+      const response = await withTimeout(api.get("/api/produtos"));
 
-    // Processar produtos
-    let produtos = [];
-    if (response?.data) {
-      if (Array.isArray(response.data)) {
-        produtos = response.data;
-      } else if (
-        response.data.produtos &&
-        Array.isArray(response.data.produtos)
-      ) {
-        produtos = response.data.produtos;
-      }
-    }
-
-    console.log(`✅ Produtos analisados: ${produtos.length}`);
-
-    // Se não houver produtos, retornar array vazio
-    if (produtos.length === 0) {
-      return [];
-    }
-
-    // Agrupar por categoria
-    const categorias = {};
-    produtos.forEach((produto) => {
-      const categoria = produto.categoria || "Sem categoria";
-
-      if (!categorias[categoria]) {
-        categorias[categoria] = 0;
+      // Processar produtos
+      let produtos = [];
+      if (response?.data) {
+        if (Array.isArray(response.data)) {
+          produtos = response.data;
+        } else if (
+          response.data.produtos &&
+          Array.isArray(response.data.produtos)
+        ) {
+          produtos = response.data.produtos;
+        }
       }
 
-      categorias[categoria]++;
-    });
+      console.log(`✅ Produtos analisados para categorias: ${produtos.length}`);
 
-    // Converter para array e ordenar
-    return Object.keys(categorias)
-      .map((categoria) => ({
-        nome: categoria,
-        quantidade: categorias[categoria],
-      }))
-      .sort((a, b) => b.quantidade - a.quantidade);
+      // Se não houver produtos, retornar array vazio
+      if (produtos.length === 0) {
+        return [];
+      }
+
+      // Agrupar por categoria
+      const categorias = {};
+      produtos.forEach((produto) => {
+        const categoria = produto.categoria || "Sem categoria";
+
+        if (!categorias[categoria]) {
+          categorias[categoria] = 0;
+        }
+
+        categorias[categoria]++;
+      });
+
+      // Converter para array e ordenar
+      return Object.keys(categorias)
+        .map((categoria) => ({
+          nome: categoria,
+          quantidade: categorias[categoria],
+        }))
+        .sort((a, b) => b.quantidade - a.quantidade);
+    }, CONFIG.MAX_RETRIES, "distribuição de categorias");
+    
+    // Armazenar no cache
+    setCache(cacheKey, result);
+    
+    return result;
   } catch (error) {
     console.error("❌ Erro ao buscar distribuição de categorias:", error);
+    
+    // Tentar usar cache expirado como fallback
+    const expiredCache = getFromCache(cacheKey);
+    if (expiredCache) {
+      console.log("⚠️ Usando cache expirado como fallback para categorias");
+      return expiredCache;
+    }
+    
     return [];
   }
 };
 
-// Obter movimentações recentes
-export const getRecentTransactions = async (limit = 8) => {
+// Obter movimentações recentes com cache e fallback melhorado
+export const getRecentTransactions = async (limit = 8, useCache = true) => {
+  const cacheKey = `recentTransactions_${limit}`;
+  
+  // Verificar cache primeiro
+  if (useCache && isCacheValid(cacheKey)) {
+    console.log("📦 Usando cache para movimentações recentes");
+    return getFromCache(cacheKey);
+  }
+  
   try {
     console.log(`🔍 Iniciando busca de ${limit} movimentações recentes`);
 
-    // Buscar movimentações com timeout
-    const response = await withTimeout(
-      api.get("/api/movimentacoes/historico", {
-        params: { limit },
-      })
-    );
+    const result = await withRetry(async () => {
+      // Buscar movimentações com timeout
+      const response = await withTimeout(
+        api.get("/api/movimentacoes/historico", {
+          params: { limit },
+        })
+      );
 
-    // Processar movimentações
-    let movimentacoes = [];
-    if (response?.data) {
-      if (Array.isArray(response.data)) {
-        movimentacoes = response.data;
-      } else if (
-        response.data.movimentacoes &&
-        Array.isArray(response.data.movimentacoes)
-      ) {
-        movimentacoes = response.data.movimentacoes;
+      // Processar movimentações
+      let movimentacoes = [];
+      if (response?.data) {
+        if (Array.isArray(response.data)) {
+          movimentacoes = response.data;
+        } else if (
+          response.data.movimentacoes &&
+          Array.isArray(response.data.movimentacoes)
+        ) {
+          movimentacoes = response.data.movimentacoes;
+        }
       }
-    }
 
-    console.log(`✅ Movimentações obtidas: ${movimentacoes.length}`);
+      return movimentacoes;
+    }, CONFIG.MAX_RETRIES, "movimentações recentes");
 
-    return movimentacoes;
+    console.log(`✅ Movimentações obtidas: ${result.length}`);
+    
+    // Armazenar no cache
+    setCache(cacheKey, result);
+    
+    return result;
   } catch (error) {
     console.error("❌ Erro ao buscar movimentações:", error);
+    
+    // Tentar usar cache expirado como fallback
+    const expiredCache = getFromCache(cacheKey);
+    if (expiredCache) {
+      console.log("⚠️ Usando cache expirado como fallback para movimentações");
+      toast.warning("Usando dados de movimentações em cache.", {
+        toastId: "movements-cache-fallback",
+        autoClose: 4000
+      });
+      return expiredCache;
+    }
+    
     return [];
   }
 };
