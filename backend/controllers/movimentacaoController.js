@@ -216,14 +216,14 @@ exports.excluirMovimentacao = async (req, res) => {
     const produtoExiste = movimentacao.produto ? 
       await Produto.findById(movimentacao.produto) : null;
     
+    const isProdutoRemovido = !produtoExiste && movimentacao.produto;
+    const isAtualizacaoProduto = movimentacao.tipo === 'atualizacao' || 
+      (movimentacao.tipo === 'entrada' && movimentacao.observacao?.includes('Produto atualizado'));
+    
     // Após excluir a movimentação, atualizar flags do produto se ele existir
     if (!isProdutoRemovido && movimentacao.produto) {
       await EstoqueService.atualizarFlagsProduto(movimentacao.produto);
     }
-    
-    const isProdutoRemovido = !produtoExiste && movimentacao.produto;
-    const isAtualizacaoProduto = movimentacao.tipo === 'atualizacao' || 
-      (movimentacao.tipo === 'entrada' && movimentacao.observacao?.includes('Produto atualizado'));
     
     // VERIFICAÇÃO DE ESTOQUE NEGATIVO PARA ENTRADAS
     if (movimentacao.tipo === 'entrada' && !isProdutoRemovido && !isAtualizacaoProduto) {
