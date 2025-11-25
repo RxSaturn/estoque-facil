@@ -1024,3 +1024,150 @@
 .inspector-button:hover {
   background-color: #5a6268;
 }
+
+/* Melhorias para alertas de estoque baixo - Mobile-friendly */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 70px;
+}
+
+.status-badge.esgotado {
+  background-color: #e74c3c;
+  color: white;
+  animation: pulse-alert 2s infinite;
+}
+
+.status-badge.critico {
+  background-color: #ff5722;
+  color: white;
+  animation: pulse-alert 3s infinite;
+}
+
+.status-badge.baixo {
+  background-color: #f39c12;
+  color: white;
+}
+
+@keyframes pulse-alert {
+  0% {
+    box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(231, 76, 60, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(231, 76, 60, 0);
+  }
+}
+
+/* Respect user preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .status-badge.esgotado,
+  .status-badge.critico,
+  .stat-card .card-icon.alertas {
+    animation: none;
+  }
+  
+  .loading-spinner,
+  .loading-spinner-small,
+  .dot-pulse,
+  .refresh-indicator {
+    animation: none;
+  }
+}
+
+/* Melhorias mobile para tabela de estoque baixo */
+@media (max-width: 768px) {
+  .dashboard-table.low-stock-table th,
+  .dashboard-table.low-stock-table td {
+    padding: 10px 8px;
+    font-size: 13px;
+  }
+  
+  .status-badge {
+    padding: 5px 8px;
+    font-size: 10px;
+    min-width: 60px;
+  }
+  
+  /* Cards mais compactos no mobile */
+  .stat-card {
+    padding: 15px;
+  }
+  
+  .stat-card .card-icon {
+    width: 45px;
+    height: 45px;
+    font-size: 18px;
+    margin-right: 12px;
+  }
+  
+  /* Alertas de estoque mais visíveis no mobile */
+  .stat-card .card-icon.alertas {
+    animation: pulse-alert 2s infinite;
+  }
+  
+  /* Melhorar legibilidade das movimentações no mobile */
+  .movimentacao-item {
+    padding: 12px;
+    flex-wrap: wrap;
+  }
+  
+  .movimentacao-info {
+    flex: 1;
+    min-width: 150px;
+  }
+  
+  .movimentacao-quantidade {
+    min-width: 80px;
+    text-align: right;
+  }
+}
+
+/* Melhorias para warnings visuais de estoque */
+.estoque-warning-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: rgba(231, 76, 60, 0.1);
+  border-left: 3px solid #e74c3c;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #c0392b;
+}
+
+.estoque-warning-indicator svg {
+  flex-shrink: 0;
+}
+
+/* Feedback visual para dados em cache/fallback */
+.data-source-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #6c757d;
+  padding: 4px 8px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.data-source-indicator.cache {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+.data-source-indicator svg {
+  font-size: 10px;
+}
