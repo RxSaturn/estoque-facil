@@ -35,12 +35,12 @@ import { toast } from "react-toastify";
 import "./Dashboard.css";
 
 // QueryClient configurado com otimizações de retry e cache
+// Nota: retry é 0 pois o serviço dashboardService já implementa retry com backoff
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 2, // Aumentado para 2 com backoff exponencial no serviço
-      retryDelay: (attemptIndex) => Math.min(300 * 2 ** attemptIndex, 2000), // Backoff exponencial: 300ms, 600ms, 1200ms (max 2s)
+      retry: 0, // Desabilitado pois dashboardService já implementa retry com backoff
       staleTime: 3 * 60 * 1000, // 3 minutos
       gcTime: 10 * 60 * 1000, // 10 minutos
       networkMode: "always",

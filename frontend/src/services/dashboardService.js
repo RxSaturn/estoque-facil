@@ -7,6 +7,7 @@ const CONFIG = {
   MAX_RETRIES: 2,
   RETRY_DELAY_BASE_MS: 300, // Delay base reduzido para respostas mais rápidas
   CACHE_DURATION_MS: 180000, // 3 minutos de cache
+  MIN_STOCK_THRESHOLD: 20, // Limite mínimo de estoque
 };
 
 // Cache em memória para dados do dashboard
@@ -345,10 +346,12 @@ export const getTopProducts = async (limit = 5, useCache = true) => {
         );
         
         if (movResponse?.data?.movimentacoes) {
-          vendas = movResponse.data.movimentacoes.map(mov => ({
-            produto: mov.produto,
-            quantidade: mov.quantidade
-          }));
+          vendas = movResponse.data.movimentacoes
+            .filter(mov => mov.produto && mov.quantidade) // Filter out invalid entries
+            .map(mov => ({
+              produto: mov.produto,
+              quantidade: mov.quantidade
+            }));
           console.log(`📊 Vendas obtidas de movimentações: ${vendas.length}`);
         }
       }
@@ -437,10 +440,10 @@ export const getLowStockProducts = async (useCache = true) => {
           nome: item.produtoNome || "Produto",
           local: item.local || "Local não especificado",
           estoqueAtual: item.quantidade || 0,
-          estoqueMinimo: 20,
+          estoqueMinimo: CONFIG.MIN_STOCK_THRESHOLD,
           status: item.status || (
             item.quantidade === 0 ? "esgotado" : 
-            item.quantidade < 10 ? "critico" : "baixo"
+            item.quantidade < CONFIG.MIN_STOCK_THRESHOLD / 2 ? "critico" : "baixo"
           )
         }));
       }
@@ -546,7 +549,7 @@ const getLowStockProductsLegacy = async () => {
         ...produto,
         estoqueAtual:
           Number(produto.estoque) || Number(produto.quantidade) || 0,
-        estoqueMinimo: produto.estoqueMinimo || 10,
+        estoqueMinimo: produto.estoqueMinimo || CONFIG.MIN_STOCK_THRESHOLD,
       }));
     }
 
@@ -554,7 +557,7 @@ const getLowStockProductsLegacy = async () => {
     const produtosBaixoEstoque = produtosComEstoque
       .filter((p) => {
         const estoqueAtual = p.estoqueAtual || 0;
-        return estoqueAtual <= 20; // Usando o novo limite de 20
+        return estoqueAtual <= CONFIG.MIN_STOCK_THRESHOLD;
       })
       .map((p) => {
         const estoqueAtual = p.estoqueAtual || 0;
@@ -562,7 +565,7 @@ const getLowStockProductsLegacy = async () => {
         
         if (estoqueAtual === 0) {
           status = "esgotado";
-        } else if (estoqueAtual <= 10) {
+        } else if (estoqueAtual <= CONFIG.MIN_STOCK_THRESHOLD / 2) {
           status = "critico";
         }
         
@@ -570,7 +573,7 @@ const getLowStockProductsLegacy = async () => {
           id: p._id || p.id,
           nome: p.nome,
           estoqueAtual: estoqueAtual,
-          estoqueMinimo: 20, // Novo limite padrão
+          estoqueMinimo: CONFIG.MIN_STOCK_THRESHOLD,
           local: p.local || "Depósito Principal",
           status: status
         };
