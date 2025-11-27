@@ -13,6 +13,6 @@ router.get("/", proteger, estoqueController.obterTodoEstoque);
 router.get("/produtos-baixo-estoque", proteger, estoqueController.obterProdutosBaixoEstoque);
 router.get("/estatisticas", proteger, estoqueController.obterEstatisticasEstoque);
 router.post("/atualizar-flags", proteger, estoqueController.atualizarFlagsEstoque);
-router.get('/estoque-critico', estoqueController.getEstoqueCritico);
+router.get('/estoque-critico', proteger, estoqueController.getEstoqueCritico);
 
 module.exports = router;
