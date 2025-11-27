@@ -1726,22 +1726,6 @@ exports.getResumo = async (req, res) => {
       ];
     }
 
-    // Estrutura padrão para dados vazios
-    const dadosVazios = {
-      totalProdutos: 0,
-      totalVendas: 0,
-      totalItensVendidos: 0,
-      mediaVendasDiarias: 0,
-      diaMaiorVenda: null,
-      semMovimentacao: 0,
-      produtosEstoqueCritico: 0,
-      topProdutos: [],
-      vendasPorCategoria: { labels: [], dados: [] },
-      produtosSemMovimentacao: [],
-      estoquePorLocal: { labels: [], dados: [] },
-      estoqueSemMovimentacao: { labels: [], dados: [] },
-    };
-
     // Calcular dados para o relatório com tratamento de erro individual
     let totalProdutos = 0;
     let totalVendas = 0;

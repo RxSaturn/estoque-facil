@@ -224,8 +224,7 @@ const Relatorios = () => {
       const isConnectionError = error.isConnectionError || 
         error.code === "ECONNREFUSED" || 
         error.code === "ERR_NETWORK" || 
-        error.message === "Network Error" ||
-        (!error.response && !error.isConnectionError === false);
+        error.message === "Network Error";
       
       // Tratamento específico para diferentes tipos de erro
       if (isConnectionError && !error.response) {
