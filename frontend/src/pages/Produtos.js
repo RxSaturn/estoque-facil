@@ -19,6 +19,7 @@ const Produtos = () => {
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState("");
+  const [imagensComErro, setImagensComErro] = useState({});
 
   // Filtro avançado visível por padrão
   const [filtroAvancado, setFiltroAvancado] = useState(true);
@@ -532,15 +533,13 @@ const Produtos = () => {
             <div className="produtos-grid">
               {produtosFiltrados.map((produto) => (
                 <div className="produto-card" key={produto._id}>
-                  <div className="produto-img">
-                    {produto.imagemUrl ? (
+                  <div className={`produto-img ${imagensComErro[produto._id] ? 'placeholder-container' : ''}`}>
+                    {produto.imagemUrl && !imagensComErro[produto._id] ? (
                       <img
                         src={produto.imagemUrl}
                         alt={produto.nome}
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.parentElement.classList.add('placeholder-container');
-                          e.target.style.display = 'none';
+                        onError={() => {
+                          setImagensComErro((prev) => ({ ...prev, [produto._id]: true }));
                         }}
                       />
                     ) : (

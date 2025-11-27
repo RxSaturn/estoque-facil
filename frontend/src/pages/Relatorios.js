@@ -205,23 +205,17 @@ const Relatorios = () => {
     } catch (error) {
       console.error("Erro ao carregar resumo:", error);
       
-      // Verificar se é erro de dados vazios ou erro real
-      if (error.response && error.response.status === 200) {
-        // Dados vazios não são erro - definir resumo vazio
-        setResumo({
-          totalProdutos: 0,
-          totalVendas: 0,
-          totalItensVendidos: 0,
-          mediaVendasDiarias: 0,
-          diaMaiorVenda: null,
-          semMovimentacao: 0,
-          produtosEstoqueCritico: 0,
-          topProdutos: [],
-          vendasPorCategoria: { labels: [], dados: [] },
-          produtosSemMovimentacao: [],
-          estoquePorLocal: { labels: [], dados: [] },
-          estoqueSemMovimentacao: { labels: [], dados: [] },
-        });
+      // Verificar se é erro de rede ou servidor
+      if (error.code === "ECONNREFUSED" || error.code === "ERR_NETWORK") {
+        setErroCarregamento(
+          "Não foi possível conectar ao servidor. Verifique sua conexão."
+        );
+        toast.error("Erro de conexão. Verifique o servidor.");
+      } else if (error.response && error.response.status >= 500) {
+        setErroCarregamento(
+          "Erro no servidor. Tente novamente mais tarde."
+        );
+        toast.error("Erro no servidor. Tente novamente.");
       } else {
         setErroCarregamento(
           "Não foi possível gerar o relatório. Verifique os filtros e tente novamente."

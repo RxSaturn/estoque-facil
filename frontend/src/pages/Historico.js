@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   FaShoppingCart,
   FaExchangeAlt,
@@ -631,18 +631,22 @@ const Historico = () => {
     aplicarPeriodoPredefinido(periodo);
   };
 
-  // Filtrar produtos para busca
-  const produtosFiltrados = produtos.filter((produto) =>
-    buscaProduto === "" ||
-    produto.nome.toLowerCase().includes(buscaProduto.toLowerCase()) ||
-    produto.id.toLowerCase().includes(buscaProduto.toLowerCase())
-  );
+  // Filtrar produtos para busca com memoização
+  const produtosFiltrados = useMemo(() => {
+    return produtos.filter((produto) =>
+      buscaProduto === "" ||
+      produto.nome.toLowerCase().includes(buscaProduto.toLowerCase()) ||
+      produto.id.toLowerCase().includes(buscaProduto.toLowerCase())
+    );
+  }, [produtos, buscaProduto]);
 
-  // Filtrar locais para busca
-  const locaisFiltrados = locais.filter((local) =>
-    buscaLocal === "" ||
-    local.toLowerCase().includes(buscaLocal.toLowerCase())
-  );
+  // Filtrar locais para busca com memoização
+  const locaisFiltrados = useMemo(() => {
+    return locais.filter((local) =>
+      buscaLocal === "" ||
+      local.toLowerCase().includes(buscaLocal.toLowerCase())
+    );
+  }, [locais, buscaLocal]);
 
   const aplicarFiltros = (e) => {
     e.preventDefault();
