@@ -92,6 +92,19 @@ const updateBrowsersList = (dir, name) => {
     const isWindows = os.platform() === 'win32';
     const npxCmd = isWindows ? 'npx.cmd' : 'npx';
     
+    let timeoutId = null;
+    let resolved = false;
+    
+    const resolveOnce = () => {
+      if (!resolved) {
+        resolved = true;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        resolve();
+      }
+    };
+    
     const updateProcess = spawn(npxCmd, ['update-browserslist-db@latest', '--yes'], {
       cwd: dir,
       shell: true,
@@ -119,17 +132,18 @@ const updateBrowsersList = (dir, name) => {
       } else {
         console.log(`${colors.yellow}[!] Atualização de browserslist ignorada para ${name} (código: ${code})${colors.reset}`);
       }
-      resolve();
+      resolveOnce();
     });
     
     updateProcess.on('error', (err) => {
       console.log(`${colors.yellow}[!] Não foi possível atualizar browserslist para ${name}: ${err.message}${colors.reset}`);
-      resolve();
+      resolveOnce();
     });
     
-    // Timeout para não travar o processo
-    setTimeout(() => {
-      resolve();
+    // Timeout para não travar o processo (limpo se o processo terminar antes)
+    timeoutId = setTimeout(() => {
+      console.log(`${colors.yellow}[!] Timeout ao atualizar browserslist para ${name}${colors.reset}`);
+      resolveOnce();
     }, 30000);
   });
 };
