@@ -1726,59 +1726,141 @@ exports.getResumo = async (req, res) => {
       ];
     }
 
-    // Calcular dados para o relatório
-    const totalProdutos = await Produto.countDocuments(filtroProdutos);
-    const totalVendas = await Venda.countDocuments(filtroVendas);
+    // Estrutura padrão para dados vazios
+    const dadosVazios = {
+      totalProdutos: 0,
+      totalVendas: 0,
+      totalItensVendidos: 0,
+      mediaVendasDiarias: 0,
+      diaMaiorVenda: null,
+      semMovimentacao: 0,
+      produtosEstoqueCritico: 0,
+      topProdutos: [],
+      vendasPorCategoria: { labels: [], dados: [] },
+      produtosSemMovimentacao: [],
+      estoquePorLocal: { labels: [], dados: [] },
+      estoqueSemMovimentacao: { labels: [], dados: [] },
+    };
+
+    // Calcular dados para o relatório com tratamento de erro individual
+    let totalProdutos = 0;
+    let totalVendas = 0;
+
+    try {
+      totalProdutos = await Produto.countDocuments(filtroProdutos);
+    } catch (err) {
+      console.error("Erro ao contar produtos:", err);
+    }
+
+    try {
+      totalVendas = await Venda.countDocuments(filtroVendas);
+    } catch (err) {
+      console.error("Erro ao contar vendas:", err);
+    }
 
     // Obter top produtos com base no método de cálculo escolhido
-    const topProdutos =
-      metodoCalculo === "transacoes"
-        ? await obterTopProdutosPorTransacoes(
-            filtroVendas,
-            dataInicioObj,
-            dataFimObj
-          )
-        : await obterTopProdutos(filtroVendas, dataInicioObj, dataFimObj);
+    let topProdutos = [];
+    try {
+      topProdutos =
+        metodoCalculo === "transacoes"
+          ? await obterTopProdutosPorTransacoes(
+              filtroVendas,
+              dataInicioObj,
+              dataFimObj
+            )
+          : await obterTopProdutos(filtroVendas, dataInicioObj, dataFimObj);
+    } catch (err) {
+      console.error("Erro ao obter top produtos:", err);
+      topProdutos = [];
+    }
 
-    const estatisticas = await calcularEstatisticas(
-      filtroVendas,
-      dataInicioObj,
-      dataFimObj,
-      metodoCalculo
-    );
-    const vendasPorCategoria = await calcularVendasPorCategoria(
-      filtroVendas,
-      dataInicioObj,
-      dataFimObj
-    );
-    const produtosSemMovimentacao = await obterProdutosSemMovimentacao(
-      dataInicioObj,
-      dataFimObj,
-      filtroProdutos,
-      local
-    );
-    const produtosEstoqueCritico = await obterProdutosEstoqueCritico(
-      filtroEstoque
-    );
-    const estoquePorLocal = await calcularEstoquePorLocal(filtroEstoque);
-    const estoqueSemMovimentacao = await calcularEstoqueSemMovimentacao(
-      produtosSemMovimentacao
-    );
+    let estatisticas = {
+      totalItensVendidos: 0,
+      totalTransacoes: 0,
+      mediaVendasDiarias: 0,
+      diaMaiorVenda: null,
+      numeroDias: 1,
+    };
+    try {
+      estatisticas = await calcularEstatisticas(
+        filtroVendas,
+        dataInicioObj,
+        dataFimObj,
+        metodoCalculo
+      );
+    } catch (err) {
+      console.error("Erro ao calcular estatísticas:", err);
+    }
 
-    // Montar e retornar o resumo
+    let vendasPorCategoria = { labels: [], dados: [] };
+    try {
+      vendasPorCategoria = await calcularVendasPorCategoria(
+        filtroVendas,
+        dataInicioObj,
+        dataFimObj
+      );
+    } catch (err) {
+      console.error("Erro ao calcular vendas por categoria:", err);
+    }
+
+    let produtosSemMovimentacao = [];
+    try {
+      produtosSemMovimentacao = await obterProdutosSemMovimentacao(
+        dataInicioObj,
+        dataFimObj,
+        filtroProdutos,
+        local
+      );
+    } catch (err) {
+      console.error("Erro ao obter produtos sem movimentação:", err);
+    }
+
+    let produtosEstoqueCritico = [];
+    try {
+      produtosEstoqueCritico = await obterProdutosEstoqueCritico(filtroEstoque);
+    } catch (err) {
+      console.error("Erro ao obter produtos com estoque crítico:", err);
+    }
+
+    let estoquePorLocal = { labels: [], dados: [] };
+    try {
+      estoquePorLocal = await calcularEstoquePorLocal(filtroEstoque);
+    } catch (err) {
+      console.error("Erro ao calcular estoque por local:", err);
+    }
+
+    let estoqueSemMovimentacao = { labels: [], dados: [] };
+    try {
+      estoqueSemMovimentacao = await calcularEstoqueSemMovimentacao(
+        produtosSemMovimentacao
+      );
+    } catch (err) {
+      console.error("Erro ao calcular estoque sem movimentação:", err);
+    }
+
+    // Garantir valores seguros para evitar NaN
+    const mediaVendasDiariasSegura = isNaN(estatisticas.mediaVendasDiarias)
+      ? 0
+      : estatisticas.mediaVendasDiarias;
+    const totalItensVendidosSeguro = isNaN(estatisticas.totalItensVendidos)
+      ? 0
+      : estatisticas.totalItensVendidos;
+
+    // Montar e retornar o resumo com estrutura consistente
     res.json({
-      totalProdutos,
-      totalVendas,
-      totalItensVendidos: estatisticas.totalItensVendidos,
-      mediaVendasDiarias: estatisticas.mediaVendasDiarias,
-      diaMaiorVenda: estatisticas.diaMaiorVenda,
-      semMovimentacao: produtosSemMovimentacao.length,
-      produtosEstoqueCritico: produtosEstoqueCritico.length,
-      topProdutos,
-      vendasPorCategoria,
-      produtosSemMovimentacao,
-      estoquePorLocal,
-      estoqueSemMovimentacao,
+      sucesso: true,
+      totalProdutos: totalProdutos || 0,
+      totalVendas: totalVendas || 0,
+      totalItensVendidos: totalItensVendidosSeguro,
+      mediaVendasDiarias: mediaVendasDiariasSegura,
+      diaMaiorVenda: estatisticas.diaMaiorVenda || null,
+      semMovimentacao: produtosSemMovimentacao.length || 0,
+      produtosEstoqueCritico: produtosEstoqueCritico.length || 0,
+      topProdutos: topProdutos || [],
+      vendasPorCategoria: vendasPorCategoria || { labels: [], dados: [] },
+      produtosSemMovimentacao: produtosSemMovimentacao || [],
+      estoquePorLocal: estoquePorLocal || { labels: [], dados: [] },
+      estoqueSemMovimentacao: estoqueSemMovimentacao || { labels: [], dados: [] },
     });
   } catch (error) {
     console.error("Erro ao gerar resumo:", error);

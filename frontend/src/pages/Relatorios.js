@@ -202,34 +202,68 @@ const Relatorios = () => {
       // Resto do código para buscar produtos e resumo...
       const resposta = await api.get(`/api/relatorios/resumo?${query}`);
       
-      setResumo(resposta.data);
-      setErroCarregamento(null);
+      // Verificar se a resposta contém dados válidos
+      if (resposta.data) {
+        setResumo(resposta.data);
+        setErroCarregamento(null);
+        
+        // Verificar se o período não tem vendas e informar o usuário
+        if (resposta.data.totalVendas === 0) {
+          toast.info("Nenhuma venda encontrada no período selecionado.", {
+            toastId: 'no-sales-info',
+            autoClose: 5000,
+          });
+        }
+      }
 
       // Buscar produtos com estoque crítico...
     } catch (error) {
       console.error("Erro ao carregar resumo:", error);
       
+      // Verificar se é um erro de conexão REAL (flag do interceptor)
+      const isConnectionError = error.isConnectionError || 
+        error.code === "ECONNREFUSED" || 
+        error.code === "ERR_NETWORK" || 
+        error.message === "Network Error" ||
+        (!error.response && !error.isConnectionError === false);
+      
       // Tratamento específico para diferentes tipos de erro
-      if (error.code === "ECONNREFUSED" || error.code === "ERR_NETWORK" || error.message === "Network Error") {
+      if (isConnectionError && !error.response) {
         setErroCarregamento(
           "Não foi possível conectar ao servidor. Verifique se o backend está rodando."
         );
-        toast.error("Erro de conexão. Verifique o servidor.");
+        // Não mostrar toast aqui, o interceptor já mostra
       } else if (error.response?.status === 400) {
         setErroCarregamento(
           "Parâmetros inválidos. Verifique as datas e filtros selecionados."
         );
-        toast.error("Parâmetros inválidos. Verifique os filtros.");
+        toast.error("Parâmetros inválidos. Verifique os filtros.", {
+          toastId: 'params-error',
+        });
       } else if (error.response && error.response.status >= 500) {
+        // Erro do servidor - NÃO é erro de conexão
         setErroCarregamento(
-          "Erro no servidor. Tente novamente em alguns instantes."
+          "Erro no servidor ao processar a requisição. Tente novamente em alguns instantes."
         );
-        toast.error("Erro no servidor. Tente novamente.");
+        toast.error("Erro no servidor. Tente novamente.", {
+          toastId: 'server-error',
+        });
+      } else if (error.response) {
+        // Outros erros HTTP com resposta
+        setErroCarregamento(
+          `Erro ao gerar relatório: ${error.response.data?.mensagem || 'Erro desconhecido'}`
+        );
+        toast.error("Erro ao gerar relatório. Tente novamente.", {
+          toastId: 'report-error',
+        });
       } else {
+        // Erro genérico
         setErroCarregamento(
           "Não foi possível gerar o relatório. Verifique os filtros e tente novamente."
         );
-        toast.error("Erro ao gerar relatório. Tente novamente.");
+        toast.error("Erro ao gerar relatório. Tente novamente.", {
+          toastId: 'generic-error',
+        });
       }
     } finally {
       setCarregando(false);
