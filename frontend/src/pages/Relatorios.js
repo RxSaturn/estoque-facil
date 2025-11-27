@@ -11,6 +11,7 @@ import {
   FaTimes,
   FaExchangeAlt,
   FaExclamationCircle,
+  FaInfoCircle,
 } from "react-icons/fa";
 import api from "../services/api";
 import { toast } from "react-toastify";
@@ -25,6 +26,7 @@ import {
   Legend,
   ArcElement,
 } from "chart.js";
+import SearchableSelect from "../components/SearchableSelect";
 import "./Relatorios.css";
 
 // Registrar componentes do Chart.js
@@ -199,15 +201,39 @@ const Relatorios = () => {
 
       // Resto do código para buscar produtos e resumo...
       const resposta = await api.get(`/api/relatorios/resumo?${query}`);
+      
+      // Verificar se há dados de vendas, mas não tratar como erro
+      if (resposta.data && resposta.data.totalVendas === 0) {
+        console.log("Nenhuma venda encontrada no período selecionado");
+        // Não mostrar erro, apenas deixar o relatório com zeros
+      }
+      
       setResumo(resposta.data);
 
       // Buscar produtos com estoque crítico...
     } catch (error) {
       console.error("Erro ao carregar resumo:", error);
-      setErroCarregamento(
-        "Não foi possível gerar o relatório. Verifique os filtros e tente novamente."
-      );
-      toast.error("Erro ao gerar relatório. Tente novamente.");
+      
+      // Verificar se é erro de conexão ou servidor
+      if (error.response) {
+        // Servidor respondeu com erro
+        setErroCarregamento(
+          "Não foi possível gerar o relatório. Verifique os filtros e tente novamente."
+        );
+        toast.error("Erro ao gerar relatório. Tente novamente.");
+      } else if (error.request) {
+        // Sem resposta do servidor
+        setErroCarregamento(
+          "Não foi possível conectar ao servidor. Verifique sua conexão."
+        );
+        toast.error("Erro de conexão. Verifique sua conexão de internet.");
+      } else {
+        // Erro inesperado
+        setErroCarregamento(
+          "Ocorreu um erro inesperado. Tente novamente."
+        );
+        toast.error("Erro inesperado. Tente novamente.");
+      }
     } finally {
       setCarregando(false);
     }
@@ -519,72 +545,60 @@ const Relatorios = () => {
 
             <div className="form-group">
               <label htmlFor="tipo">Tipo de Produto</label>
-              <select
+              <SearchableSelect
                 id="tipo"
                 name="tipo"
                 value={filtros.tipo}
                 onChange={handleChangeFiltro}
-              >
-                <option value="">Todos</option>
-                {tipos.map((tipo, index) => (
-                  <option key={index} value={tipo}>
-                    {tipo}
-                  </option>
-                ))}
-              </select>
+                options={tipos}
+                placeholder="Selecione um tipo"
+                emptyOptionLabel="Todos"
+                noResultsText="Nenhum tipo encontrado"
+              />
             </div>
 
             <div className="form-group">
               <label htmlFor="categoria">Categoria</label>
-              <select
+              <SearchableSelect
                 id="categoria"
                 name="categoria"
                 value={filtros.categoria}
                 onChange={handleChangeFiltro}
+                options={categorias}
+                placeholder="Selecione uma categoria"
+                emptyOptionLabel="Todas"
                 disabled={!filtros.tipo}
-              >
-                <option value="">Todas</option>
-                {categorias.map((categoria, index) => (
-                  <option key={index} value={categoria}>
-                    {categoria}
-                  </option>
-                ))}
-              </select>
+                noResultsText="Nenhuma categoria encontrada"
+              />
             </div>
 
             <div className="form-group">
               <label htmlFor="subcategoria">Subcategoria</label>
-              <select
+              <SearchableSelect
                 id="subcategoria"
                 name="subcategoria"
                 value={filtros.subcategoria}
                 onChange={handleChangeFiltro}
+                options={subcategorias}
+                placeholder="Selecione uma subcategoria"
+                emptyOptionLabel="Todas"
                 disabled={!filtros.categoria}
-              >
-                <option value="">Todas</option>
-                {subcategorias.map((subcategoria, index) => (
-                  <option key={index} value={subcategoria}>
-                    {subcategoria}
-                  </option>
-                ))}
-              </select>
+                noResultsText="Nenhuma subcategoria encontrada"
+              />
             </div>
 
             <div className="form-group">
               <label htmlFor="local">Local</label>
-              <select
+              <SearchableSelect
                 id="local"
                 name="local"
                 value={filtros.local}
                 onChange={handleChangeFiltro}
-              >
-                <option value="">Todos</option>
-                {locais.map((local, index) => (
-                  <option key={index} value={local}>
-                    {local}
-                  </option>
-                ))}
-              </select>
+                options={locais}
+                placeholder="Selecione um local"
+                emptyOptionLabel="Todos"
+                noResultsText="Nenhum local encontrado"
+              />
             </div>
           </div>
           <div className="filtros-actions">
@@ -916,9 +930,15 @@ const Relatorios = () => {
                     </table>
                   </div>
                 ) : (
-                  <p className="no-data-message">
-                    Nenhuma venda registrada no período selecionado.
-                  </p>
+                  <div className="no-data-info-card">
+                    <FaInfoCircle className="info-icon" />
+                    <p className="no-data-message">
+                      Nenhuma venda registrada no período selecionado.
+                    </p>
+                    <p className="no-data-hint">
+                      Tente ajustar o período ou os filtros para ver resultados.
+                    </p>
+                  </div>
                 )}
 
                 {resumo.topProdutos.length > 0 && (

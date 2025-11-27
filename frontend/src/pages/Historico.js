@@ -11,10 +11,12 @@ import {
   FaExclamationTriangle,
   FaPen,
   FaTrash,
+  FaClock,
 } from "react-icons/fa";
 import api from "../services/api";
 import { toast } from "react-toastify";
 import Paginacao from "../components/Paginacao";
+import SearchableSelect from "../components/SearchableSelect";
 import "./Historico.css";
 
 const Historico = () => {
@@ -46,6 +48,7 @@ const Historico = () => {
     tipo: "",
   });
 
+  const [periodoPreDefinido, setPeriodoPreDefinido] = useState("ultimoMes");
   const [filtroAvancado, setFiltroAvancado] = useState(false);
   const [produtos, setProdutos] = useState([]);
   const [locais, setLocais] = useState([]);
@@ -575,6 +578,63 @@ const Historico = () => {
   const handleChangeFiltro = (e) => {
     const { name, value } = e.target;
     setFiltros((prev) => ({ ...prev, [name]: value }));
+    
+    // Se mudar manualmente as datas, resetar o período predefinido
+    if (name === "dataInicio" || name === "dataFim") {
+      setPeriodoPreDefinido("personalizado");
+    }
+  };
+
+  // Função para aplicar período predefinido
+  const aplicarPeriodoPredefinido = useCallback((periodo) => {
+    const hoje = new Date();
+    let inicio = new Date();
+
+    switch (periodo) {
+      case "hoje":
+        inicio = new Date(hoje);
+        break;
+      case "ultimaSemana":
+        inicio = new Date(hoje);
+        inicio.setDate(hoje.getDate() - 7);
+        break;
+      case "ultimoMes":
+        inicio = new Date(hoje);
+        inicio.setMonth(hoje.getMonth() - 1);
+        break;
+      case "ultimoTrimestre":
+        inicio = new Date(hoje);
+        inicio.setMonth(hoje.getMonth() - 3);
+        break;
+      case "ultimoAno":
+        inicio = new Date(hoje);
+        inicio.setFullYear(hoje.getFullYear() - 1);
+        break;
+      case "mesAtual":
+        inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        break;
+      case "anoAtual":
+        inicio = new Date(hoje.getFullYear(), 0, 1);
+        break;
+      default:
+        return;
+    }
+
+    const dataInicioStr = inicio.toISOString().split("T")[0];
+    const dataFimStr = hoje.toISOString().split("T")[0];
+
+    setFiltros((prev) => ({
+      ...prev,
+      dataInicio: dataInicioStr,
+      dataFim: dataFimStr,
+    }));
+
+    setPeriodoPreDefinido(periodo);
+  }, []);
+
+  const handleChangePeriodo = (e) => {
+    const periodo = e.target.value;
+    aplicarPeriodoPredefinido(periodo);
   };
 
   const aplicarFiltros = (e) => {
@@ -606,6 +666,7 @@ const Historico = () => {
       setPaginacaoMovimentacoes((prev) => ({ ...prev, currentPage: 1 }));
     }
 
+    setPeriodoPreDefinido("ultimoMes");
     setFiltroAvancado(false);
     carregarHistorico();
   };
@@ -765,6 +826,27 @@ const Historico = () => {
         </div>
 
         <form onSubmit={aplicarFiltros}>
+          {/* Período predefinido */}
+          <div className="periodos-predefinidos">
+            <label>
+              <FaClock /> Período:
+            </label>
+            <select
+              value={periodoPreDefinido}
+              onChange={handleChangePeriodo}
+              className="periodo-select"
+            >
+              <option value="personalizado">Personalizado</option>
+              <option value="hoje">Hoje</option>
+              <option value="ultimaSemana">Última Semana</option>
+              <option value="ultimoMes">Último Mês</option>
+              <option value="ultimoTrimestre">Último Trimestre</option>
+              <option value="ultimoAno">Último Ano</option>
+              <option value="mesAtual">Mês Atual</option>
+              <option value="anoAtual">Ano Atual</option>
+            </select>
+          </div>
+
           <div className="filtro-basico">
             <div className="form-group">
               <label htmlFor="dataInicio">Data Inicial</label>
@@ -797,36 +879,33 @@ const Historico = () => {
             <div className="filtro-avancado">
               <div className="form-group">
                 <label htmlFor="produto">Produto</label>
-                <select
+                <SearchableSelect
                   id="produto"
                   name="produto"
                   value={filtros.produto}
                   onChange={handleChangeFiltro}
-                >
-                  <option value="">Todos</option>
-                  {produtos.map((produto) => (
-                    <option key={produto._id} value={produto._id}>
-                      {produto.id} - {produto.nome}
-                    </option>
-                  ))}
-                </select>
+                  options={produtos.map((produto) => ({
+                    value: produto._id,
+                    label: `${produto.id} - ${produto.nome}`,
+                  }))}
+                  placeholder="Selecione um produto"
+                  emptyOptionLabel="Todos"
+                  noResultsText="Nenhum produto encontrado"
+                />
               </div>
 
               <div className="form-group">
                 <label htmlFor="local">Local</label>
-                <select
+                <SearchableSelect
                   id="local"
                   name="local"
                   value={filtros.local}
                   onChange={handleChangeFiltro}
-                >
-                  <option value="">Todos</option>
-                  {locais.map((local, index) => (
-                    <option key={index} value={local}>
-                      {local}
-                    </option>
-                  ))}
-                </select>
+                  options={locais}
+                  placeholder="Selecione um local"
+                  emptyOptionLabel="Todos"
+                  noResultsText="Nenhum local encontrado"
+                />
               </div>
 
               {activeTab === "movimentacoes" && (

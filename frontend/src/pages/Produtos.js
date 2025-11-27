@@ -8,10 +8,12 @@ import {
   FaFilter,
   FaTimes,
   FaExclamationTriangle,
+  FaBoxOpen,
 } from "react-icons/fa";
 import api from "../services/api";
 import { toast } from "react-toastify";
 import Paginacao from "../components/Paginacao";
+import PaginacaoCompacta from "../components/PaginacaoCompacta";
 import "./Produtos.css";
 
 const Produtos = () => {
@@ -500,12 +502,23 @@ const Produtos = () => {
         </div>
       )}
 
-      {/* Indicador de resultados */}
-      <div className="resultados-info">
-        Exibindo {produtosFiltrados.length} de {paginacao.totalItems} produtos
-        {busca || filtros.tipo || filtros.categoria || filtros.subcategoria
-          ? " (filtrados)"
-          : ""}
+      {/* Indicador de resultados e paginação compacta no topo */}
+      <div className="resultados-header">
+        <div className="resultados-info">
+          Exibindo {produtosFiltrados.length} de {paginacao.totalItems} produtos
+          {busca || filtros.tipo || filtros.categoria || filtros.subcategoria
+            ? " (filtrados)"
+            : ""}
+        </div>
+        
+        {produtosFiltrados.length > 0 && paginacao.totalItems > paginacao.itemsPerPage && (
+          <PaginacaoCompacta
+            totalItems={paginacao.totalItems}
+            onPageChange={handlePageChange}
+            itemsPerPage={paginacao.itemsPerPage}
+            pageName="produtos"
+          />
+        )}
       </div>
 
       {/* Indicador de carregamento */}
@@ -522,14 +535,23 @@ const Produtos = () => {
               {produtosFiltrados.map((produto) => (
                 <div className="produto-card" key={produto._id}>
                   <div className="produto-img">
-                    <img
-                      src={produto.imagemUrl || "/placeholder-image.png"}
-                      alt={produto.nome}
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = "/placeholder-image.png";
-                      }}
-                    />
+                    {produto.imagemUrl ? (
+                      <img
+                        src={produto.imagemUrl}
+                        alt={produto.nome}
+                        loading="lazy"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.style.display = "none";
+                          e.target.parentElement.classList.add("placeholder-visible");
+                        }}
+                      />
+                    ) : (
+                      <div className="produto-placeholder">
+                        <FaBoxOpen className="placeholder-icon" />
+                        <span className="placeholder-text">{produto.nome.charAt(0).toUpperCase()}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="produto-info">
