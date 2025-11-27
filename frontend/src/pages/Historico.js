@@ -16,7 +16,6 @@ import {
 import api from "../services/api";
 import { toast } from "react-toastify";
 import Paginacao from "../components/Paginacao";
-import SearchableSelect from "../components/SearchableSelect";
 import "./Historico.css";
 
 const Historico = () => {
@@ -49,7 +48,6 @@ const Historico = () => {
     tipo: "",
   });
 
-  const [periodoPreDefinido, setPeriodoPreDefinido] = useState("ultimoMes");
   const [filtroAvancado, setFiltroAvancado] = useState(false);
   const [produtos, setProdutos] = useState([]);
   const [locais, setLocais] = useState([]);
@@ -97,28 +95,21 @@ const Historico = () => {
 
   // Função para lidar com a mudança de página para vendas com useCallback
   const handleVendasPageChange = useCallback((page) => {
-    console.log("Página de vendas alterada para:", page);
     setPaginacaoVendas((prev) => ({ ...prev, currentPage: page }));
   }, []);
 
   // Função para lidar com a mudança de itens por página para vendas com useCallback
   const handleVendasItemsPerPageChange = useCallback((itemsPerPage) => {
-    console.log("Itens por página de vendas alterados para:", itemsPerPage);
     setPaginacaoVendas((prev) => ({ ...prev, itemsPerPage, currentPage: 1 }));
   }, []);
 
   // Função para lidar com a mudança de página para movimentações com useCallback
   const handleMovimentacoesPageChange = useCallback((page) => {
-    console.log("Página de movimentações alterada para:", page);
     setPaginacaoMovimentacoes((prev) => ({ ...prev, currentPage: page }));
   }, []);
 
   // Função para lidar com a mudança de itens por página para movimentações com useCallback
   const handleMovimentacoesItemsPerPageChange = useCallback((itemsPerPage) => {
-    console.log(
-      "Itens por página de movimentações alterados para:",
-      itemsPerPage
-    );
     setPaginacaoMovimentacoes((prev) => ({
       ...prev,
       itemsPerPage,
@@ -405,7 +396,6 @@ const Historico = () => {
     }
 
     if (precisaAtualizar) {
-      console.log("Definindo valores padrão para datas:", valoresAtualizados);
       setFiltros((prev) => ({ ...prev, ...valoresAtualizados }));
     }
   }, [filtros.dataInicio, filtros.dataFim]);
@@ -425,7 +415,6 @@ const Historico = () => {
 
         try {
           const resUsuarios = await api.get("/api/usuarios");
-          console.log("Usuários carregados:", resUsuarios.data);
           setUsuarios(resUsuarios.data || []);
         } catch (err) {
           console.warn("Não foi possível carregar usuários:", err);
@@ -487,7 +476,6 @@ const Historico = () => {
           const resVendas = await api.get(
             `/api/vendas/historico?${queryVendas}`
           );
-          console.log("Resposta de vendas:", resVendas.data);
 
           // Atualizar total de itens para paginação
           if (resVendas.data && Array.isArray(resVendas.data)) {
@@ -537,12 +525,6 @@ const Historico = () => {
           );
           const movs = resMovimentacoes.data.movimentacoes || [];
 
-          // Log para debug das primeiras movimentações
-          console.log(
-            "Movimentações carregadas (primeiras 2):",
-            movs.slice(0, 2)
-          );
-
           // Aceitar todas as movimentações, mesmo com produto nulo
           setMovimentacoes(movs);
 
@@ -552,14 +534,6 @@ const Historico = () => {
             totalItems:
               resMovimentacoes.data.total || resMovimentacoes.data.contagem,
           }));
-
-          console.log(
-            `Carregadas ${
-              resMovimentacoes.data.movimentacoes?.length || 0
-            } movimentações de um total de ${
-              resMovimentacoes.data.total || "desconhecido"
-            }`
-          );
         } catch (err) {
           console.error("Erro ao carregar movimentações:", err);
           setMovimentacoes([]);
