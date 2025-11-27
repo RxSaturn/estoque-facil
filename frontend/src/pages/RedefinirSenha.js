@@ -117,7 +117,7 @@ const RedefinirSenha = () => {
               Ir para Login
             </button>
           </div>
-        ) : (
+        ) : tokenValido ? (
           <form className="login-form" onSubmit={handleSubmit}>
             <div className="form-group">
               <label htmlFor="senha">
@@ -159,6 +159,18 @@ const RedefinirSenha = () => {
               {redefinindo ? 'Redefinindo...' : 'Redefinir Senha'}
             </button>
           </form>
+        ) : (
+          <div className="error-container">
+            <FaExclamationTriangle className="error-icon" />
+            <h3>Link Inválido</h3>
+            <p>O link de recuperação é inválido.</p>
+            <button 
+              className="btn-login" 
+              onClick={() => navigate('/login')}
+            >
+              Voltar para Login
+            </button>
+          </div>
         )}
       </div>
     </div>

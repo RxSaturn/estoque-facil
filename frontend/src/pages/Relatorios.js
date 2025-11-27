@@ -204,10 +204,30 @@ const Relatorios = () => {
       // Buscar produtos com estoque crítico...
     } catch (error) {
       console.error("Erro ao carregar resumo:", error);
-      setErroCarregamento(
-        "Não foi possível gerar o relatório. Verifique os filtros e tente novamente."
-      );
-      toast.error("Erro ao gerar relatório. Tente novamente.");
+      
+      // Verificar se é erro de dados vazios ou erro real
+      if (error.response && error.response.status === 200) {
+        // Dados vazios não são erro - definir resumo vazio
+        setResumo({
+          totalProdutos: 0,
+          totalVendas: 0,
+          totalItensVendidos: 0,
+          mediaVendasDiarias: 0,
+          diaMaiorVenda: null,
+          semMovimentacao: 0,
+          produtosEstoqueCritico: 0,
+          topProdutos: [],
+          vendasPorCategoria: { labels: [], dados: [] },
+          produtosSemMovimentacao: [],
+          estoquePorLocal: { labels: [], dados: [] },
+          estoqueSemMovimentacao: { labels: [], dados: [] },
+        });
+      } else {
+        setErroCarregamento(
+          "Não foi possível gerar o relatório. Verifique os filtros e tente novamente."
+        );
+        toast.error("Erro ao gerar relatório. Tente novamente.");
+      }
     } finally {
       setCarregando(false);
     }

@@ -8,6 +8,7 @@ import {
   FaFilter,
   FaTimes,
   FaExclamationTriangle,
+  FaBoxOpen,
 } from "react-icons/fa";
 import api from "../services/api";
 import { toast } from "react-toastify";
@@ -508,6 +509,16 @@ const Produtos = () => {
           : ""}
       </div>
 
+      {/* Componente de Paginação no topo */}
+      {!carregando && produtosFiltrados.length > 0 && (
+        <Paginacao
+          totalItems={paginacao.totalItems}
+          onPageChange={handlePageChange}
+          onItemsPerPageChange={handleItemsPerPageChange}
+          pageName="produtos_top"
+        />
+      )}
+
       {/* Indicador de carregamento */}
       {carregando ? (
         <div className="loading-container">
@@ -522,14 +533,22 @@ const Produtos = () => {
               {produtosFiltrados.map((produto) => (
                 <div className="produto-card" key={produto._id}>
                   <div className="produto-img">
-                    <img
-                      src={produto.imagemUrl || "/placeholder-image.png"}
-                      alt={produto.nome}
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = "/placeholder-image.png";
-                      }}
-                    />
+                    {produto.imagemUrl ? (
+                      <img
+                        src={produto.imagemUrl}
+                        alt={produto.nome}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.parentElement.classList.add('placeholder-container');
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="placeholder-image">
+                        <FaBoxOpen className="placeholder-icon" />
+                        <span>Sem imagem</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="produto-info">
@@ -588,7 +607,7 @@ const Produtos = () => {
             </div>
           )}
 
-          {/* Componente de Paginação */}
+          {/* Componente de Paginação no final */}
           {produtosFiltrados.length > 0 && (
             <Paginacao
               totalItems={paginacao.totalItems}
