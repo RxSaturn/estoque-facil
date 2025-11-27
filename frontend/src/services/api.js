@@ -89,9 +89,16 @@ api.interceptors.response.use(
     }
     
     // Tratamento de erros de conexão melhorado
-    if (!error.response || error.code === 'ECONNABORTED' || 
-        error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED') {
-      
+    // IMPORTANTE: Verificar se é um erro REAL de conexão (sem resposta do servidor)
+    // e não um erro HTTP (como 500) que TEM resposta
+    const isRealConnectionError = 
+      !error.response && 
+      (error.code === 'ECONNABORTED' || 
+       error.code === 'ERR_NETWORK' || 
+       error.code === 'ECONNREFUSED' ||
+       error.message === 'Network Error');
+    
+    if (isRealConnectionError) {
       connectionErrorCount++;
       
       // Mostrar toast apenas se não existir ainda
