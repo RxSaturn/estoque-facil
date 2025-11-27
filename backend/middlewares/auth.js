@@ -22,7 +22,7 @@ exports.proteger = async (req, res, next) => {
     // Verificar token
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || "seu_jwt_secret"
+      process.env.JWT_SECRET
     );
 
     // Verificar se o usuário ainda existe
