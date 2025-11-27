@@ -204,10 +204,24 @@ const Relatorios = () => {
       // Buscar produtos com estoque crítico...
     } catch (error) {
       console.error("Erro ao carregar resumo:", error);
-      setErroCarregamento(
-        "Não foi possível gerar o relatório. Verifique os filtros e tente novamente."
-      );
-      toast.error("Erro ao gerar relatório. Tente novamente.");
+      
+      // Verificar se é erro de rede ou servidor
+      if (error.code === "ECONNREFUSED" || error.code === "ERR_NETWORK") {
+        setErroCarregamento(
+          "Não foi possível conectar ao servidor. Verifique sua conexão."
+        );
+        toast.error("Erro de conexão. Verifique o servidor.");
+      } else if (error.response && error.response.status >= 500) {
+        setErroCarregamento(
+          "Erro no servidor. Tente novamente mais tarde."
+        );
+        toast.error("Erro no servidor. Tente novamente.");
+      } else {
+        setErroCarregamento(
+          "Não foi possível gerar o relatório. Verifique os filtros e tente novamente."
+        );
+        toast.error("Erro ao gerar relatório. Tente novamente.");
+      }
     } finally {
       setCarregando(false);
     }

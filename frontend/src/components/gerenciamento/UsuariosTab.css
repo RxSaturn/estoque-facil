@@ -133,3 +133,35 @@
   text-align: right;
   padding-right: 16px;
 }
+
+/* Estilo para o botão de alterar senha */
+.btn-alterar-senha {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  border: 1px solid #bbdefb;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-alterar-senha:hover {
+  background-color: #bbdefb;
+  border-color: #1976d2;
+  color: #0d47a1;
+}
+
+.btn-alterar-senha svg {
+  font-size: 14px;
+}
+
+/* Container de ações melhorado */
+.acoes-cell-container {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}

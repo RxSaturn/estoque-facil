@@ -8,6 +8,7 @@ import {
   FaFilter,
   FaTimes,
   FaExclamationTriangle,
+  FaBoxOpen,
 } from "react-icons/fa";
 import api from "../services/api";
 import { toast } from "react-toastify";
@@ -18,6 +19,7 @@ const Produtos = () => {
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState("");
+  const [imagensComErro, setImagensComErro] = useState({});
 
   // Filtro avançado visível por padrão
   const [filtroAvancado, setFiltroAvancado] = useState(true);
@@ -508,6 +510,16 @@ const Produtos = () => {
           : ""}
       </div>
 
+      {/* Componente de Paginação no topo */}
+      {!carregando && produtosFiltrados.length > 0 && (
+        <Paginacao
+          totalItems={paginacao.totalItems}
+          onPageChange={handlePageChange}
+          onItemsPerPageChange={handleItemsPerPageChange}
+          pageName="produtos_top"
+        />
+      )}
+
       {/* Indicador de carregamento */}
       {carregando ? (
         <div className="loading-container">
@@ -521,15 +533,21 @@ const Produtos = () => {
             <div className="produtos-grid">
               {produtosFiltrados.map((produto) => (
                 <div className="produto-card" key={produto._id}>
-                  <div className="produto-img">
-                    <img
-                      src={produto.imagemUrl || "/placeholder-image.png"}
-                      alt={produto.nome}
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = "/placeholder-image.png";
-                      }}
-                    />
+                  <div className={`produto-img ${imagensComErro[produto._id] ? 'placeholder-container' : ''}`}>
+                    {produto.imagemUrl && !imagensComErro[produto._id] ? (
+                      <img
+                        src={produto.imagemUrl}
+                        alt={produto.nome}
+                        onError={() => {
+                          setImagensComErro((prev) => ({ ...prev, [produto._id]: true }));
+                        }}
+                      />
+                    ) : (
+                      <div className="placeholder-image">
+                        <FaBoxOpen className="placeholder-icon" />
+                        <span>Sem imagem</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="produto-info">
@@ -588,7 +606,7 @@ const Produtos = () => {
             </div>
           )}
 
-          {/* Componente de Paginação */}
+          {/* Componente de Paginação no final */}
           {produtosFiltrados.length > 0 && (
             <Paginacao
               totalItems={paginacao.totalItems}

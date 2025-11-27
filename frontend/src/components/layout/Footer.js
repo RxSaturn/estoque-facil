@@ -11,9 +11,9 @@ const Footer = () => {
           <p>&copy; {currentYear} Estoque Fácil. Todos os direitos reservados.</p>
         </div>
         <div className="footer-links">
-          <a href="#" className="footer-link">Termos de Uso</a>
-          <a href="#" className="footer-link">Política de Privacidade</a>
-          <a href="#" className="footer-link">Suporte</a>
+          <button type="button" className="footer-link">Termos de Uso</button>
+          <button type="button" className="footer-link">Política de Privacidade</button>
+          <button type="button" className="footer-link">Suporte</button>
         </div>
       </div>
     </footer>
