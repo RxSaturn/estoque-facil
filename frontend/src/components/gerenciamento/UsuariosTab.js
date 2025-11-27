@@ -482,7 +482,7 @@ const UsuariosTab = () => {
                       <div className="acoes-cell-container">
                         <button
                           onClick={() => abrirModalSenha(usuario)}
-                          className="btn btn-sm btn-outline"
+                          className="btn btn-sm btn-alterar-senha"
                           title="Alterar senha"
                         >
                           <FaKey />

@@ -20,6 +20,9 @@ import {
   FaChartPie,
   FaSync,
   FaClock,
+  FaCheckCircle,
+  FaSpinner,
+  FaCircle,
 } from "react-icons/fa";
 import AuthContext from "../contexts/AuthContext";
 import {
@@ -324,42 +327,42 @@ const Dashboard = () => {
                 !produtosQuery.isLoading ? "loaded" : produtosQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!produtosQuery.isLoading ? "✓" : produtosQuery.isFetching ? "⟳" : "○"} Produtos
+              {!produtosQuery.isLoading ? <FaCheckCircle className="check-icon" /> : produtosQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Produtos
             </div>
             <div
               className={`loading-item ${
                 !vendasQuery.isLoading ? "loaded" : vendasQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!vendasQuery.isLoading ? "✓" : vendasQuery.isFetching ? "⟳" : "○"} Vendas
+              {!vendasQuery.isLoading ? <FaCheckCircle className="check-icon" /> : vendasQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Vendas
             </div>
             <div
               className={`loading-item ${
                 !topProdutosQuery.isLoading ? "loaded" : topProdutosQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!topProdutosQuery.isLoading ? "✓" : topProdutosQuery.isFetching ? "⟳" : "○"} Top Produtos
+              {!topProdutosQuery.isLoading ? <FaCheckCircle className="check-icon" /> : topProdutosQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Top Produtos
             </div>
             <div
               className={`loading-item ${
                 !estoqueBaixoQuery.isLoading ? "loaded" : estoqueBaixoQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!estoqueBaixoQuery.isLoading ? "✓" : estoqueBaixoQuery.isFetching ? "⟳" : "○"} Estoque
+              {!estoqueBaixoQuery.isLoading ? <FaCheckCircle className="check-icon" /> : estoqueBaixoQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Estoque Baixo
             </div>
             <div
               className={`loading-item ${
                 !categoriasQuery.isLoading ? "loaded" : categoriasQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!categoriasQuery.isLoading ? "✓" : categoriasQuery.isFetching ? "⟳" : "○"} Categorias
+              {!categoriasQuery.isLoading ? <FaCheckCircle className="check-icon" /> : categoriasQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Categorias
             </div>
             <div
               className={`loading-item ${
                 !movimentacoesQuery.isLoading ? "loaded" : movimentacoesQuery.isFetching ? "fetching" : ""
               }`}
             >
-              {!movimentacoesQuery.isLoading ? "✓" : movimentacoesQuery.isFetching ? "⟳" : "○"} Movimentações
+              {!movimentacoesQuery.isLoading ? <FaCheckCircle className="check-icon" /> : movimentacoesQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Movimentações
             </div>
           </div>
           <div className="loading-info">

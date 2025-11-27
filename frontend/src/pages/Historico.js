@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   FaShoppingCart,
   FaExchangeAlt,
@@ -39,6 +39,7 @@ const Historico = () => {
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
+  const [periodoPreDefinido, setPeriodoPreDefinido] = useState("ultimoMes");
 
   const [filtros, setFiltros] = useState({
     dataInicio: obterDataUmMesAtras(),
@@ -53,6 +54,8 @@ const Historico = () => {
   const [produtos, setProdutos] = useState([]);
   const [locais, setLocais] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
+  const [buscaProduto, setBuscaProduto] = useState("");
+  const [buscaLocal, setBuscaLocal] = useState("");
 
   // Estado para paginação separado por tipo de visualização
   const [paginacaoVendas, setPaginacaoVendas] = useState({
@@ -602,19 +605,12 @@ const Historico = () => {
         inicio = new Date(hoje);
         inicio.setMonth(hoje.getMonth() - 1);
         break;
-      case "ultimoTrimestre":
+      case "ultimosTresMeses":
         inicio = new Date(hoje);
         inicio.setMonth(hoje.getMonth() - 3);
         break;
-      case "ultimoAno":
-        inicio = new Date(hoje);
-        inicio.setFullYear(hoje.getFullYear() - 1);
-        break;
       case "mesAtual":
         inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-        break;
-      case "anoAtual":
-        inicio = new Date(hoje.getFullYear(), 0, 1);
         break;
       default:
         return;
@@ -636,6 +632,23 @@ const Historico = () => {
     const periodo = e.target.value;
     aplicarPeriodoPredefinido(periodo);
   };
+
+  // Filtrar produtos para busca com memoização
+  const produtosFiltrados = useMemo(() => {
+    return produtos.filter((produto) =>
+      buscaProduto === "" ||
+      produto.nome.toLowerCase().includes(buscaProduto.toLowerCase()) ||
+      produto.id.toLowerCase().includes(buscaProduto.toLowerCase())
+    );
+  }, [produtos, buscaProduto]);
+
+  // Filtrar locais para busca com memoização
+  const locaisFiltrados = useMemo(() => {
+    return locais.filter((local) =>
+      buscaLocal === "" ||
+      local.toLowerCase().includes(buscaLocal.toLowerCase())
+    );
+  }, [locais, buscaLocal]);
 
   const aplicarFiltros = (e) => {
     e.preventDefault();
@@ -667,6 +680,8 @@ const Historico = () => {
     }
 
     setPeriodoPreDefinido("ultimoMes");
+    setBuscaProduto("");
+    setBuscaLocal("");
     setFiltroAvancado(false);
     carregarHistorico();
   };
@@ -829,7 +844,7 @@ const Historico = () => {
           {/* Período predefinido */}
           <div className="periodos-predefinidos">
             <label>
-              <FaClock /> Período:
+              <FaClock /> Período Predefinido:
             </label>
             <select
               value={periodoPreDefinido}
@@ -838,12 +853,10 @@ const Historico = () => {
             >
               <option value="personalizado">Personalizado</option>
               <option value="hoje">Hoje</option>
-              <option value="ultimaSemana">Última Semana</option>
-              <option value="ultimoMes">Último Mês</option>
-              <option value="ultimoTrimestre">Último Trimestre</option>
-              <option value="ultimoAno">Último Ano</option>
-              <option value="mesAtual">Mês Atual</option>
-              <option value="anoAtual">Ano Atual</option>
+              <option value="ultimaSemana">Últimos 7 dias</option>
+              <option value="ultimoMes">Últimos 30 dias</option>
+              <option value="ultimosTresMeses">Últimos 3 meses</option>
+              <option value="mesAtual">Este mês</option>
             </select>
           </div>
 
@@ -877,35 +890,58 @@ const Historico = () => {
 
           {filtroAvancado && (
             <div className="filtro-avancado">
-              <div className="form-group">
-                <label htmlFor="produto">Produto</label>
-                <SearchableSelect
+              <div className="form-group searchable-select">
+                <label htmlFor="buscaProduto">Produto</label>
+                <input
+                  type="text"
+                  id="buscaProduto"
+                  placeholder="Buscar produto..."
+                  value={buscaProduto}
+                  onChange={(e) => setBuscaProduto(e.target.value)}
+                  className="search-input"
+                />
+                <select
                   id="produto"
                   name="produto"
                   value={filtros.produto}
                   onChange={handleChangeFiltro}
-                  options={produtos.map((produto) => ({
-                    value: produto._id,
-                    label: `${produto.id} - ${produto.nome}`,
-                  }))}
-                  placeholder="Selecione um produto"
-                  emptyOptionLabel="Todos"
-                  noResultsText="Nenhum produto encontrado"
-                />
+                  size={Math.min(5, produtosFiltrados.length + 1)}
+                  className="searchable-dropdown"
+                >
+                  <option value="">Todos</option>
+                  {produtosFiltrados.map((produto) => (
+                    <option key={produto._id} value={produto._id}>
+                      {produto.id} - {produto.nome}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="form-group">
-                <label htmlFor="local">Local</label>
-                <SearchableSelect
+              <div className="form-group searchable-select">
+                <label htmlFor="buscaLocal">Local</label>
+                <input
+                  type="text"
+                  id="buscaLocal"
+                  placeholder="Buscar local..."
+                  value={buscaLocal}
+                  onChange={(e) => setBuscaLocal(e.target.value)}
+                  className="search-input"
+                />
+                <select
                   id="local"
                   name="local"
                   value={filtros.local}
                   onChange={handleChangeFiltro}
-                  options={locais}
-                  placeholder="Selecione um local"
-                  emptyOptionLabel="Todos"
-                  noResultsText="Nenhum local encontrado"
-                />
+                  size={Math.min(5, locaisFiltrados.length + 1)}
+                  className="searchable-dropdown"
+                >
+                  <option value="">Todos</option>
+                  {locaisFiltrados.map((local, index) => (
+                    <option key={index} value={local}>
+                      {local}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {activeTab === "movimentacoes" && (

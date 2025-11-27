@@ -134,34 +134,31 @@
   padding-right: 16px;
 }
 
-/* Estilos para o botão de alterar senha */
-.btn-senha,
-.btn-outline[title="Alterar senha"] {
+/* Estilo para o botão de alterar senha */
+.btn-alterar-senha {
   background-color: #e3f2fd;
-  border: 1px solid #1976d2;
   color: #1976d2;
+  border: 1px solid #bbdefb;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   transition: all 0.2s ease;
 }
 
-.btn-senha:hover,
-.btn-outline[title="Alterar senha"]:hover {
-  background-color: #1976d2;
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(25, 118, 210, 0.3);
+.btn-alterar-senha:hover {
+  background-color: #bbdefb;
+  border-color: #1976d2;
+  color: #0d47a1;
 }
 
-.btn-senha:focus,
-.btn-outline[title="Alterar senha"]:focus {
-  outline: 2px solid #1976d2;
-  outline-offset: 2px;
+.btn-alterar-senha svg {
+  font-size: 14px;
 }
 
-/* Container para os botões de ação */
+/* Container de ações melhorado */
 .acoes-cell-container {
   display: flex;
   gap: 8px;

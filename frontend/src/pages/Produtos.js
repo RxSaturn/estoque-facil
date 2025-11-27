@@ -77,6 +77,7 @@ const Produtos = () => {
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState("");
+  const [imagensComErro, setImagensComErro] = useState({});
 
   // Filtro avançado visível por padrão
   const [filtroAvancado, setFiltroAvancado] = useState(true);
@@ -578,6 +579,16 @@ const Produtos = () => {
         )}
       </div>
 
+      {/* Componente de Paginação no topo */}
+      {!carregando && produtosFiltrados.length > 0 && (
+        <Paginacao
+          totalItems={paginacao.totalItems}
+          onPageChange={handlePageChange}
+          onItemsPerPageChange={handleItemsPerPageChange}
+          pageName="produtos_top"
+        />
+      )}
+
       {/* Indicador de carregamento */}
       {carregando ? (
         <div className="loading-container">
@@ -590,7 +601,54 @@ const Produtos = () => {
           {produtosFiltrados.length > 0 ? (
             <div className="produtos-grid">
               {produtosFiltrados.map((produto) => (
-                <ProdutoCard key={produto._id} produto={produto} onDelete={confirmarExclusao} />
+                <div className="produto-card" key={produto._id}>
+                  <div className={`produto-img ${imagensComErro[produto._id] ? 'placeholder-container' : ''}`}>
+                    {produto.imagemUrl && !imagensComErro[produto._id] ? (
+                      <img
+                        src={produto.imagemUrl}
+                        alt={produto.nome}
+                        onError={() => {
+                          setImagensComErro((prev) => ({ ...prev, [produto._id]: true }));
+                        }}
+                      />
+                    ) : (
+                      <div className="placeholder-image">
+                        <FaBoxOpen className="placeholder-icon" />
+                        <span>Sem imagem</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="produto-info">
+                    <h3 title={produto.nome}>{produto.nome}</h3>
+                    <p className="produto-id">{produto.id}</p>
+                    <div className="produto-detalhes">
+                      <span className="badge tipo">{produto.tipo}</span>
+                      <span className="badge categoria">
+                        {produto.categoria}
+                      </span>
+                    </div>
+                    <p className="produto-subcategoria">
+                      {produto.subcategoria}
+                    </p>
+                  </div>
+
+                  <div className="produto-actions">
+                    <Link
+                      to={`/produtos/editar/${produto._id}`}
+                      className="btn btn-sm btn-secondary"
+                    >
+                      <FaEdit /> Editar
+                    </Link>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger"
+                      onClick={() => confirmarExclusao(produto._id)}
+                    >
+                      <FaTrash /> Excluir
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
@@ -617,7 +675,7 @@ const Produtos = () => {
             </div>
           )}
 
-          {/* Componente de Paginação */}
+          {/* Componente de Paginação no final */}
           {produtosFiltrados.length > 0 && (
             <Paginacao
               totalItems={paginacao.totalItems}
