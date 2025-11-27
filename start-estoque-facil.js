@@ -40,7 +40,7 @@ console.clear();
 
 // Cabeçalho
 console.log(`${colors.blue}======================================================`);
-console.log(`        INICIANDO ESTOQUE FACIL - VERSAO 1.0`);
+console.log(`        INICIANDO ESTOQUE FACIL - VERSAO 1.1`);
 console.log(`======================================================${colors.reset}`);
 console.log();
 
@@ -84,6 +84,66 @@ const isPortInUse = async (port) => {
   });
 };
 
+// Função para verificar e atualizar browserslist
+const updateBrowsersList = (dir, name) => {
+  return new Promise((resolve) => {
+    console.log(`${colors.cyan}[*] Atualizando browserslist para ${name}...${colors.reset}`);
+    
+    const isWindows = os.platform() === 'win32';
+    const npxCmd = isWindows ? 'npx.cmd' : 'npx';
+    
+    const updateProcess = spawn(npxCmd, ['update-browserslist-db@latest', '--yes'], {
+      cwd: dir,
+      shell: true,
+      stdio: 'pipe'
+    });
+    
+    updateProcess.stdout.on('data', (data) => {
+      const output = data.toString().trim();
+      if (output && !output.includes('npm warn')) {
+        console.log(`${colors.dim}[${name}] ${output}${colors.reset}`);
+      }
+    });
+    
+    updateProcess.stderr.on('data', (data) => {
+      const output = data.toString().trim();
+      // Ignora warnings comuns do npm
+      if (output && !output.includes('npm warn') && !output.includes('WARN')) {
+        console.log(`${colors.dim}[${name}] ${output}${colors.reset}`);
+      }
+    });
+    
+    updateProcess.on('close', (code) => {
+      if (code === 0) {
+        console.log(`${colors.green}[✓] Browserslist atualizado para ${name}${colors.reset}`);
+      } else {
+        console.log(`${colors.yellow}[!] Atualização de browserslist ignorada para ${name} (código: ${code})${colors.reset}`);
+      }
+      resolve();
+    });
+    
+    updateProcess.on('error', (err) => {
+      console.log(`${colors.yellow}[!] Não foi possível atualizar browserslist para ${name}: ${err.message}${colors.reset}`);
+      resolve();
+    });
+    
+    // Timeout para não travar o processo
+    setTimeout(() => {
+      resolve();
+    }, 30000);
+  });
+};
+
+// Função para verificar se node_modules existe
+const checkNodeModules = (dir, name) => {
+  const nodeModulesPath = path.join(dir, 'node_modules');
+  if (!fs.existsSync(nodeModulesPath)) {
+    console.log(`${colors.yellow}[!] node_modules não encontrado em ${name}. Execute 'npm install' primeiro.${colors.reset}`);
+    return false;
+  }
+  return true;
+};
+
 // Função para iniciar processos
 const startProcess = (name, dir, command, args, color) => {
   console.log(`[*] Iniciando ${name}...`);
@@ -108,7 +168,10 @@ const startProcess = (name, dir, command, args, color) => {
   proc.stderr.on('data', (data) => {
     data.toString().split('\n').forEach(line => {
       if (line.trim() !== '') {
-        console.log(`${colors.red}[${name} ERRO]${colors.reset} ${line}`);
+        // Ignora avisos de browserslist/caniuse para manter console limpo
+        if (!line.includes('caniuse-lite') && !line.includes('Browserslist')) {
+          console.log(`${colors.red}[${name} ERRO]${colors.reset} ${line}`);
+        }
       }
     });
   });
@@ -123,6 +186,18 @@ const startProcess = (name, dir, command, args, color) => {
 // Função principal para iniciar tudo
 const startAll = async () => {
   try {
+    // Verificar se node_modules existe
+    const backendReady = checkNodeModules(backendDir, 'backend');
+    const frontendReady = checkNodeModules(frontendDir, 'frontend');
+    
+    if (!backendReady || !frontendReady) {
+      console.error(`${colors.red}[ERRO] Dependências não instaladas. Execute 'npm install' nas pastas backend e frontend.${colors.reset}`);
+      process.exit(1);
+    }
+    
+    // Atualizar browserslist para evitar avisos de caniuse-lite desatualizado
+    await updateBrowsersList(frontendDir, 'FRONTEND');
+    
     // Verificar portas
     const backendPortInUse = await isPortInUse(5000);
     const frontendPortInUse = await isPortInUse(3000);

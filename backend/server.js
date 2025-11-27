@@ -44,6 +44,15 @@ app.use("/api/locais", localRoutes);
 app.use("/api/movimentacoes", movimentacaoRoutes);
 app.use('/api/recuperacao-senha', recuperacaoSenhaRoutes);
 
+// Endpoint de health check para verificação de conexão
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
+});
+
 
 // Rota de teste
 app.get("/", (req, res) => {
