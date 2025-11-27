@@ -78,6 +78,37 @@
   margin-right: 8px;
 }
 
+/* Período predefinido */
+.periodos-predefinidos {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.periodos-predefinidos label {
+  display: flex;
+  align-items: center;
+  margin-right: 15px;
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.periodos-predefinidos label svg {
+  margin-right: 8px;
+}
+
+.periodo-select {
+  flex: 1;
+  max-width: 250px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: white;
+  font-size: 14px;
+}
+
 .filtro-basico {
   display: flex;
   align-items: flex-end;

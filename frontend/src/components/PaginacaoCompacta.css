@@ -1,0 +1,53 @@
+.paginacao-compacta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.paginacao-compacta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px;
+  background-color: white;
+  color: var(--primary-color, #1976d2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.paginacao-compacta-btn:hover:not(:disabled) {
+  background-color: var(--primary-color, #1976d2);
+  color: white;
+  border-color: var(--primary-color, #1976d2);
+}
+
+.paginacao-compacta-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.paginacao-compacta-info {
+  font-size: 14px;
+  color: #495057;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .paginacao-compacta {
+    gap: 8px;
+  }
+
+  .paginacao-compacta-info {
+    font-size: 12px;
+  }
+
+  .paginacao-compacta-btn {
+    width: 28px;
+    height: 28px;
+  }
+}

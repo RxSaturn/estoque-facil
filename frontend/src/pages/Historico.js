@@ -16,6 +16,7 @@ import {
 import api from "../services/api";
 import { toast } from "react-toastify";
 import Paginacao from "../components/Paginacao";
+import SearchableSelect from "../components/SearchableSelect";
 import "./Historico.css";
 
 const Historico = () => {
@@ -48,6 +49,7 @@ const Historico = () => {
     tipo: "",
   });
 
+  const [periodoPreDefinido, setPeriodoPreDefinido] = useState("ultimoMes");
   const [filtroAvancado, setFiltroAvancado] = useState(false);
   const [produtos, setProdutos] = useState([]);
   const [locais, setLocais] = useState([]);

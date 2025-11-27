@@ -314,7 +314,7 @@ const Dashboard = () => {
     );
   };
 
-  // Tela de carregamento com estados detalhados
+  // Tela de carregamento com estados detalhados e skeleton
   if (isLoading) {
     return (
       <div className="loading-container">
@@ -366,11 +366,19 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="loading-info">
-            <FaClock /> Aguarde alguns segundos para carregamento completo
+            <FaClock /> Aguarde alguns segundos...
           </div>
-          <p className="loading-hint">
-            Se a conexão estiver lenta, os dados serão carregados automaticamente após algumas tentativas.
-          </p>
+        </div>
+        
+        {/* Skeleton cards para feedback visual */}
+        <div className="skeleton-cards">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="skeleton-card">
+              <div className="skeleton-icon"></div>
+              <div className="skeleton-text short"></div>
+              <div className="skeleton-text medium"></div>
+            </div>
+          ))}
         </div>
       </div>
     );

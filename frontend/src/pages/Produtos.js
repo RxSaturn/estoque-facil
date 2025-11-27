@@ -13,7 +13,65 @@ import {
 import api from "../services/api";
 import { toast } from "react-toastify";
 import Paginacao from "../components/Paginacao";
+import PaginacaoCompacta from "../components/PaginacaoCompacta";
 import "./Produtos.css";
+
+// Componente de card do produto com tratamento de imagem via state
+const ProdutoCard = ({ produto, onDelete }) => {
+  const [imagemFalhou, setImagemFalhou] = useState(false);
+
+  const handleImageError = () => {
+    setImagemFalhou(true);
+  };
+
+  return (
+    <div className="produto-card">
+      <div className="produto-img">
+        {produto.imagemUrl && !imagemFalhou ? (
+          <img
+            src={produto.imagemUrl}
+            alt={produto.nome}
+            loading="lazy"
+            onError={handleImageError}
+          />
+        ) : (
+          <div className="produto-placeholder">
+            <FaBoxOpen className="placeholder-icon" />
+            <span className="placeholder-text">
+              {produto.nome.charAt(0).toUpperCase()}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="produto-info">
+        <h3 title={produto.nome}>{produto.nome}</h3>
+        <p className="produto-id">{produto.id}</p>
+        <div className="produto-detalhes">
+          <span className="badge tipo">{produto.tipo}</span>
+          <span className="badge categoria">{produto.categoria}</span>
+        </div>
+        <p className="produto-subcategoria">{produto.subcategoria}</p>
+      </div>
+
+      <div className="produto-actions">
+        <Link
+          to={`/produtos/editar/${produto._id}`}
+          className="btn btn-sm btn-secondary"
+        >
+          <FaEdit /> Editar
+        </Link>
+        <button
+          type="button"
+          className="btn btn-sm btn-danger"
+          onClick={() => onDelete(produto._id)}
+        >
+          <FaTrash /> Excluir
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const Produtos = () => {
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
@@ -502,12 +560,23 @@ const Produtos = () => {
         </div>
       )}
 
-      {/* Indicador de resultados */}
-      <div className="resultados-info">
-        Exibindo {produtosFiltrados.length} de {paginacao.totalItems} produtos
-        {busca || filtros.tipo || filtros.categoria || filtros.subcategoria
-          ? " (filtrados)"
-          : ""}
+      {/* Indicador de resultados e paginação compacta no topo */}
+      <div className="resultados-header">
+        <div className="resultados-info">
+          Exibindo {produtosFiltrados.length} de {paginacao.totalItems} produtos
+          {busca || filtros.tipo || filtros.categoria || filtros.subcategoria
+            ? " (filtrados)"
+            : ""}
+        </div>
+        
+        {produtosFiltrados.length > 0 && paginacao.totalItems > paginacao.itemsPerPage && (
+          <PaginacaoCompacta
+            totalItems={paginacao.totalItems}
+            onPageChange={handlePageChange}
+            itemsPerPage={paginacao.itemsPerPage}
+            pageName="produtos"
+          />
+        )}
       </div>
 
       {/* Componente de Paginação no topo */}

@@ -693,3 +693,32 @@
   gap: 4px;
   justify-content: center;
 }
+
+/* Card informativo para quando não há dados */
+.no-data-info-card {
+  background-color: #f8f9fa;
+  border: 1px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 30px 20px;
+  text-align: center;
+  margin: 20px 0;
+}
+
+.no-data-info-card .info-icon {
+  font-size: 32px;
+  color: #6c757d;
+  margin-bottom: 12px;
+}
+
+.no-data-info-card .no-data-message {
+  color: #495057;
+  font-size: 16px;
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+
+.no-data-info-card .no-data-hint {
+  color: #6c757d;
+  font-size: 14px;
+  margin: 0;
+}
