@@ -187,14 +187,14 @@ const Relatorios = () => {
 
       // Garantir que estamos usando o formato ISO (YYYY-MM-DD) diretamente
       // Construir query string com os valores exatos dos inputs, sem manipulação
-      let query = `dataInicio=${filtros.dataInicio}&dataFim=${filtros.dataFim}`;
+      let query = `dataInicio=${encodeURIComponent(filtros.dataInicio)}&dataFim=${encodeURIComponent(filtros.dataFim)}`;
 
-      if (filtros.tipo) query += `&tipo=${filtros.tipo}`;
-      if (filtros.categoria) query += `&categoria=${filtros.categoria}`;
+      if (filtros.tipo) query += `&tipo=${encodeURIComponent(filtros.tipo)}`;
+      if (filtros.categoria) query += `&categoria=${encodeURIComponent(filtros.categoria)}`;
       if (filtros.subcategoria)
-        query += `&subcategoria=${filtros.subcategoria}`;
-      if (filtros.local) query += `&local=${filtros.local}`;
-      query += `&metodoCalculo=${metodoCalculo}`;
+        query += `&subcategoria=${encodeURIComponent(filtros.subcategoria)}`;
+      if (filtros.local) query += `&local=${encodeURIComponent(filtros.local)}`;
+      query += `&metodoCalculo=${encodeURIComponent(metodoCalculo)}`;
 
       // Adicionar flag para indicar que queremos usar as datas exatas
       query += `&useExactDates=true`;
@@ -203,20 +203,26 @@ const Relatorios = () => {
       const resposta = await api.get(`/api/relatorios/resumo?${query}`);
       
       setResumo(resposta.data);
+      setErroCarregamento(null);
 
       // Buscar produtos com estoque crítico...
     } catch (error) {
       console.error("Erro ao carregar resumo:", error);
       
-      // Verificar se é erro de rede ou servidor
-      if (error.code === "ECONNREFUSED" || error.code === "ERR_NETWORK") {
+      // Tratamento específico para diferentes tipos de erro
+      if (error.code === "ECONNREFUSED" || error.code === "ERR_NETWORK" || error.message === "Network Error") {
         setErroCarregamento(
-          "Não foi possível conectar ao servidor. Verifique sua conexão."
+          "Não foi possível conectar ao servidor. Verifique se o backend está rodando."
         );
         toast.error("Erro de conexão. Verifique o servidor.");
+      } else if (error.response?.status === 400) {
+        setErroCarregamento(
+          "Parâmetros inválidos. Verifique as datas e filtros selecionados."
+        );
+        toast.error("Parâmetros inválidos. Verifique os filtros.");
       } else if (error.response && error.response.status >= 500) {
         setErroCarregamento(
-          "Erro no servidor. Tente novamente mais tarde."
+          "Erro no servidor. Tente novamente em alguns instantes."
         );
         toast.error("Erro no servidor. Tente novamente.");
       } else {
@@ -228,9 +234,11 @@ const Relatorios = () => {
     } finally {
       setCarregando(false);
     }
-  }, [filtros, metodoCalculo]);
+  }, [filtros.dataInicio, filtros.dataFim, filtros.tipo, filtros.categoria, filtros.subcategoria, filtros.local, metodoCalculo]);
 
   // Carregar dados de filtro ao montar o componente
+  // IMPORTANTE: Removido carregarResumo das dependências para evitar loops infinitos
+  // O relatório será gerado apenas quando o usuário clicar em "Gerar Relatório"
   useEffect(() => {
     const carregarOpcoesFiltro = async () => {
       try {
@@ -242,23 +250,36 @@ const Relatorios = () => {
         setTipos(resTipos.data);
 
         // Carregar categorias iniciais
-        if (filtros.tipo) {
-          await carregarCategorias(filtros.tipo);
+        const tipoSalvo = localStorage.getItem("relatorios_filtros");
+        let tipoInicial = "";
+        let categoriaInicial = "";
+        if (tipoSalvo) {
+          try {
+            const preferencias = JSON.parse(tipoSalvo);
+            tipoInicial = preferencias.tipo || "";
+            categoriaInicial = preferencias.categoria || "";
+          } catch (e) {
+            console.error("Erro ao parsear preferências:", e);
+          }
+        }
+
+        if (tipoInicial) {
+          await carregarCategorias(tipoInicial);
         } else {
           await carregarCategorias();
         }
 
         // Carregar subcategorias iniciais
-        if (filtros.tipo || filtros.categoria) {
-          await carregarSubcategorias(filtros.tipo, filtros.categoria);
+        if (tipoInicial || categoriaInicial) {
+          await carregarSubcategorias(tipoInicial, categoriaInicial);
         }
 
         // Carregar locais
         const resLocais = await api.get("/api/estoque/locais");
         setLocais(resLocais.data);
 
-        // Carregar dados do relatório inicial
-        await carregarResumo();
+        // NÃO chamar carregarResumo aqui automaticamente
+        // O usuário deve clicar em "Gerar Relatório"
       } catch (error) {
         console.error("Erro ao carregar opções de filtro:", error);
         setErroCarregamento(
@@ -271,13 +292,8 @@ const Relatorios = () => {
     };
 
     carregarOpcoesFiltro();
-  }, [
-    carregarCategorias,
-    carregarSubcategorias,
-    filtros.tipo,
-    filtros.categoria,
-    carregarResumo,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Executar apenas na montagem
 
   // Efeito para salvar preferências automaticamente
   useEffect(() => {

@@ -1,17 +1,48 @@
 @echo off
 TITLE Estoque Facil - Inicializador
 COLOR 0B
+
 ECHO ======================================================
-ECHO     INICIALIZADOR DO ESTOQUE FACIL - v1.0
-ECHO     Data de inicializacao: %date% %time%
+ECHO     INICIALIZADOR DO ESTOQUE FACIL - v1.1
+ECHO     Data: %date% %time%
 ECHO     Usuario: %username%
 ECHO ======================================================
 ECHO.
 
-REM Executar o script JS para gerenciar os processos
+REM Verificar se Node.js esta instalado
+where node >nul 2>nul
+IF %ERRORLEVEL% NEQ 0 (
+    COLOR 0C
+    ECHO [ERRO] Node.js nao esta instalado ou nao esta no PATH.
+    ECHO Por favor, instale o Node.js de https://nodejs.org
+    PAUSE
+    EXIT /B 1
+)
+
+REM Verificar versao do Node.js
+FOR /F "tokens=*" %%a IN ('node -v') DO SET NODE_VERSION=%%a
+ECHO [*] Node.js encontrado: %NODE_VERSION%
+ECHO.
+
+REM Verificar se as dependencias estao instaladas
+IF NOT EXIST "backend\node_modules" (
+    ECHO [*] Instalando dependencias do backend...
+    cd backend
+    call npm install
+    cd ..
+)
+
+IF NOT EXIST "frontend\node_modules" (
+    ECHO [*] Instalando dependencias do frontend...
+    cd frontend
+    call npm install
+    cd ..
+)
+
+REM Executar o script principal
 node start-estoque-facil.js
 
-REM Capturar código de saída
+REM Capturar codigo de saida
 IF %ERRORLEVEL% NEQ 0 (
     COLOR 0C
     ECHO.
