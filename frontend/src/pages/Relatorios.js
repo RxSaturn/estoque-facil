@@ -202,12 +202,6 @@ const Relatorios = () => {
       // Resto do código para buscar produtos e resumo...
       const resposta = await api.get(`/api/relatorios/resumo?${query}`);
       
-      // Verificar se há dados de vendas, mas não tratar como erro
-      if (resposta.data && resposta.data.totalVendas === 0) {
-        console.log("Nenhuma venda encontrada no período selecionado");
-        // Não mostrar erro, apenas deixar o relatório com zeros
-      }
-      
       setResumo(resposta.data);
 
       // Buscar produtos com estoque crítico...

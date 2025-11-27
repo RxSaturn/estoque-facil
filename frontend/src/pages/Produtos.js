@@ -16,6 +16,63 @@ import Paginacao from "../components/Paginacao";
 import PaginacaoCompacta from "../components/PaginacaoCompacta";
 import "./Produtos.css";
 
+// Componente de card do produto com tratamento de imagem via state
+const ProdutoCard = ({ produto, onDelete }) => {
+  const [imagemFalhou, setImagemFalhou] = useState(false);
+
+  const handleImageError = () => {
+    setImagemFalhou(true);
+  };
+
+  return (
+    <div className="produto-card">
+      <div className="produto-img">
+        {produto.imagemUrl && !imagemFalhou ? (
+          <img
+            src={produto.imagemUrl}
+            alt={produto.nome}
+            loading="lazy"
+            onError={handleImageError}
+          />
+        ) : (
+          <div className="produto-placeholder">
+            <FaBoxOpen className="placeholder-icon" />
+            <span className="placeholder-text">
+              {produto.nome.charAt(0).toUpperCase()}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="produto-info">
+        <h3 title={produto.nome}>{produto.nome}</h3>
+        <p className="produto-id">{produto.id}</p>
+        <div className="produto-detalhes">
+          <span className="badge tipo">{produto.tipo}</span>
+          <span className="badge categoria">{produto.categoria}</span>
+        </div>
+        <p className="produto-subcategoria">{produto.subcategoria}</p>
+      </div>
+
+      <div className="produto-actions">
+        <Link
+          to={`/produtos/editar/${produto._id}`}
+          className="btn btn-sm btn-secondary"
+        >
+          <FaEdit /> Editar
+        </Link>
+        <button
+          type="button"
+          className="btn btn-sm btn-danger"
+          onClick={() => onDelete(produto._id)}
+        >
+          <FaTrash /> Excluir
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const Produtos = () => {
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -533,57 +590,7 @@ const Produtos = () => {
           {produtosFiltrados.length > 0 ? (
             <div className="produtos-grid">
               {produtosFiltrados.map((produto) => (
-                <div className="produto-card" key={produto._id}>
-                  <div className="produto-img">
-                    {produto.imagemUrl ? (
-                      <img
-                        src={produto.imagemUrl}
-                        alt={produto.nome}
-                        loading="lazy"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.style.display = "none";
-                          e.target.parentElement.classList.add("placeholder-visible");
-                        }}
-                      />
-                    ) : (
-                      <div className="produto-placeholder">
-                        <FaBoxOpen className="placeholder-icon" />
-                        <span className="placeholder-text">{produto.nome.charAt(0).toUpperCase()}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="produto-info">
-                    <h3 title={produto.nome}>{produto.nome}</h3>
-                    <p className="produto-id">{produto.id}</p>
-                    <div className="produto-detalhes">
-                      <span className="badge tipo">{produto.tipo}</span>
-                      <span className="badge categoria">
-                        {produto.categoria}
-                      </span>
-                    </div>
-                    <p className="produto-subcategoria">
-                      {produto.subcategoria}
-                    </p>
-                  </div>
-
-                  <div className="produto-actions">
-                    <Link
-                      to={`/produtos/editar/${produto._id}`}
-                      className="btn btn-sm btn-secondary"
-                    >
-                      <FaEdit /> Editar
-                    </Link>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-danger"
-                      onClick={() => confirmarExclusao(produto._id)}
-                    >
-                      <FaTrash /> Excluir
-                    </button>
-                  </div>
-                </div>
+                <ProdutoCard key={produto._id} produto={produto} onDelete={confirmarExclusao} />
               ))}
             </div>
           ) : (

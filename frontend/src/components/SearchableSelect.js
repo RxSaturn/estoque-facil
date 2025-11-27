@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { FaSearch, FaChevronDown, FaTimes } from "react-icons/fa";
 import "./SearchableSelect.css";
 
@@ -33,24 +33,28 @@ const SearchableSelect = ({
   const inputRef = useRef(null);
   const listRef = useRef(null);
 
-  // Normalizar opções para o formato {value, label}
-  const normalizedOptions = options.map((option) => {
-    if (typeof option === "string") {
-      return { value: option, label: option };
-    }
-    return option;
-  });
+  // Memoize options normalization to avoid recalculation on every render
+  const normalizedOptions = useMemo(() => {
+    return options.map((option) => {
+      if (typeof option === "string") {
+        return { value: option, label: option };
+      }
+      return option;
+    });
+  }, [options]);
 
   // Adicionar opção vazia no início
-  const allOptions = [
+  const allOptions = useMemo(() => [
     { value: "", label: emptyOptionLabel },
     ...normalizedOptions,
-  ];
+  ], [normalizedOptions, emptyOptionLabel]);
 
   // Filtrar opções baseado no termo de busca
-  const filteredOptions = allOptions.filter((option) =>
-    option.label.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredOptions = useMemo(() => {
+    return allOptions.filter((option) =>
+      option.label.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [allOptions, searchTerm]);
 
   // Encontrar o label do valor atual
   const selectedLabel =
