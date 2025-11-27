@@ -6,6 +6,11 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+if (process.env.JWT_SECRET.length < 32) {
+  console.error('ERRO: JWT_SECRET deve ter pelo menos 32 caracteres para garantir segurança!');
+  process.exit(1);
+}
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
