@@ -229,27 +229,19 @@ exports.listarHistorico = async (req, res) => {
 };
 
 // Exclui todas as vendas associadas a produtos que não existem mais
+// Otimizado: usa lógica baseada em conjuntos ao invés de N+1 queries
 exports.excluirVendasProdutosRemovidos = async (req, res) => {
   try {
-    // Primeiro, coletamos todas as vendas
-    const todasVendas = await Venda.find({
-      produto: { $ne: null } // Apenas vendas que têm referência a um produto
+    // 1. Buscar todos os IDs de produtos válidos de uma só vez
+    const produtosValidos = await Produto.distinct('_id');
+    
+    // 2. Contar vendas cujos produtos NÃO estão na lista de produtos válidos
+    const quantidade = await Venda.countDocuments({
+      produto: { $nin: produtosValidos }
     });
     
-    // Lista para armazenar IDs de vendas a serem excluídas
-    const vendasParaExcluir = [];
-    
-    // Para cada venda, verificamos se o produto ainda existe
-    for (const venda of todasVendas) {
-      const produtoExiste = await Produto.findById(venda.produto);
-      
-      if (!produtoExiste) {
-        vendasParaExcluir.push(venda._id);
-      }
-    }
-    
     // Se não houver vendas para excluir
-    if (vendasParaExcluir.length === 0) {
+    if (quantidade === 0) {
       return res.status(200).json({
         sucesso: true,
         mensagem: 'Nenhuma venda de produto removido encontrada',
@@ -261,23 +253,23 @@ exports.excluirVendasProdutosRemovidos = async (req, res) => {
     if (req.query.preview === 'true') {
       return res.status(200).json({
         sucesso: true,
-        mensagem: `Encontradas ${vendasParaExcluir.length} vendas de produtos removidos`,
-        quantidade: vendasParaExcluir.length
+        mensagem: `Encontradas ${quantidade} vendas de produtos removidos`,
+        quantidade
       });
     }
     
-    // Excluir todas as vendas de uma vez
-    await Venda.deleteMany({
-      _id: { $in: vendasParaExcluir }
+    // 3. Excluir todas as vendas de produtos que não existem mais
+    const resultado = await Venda.deleteMany({
+      produto: { $nin: produtosValidos }
     });
     
     // Registrar a ação no log do sistema
-    console.log(`${vendasParaExcluir.length} vendas de produtos removidos excluídas por ${req.usuario.nome} (${req.usuario.id}) em ${new Date().toISOString()}`);
+    console.log(`${resultado.deletedCount} vendas de produtos removidos excluídas por ${req.usuario.nome} (${req.usuario.id}) em ${new Date().toISOString()}`);
     
     res.status(200).json({
       sucesso: true,
-      mensagem: `${vendasParaExcluir.length} vendas de produtos removidos foram excluídas com sucesso`,
-      quantidade: vendasParaExcluir.length
+      mensagem: `${resultado.deletedCount} vendas de produtos removidos foram excluídas com sucesso`,
+      quantidade: resultado.deletedCount
     });
   } catch (error) {
     console.error('Erro ao excluir vendas de produtos removidos:', error);
