@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "react-toastify/dist/ReactToastify.css";
 
 // Importação de componentes
@@ -15,7 +16,26 @@ import Dashboard from "./pages/Dashboard";
 // Importação de contextos
 import { AuthProvider } from "./contexts/AuthContext";
 
+// Importação de estilos
+import "./styles/design-system.css";
+import "./styles/components.css";
 import "./App.css";
+
+// Configuração do React Query
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutos
+      gcTime: 1000 * 60 * 10, // 10 minutos (anteriormente cacheTime)
+      refetchOnWindowFocus: false,
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
 
 // Lazy loading para páginas secundárias (carregamento sob demanda)
 const Produtos = lazy(() => import("./pages/Produtos"));
@@ -44,76 +64,78 @@ const LoadingSpinner = () => (
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <div className="app-container">
-          <ToastContainer
-            position="top-center"
-            autoClose={3000}
-            hideProgressBar={false}
-            newestOnTop={true}
-            closeOnClick
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            limit={3} // Limita o número de toasts exibidos simultaneamente
-          />
-          <Navbar />
-          <main className="container">
-            <Suspense fallback={<LoadingSpinner />}>
-              <Routes>
-                <Route path="/" element={<Login />} />
-                <Route path="/login" element={<Login />} />
-                <Route
-                  path="/redefinir-senha/:token"
-                  element={<RedefinirSenha />}
-                />
-                <Route
-                  path="/dashboard"
-                  element={<PrivateRoute component={Dashboard} />}
-                />
-                <Route
-                  path="/produtos"
-                  element={<PrivateRoute component={Produtos} />}
-                />
-                <Route
-                  path="/produtos/adicionar"
-                  element={<PrivateRoute component={AdicionarProduto} />}
-                />
-                <Route
-                  path="/produtos/editar/:id"
-                  element={<PrivateRoute component={EditarProduto} />}
-                />
-                <Route
-                  path="/movimentacao"
-                  element={<PrivateRoute component={Movimentacao} />}
-                />
-                <Route
-                  path="/movimentacoes/adicionar"
-                  element={<Movimentacao />}
-                />
-                <Route
-                  path="/historico"
-                  element={<PrivateRoute component={Historico} />}
-                />
-                <Route
-                  path="/relatorios"
-                  element={<PrivateRoute component={Relatorios} />}
-                />
-                <Route
-                  path="/gerenciamento"
-                  element={
-                    <PrivateRoute component={Gerenciamento} adminOnly={true} />
-                  }
-                />
-              </Routes>
-            </Suspense>
-          </main>
-          <Footer />
-        </div>
-      </AuthProvider>
-    </Router>
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <AuthProvider>
+          <div className="app-container">
+            <ToastContainer
+              position="top-center"
+              autoClose={3000}
+              hideProgressBar={false}
+              newestOnTop={true}
+              closeOnClick
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              limit={3} // Limita o número de toasts exibidos simultaneamente
+            />
+            <Navbar />
+            <main className="container">
+              <Suspense fallback={<LoadingSpinner />}>
+                <Routes>
+                  <Route path="/" element={<Login />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route
+                    path="/redefinir-senha/:token"
+                    element={<RedefinirSenha />}
+                  />
+                  <Route
+                    path="/dashboard"
+                    element={<PrivateRoute component={Dashboard} />}
+                  />
+                  <Route
+                    path="/produtos"
+                    element={<PrivateRoute component={Produtos} />}
+                  />
+                  <Route
+                    path="/produtos/adicionar"
+                    element={<PrivateRoute component={AdicionarProduto} />}
+                  />
+                  <Route
+                    path="/produtos/editar/:id"
+                    element={<PrivateRoute component={EditarProduto} />}
+                  />
+                  <Route
+                    path="/movimentacao"
+                    element={<PrivateRoute component={Movimentacao} />}
+                  />
+                  <Route
+                    path="/movimentacoes/adicionar"
+                    element={<Movimentacao />}
+                  />
+                  <Route
+                    path="/historico"
+                    element={<PrivateRoute component={Historico} />}
+                  />
+                  <Route
+                    path="/relatorios"
+                    element={<PrivateRoute component={Relatorios} />}
+                  />
+                  <Route
+                    path="/gerenciamento"
+                    element={
+                      <PrivateRoute component={Gerenciamento} adminOnly={true} />
+                    }
+                  />
+                </Routes>
+              </Suspense>
+            </main>
+            <Footer />
+          </div>
+        </AuthProvider>
+      </Router>
+    </QueryClientProvider>
   );
 }
 

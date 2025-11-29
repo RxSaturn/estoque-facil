@@ -1,28 +1,12 @@
 import React, { useContext, useCallback } from "react";
-import { Link } from "react-router-dom";
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   FaBoxOpen,
   FaExchangeAlt,
   FaChartLine,
   FaShoppingCart,
   FaExclamationTriangle,
-  FaPlus,
-  FaArrowUp,
-  FaArrowDown,
-  FaTrophy,
-  FaChartPie,
   FaSync,
-  FaClock,
-  FaCheckCircle,
-  FaSpinner,
-  FaCircle,
 } from "react-icons/fa";
 import AuthContext from "../contexts/AuthContext";
 import {
@@ -35,32 +19,16 @@ import {
   clearDashboardCache,
 } from "../services/dashboardService";
 import { toast } from "react-toastify";
+
+// Novos componentes modulares
+import MetricCard from "../components/dashboard/MetricCard";
+import StockAlerts from "../components/dashboard/StockAlerts";
+import SalesChart from "../components/dashboard/SalesChart";
+import CategoryDistribution from "../components/dashboard/CategoryDistribution";
+import RecentActivity from "../components/dashboard/RecentActivity";
+import SkeletonCard from "../components/dashboard/SkeletonCard";
+
 import "./Dashboard.css";
-
-// QueryClient configurado com otimizações de retry e cache
-// Nota: retry é configurado com backoff exponencial para conexões lentas
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 2, // Habilitado retry no React Query para fallback adicional
-      retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 10000), // Backoff: 1s, 2s, 4s, max 10s
-      staleTime: 3 * 60 * 1000, // 3 minutos
-      gcTime: 10 * 60 * 1000, // 10 minutos
-      networkMode: "always",
-    },
-  },
-});
-
-// Componente wrapper para prover o React Query context
-const DashboardWithQueryProvider = () => (
-  <QueryClientProvider client={queryClient}>
-    <Dashboard />
-    {process.env.NODE_ENV === "development" && (
-      <ReactQueryDevtools initialIsOpen={false} position="bottom-right" />
-    )}
-  </QueryClientProvider>
-);
 
 // Componente principal do Dashboard
 const Dashboard = () => {
@@ -291,94 +259,32 @@ const Dashboard = () => {
     receita: 0,
   };
 
-  // Função para formatar data
-  const formatarData = (dataString) => {
-    try {
-      const data = new Date(dataString);
-      return data.toLocaleDateString("pt-BR");
-    } catch (e) {
-      return dataString || "Data indisponível";
-    }
-  };
-
-  // Função para renderizar indicador de tendência
-  const renderTrend = (valor) => {
-    if (!valor || valor === 0) return null;
-    return (
-      <span
-        className={`trend-indicator ${valor > 0 ? "positivo" : "negativo"}`}
-      >
-        {valor > 0 ? <FaArrowUp /> : <FaArrowDown />}
-        <span>{Math.abs(valor)}%</span>
-      </span>
-    );
-  };
-
-  // Tela de carregamento com estados detalhados e skeleton
+  // Tela de carregamento com skeleton loaders
   if (isLoading) {
     return (
-      <div className="loading-container">
-        <div className="loading-spinner"></div>
-        <h2>Carregando dashboard...</h2>
-        <div className="loading-status">
-          <div className="loading-progress">
-            <div
-              className={`loading-item ${
-                !produtosQuery.isLoading ? "loaded" : produtosQuery.isFetching ? "fetching" : ""
-              }`}
-            >
-              {!produtosQuery.isLoading ? <FaCheckCircle className="check-icon" /> : produtosQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Produtos
-            </div>
-            <div
-              className={`loading-item ${
-                !vendasQuery.isLoading ? "loaded" : vendasQuery.isFetching ? "fetching" : ""
-              }`}
-            >
-              {!vendasQuery.isLoading ? <FaCheckCircle className="check-icon" /> : vendasQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Vendas
-            </div>
-            <div
-              className={`loading-item ${
-                !topProdutosQuery.isLoading ? "loaded" : topProdutosQuery.isFetching ? "fetching" : ""
-              }`}
-            >
-              {!topProdutosQuery.isLoading ? <FaCheckCircle className="check-icon" /> : topProdutosQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Top Produtos
-            </div>
-            <div
-              className={`loading-item ${
-                !estoqueBaixoQuery.isLoading ? "loaded" : estoqueBaixoQuery.isFetching ? "fetching" : ""
-              }`}
-            >
-              {!estoqueBaixoQuery.isLoading ? <FaCheckCircle className="check-icon" /> : estoqueBaixoQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Estoque Baixo
-            </div>
-            <div
-              className={`loading-item ${
-                !categoriasQuery.isLoading ? "loaded" : categoriasQuery.isFetching ? "fetching" : ""
-              }`}
-            >
-              {!categoriasQuery.isLoading ? <FaCheckCircle className="check-icon" /> : categoriasQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Categorias
-            </div>
-            <div
-              className={`loading-item ${
-                !movimentacoesQuery.isLoading ? "loaded" : movimentacoesQuery.isFetching ? "fetching" : ""
-              }`}
-            >
-              {!movimentacoesQuery.isLoading ? <FaCheckCircle className="check-icon" /> : movimentacoesQuery.isFetching ? <FaSpinner className="spinner-icon" /> : <FaCircle className="pending-icon" />} Movimentações
-            </div>
-          </div>
-          <div className="loading-info">
-            <FaClock /> Aguarde alguns segundos...
-          </div>
+      <div className="dashboard-container">
+        <div className="welcome-section">
+          <h1>Carregando dashboard...</h1>
+          <p>Aguarde enquanto carregamos seus dados</p>
         </div>
         
-        {/* Skeleton cards para feedback visual */}
-        <div className="skeleton-cards">
+        {/* Skeleton cards para métricas */}
+        <div className="cards-grid">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="skeleton-card">
-              <div className="skeleton-icon"></div>
-              <div className="skeleton-text short"></div>
-              <div className="skeleton-text medium"></div>
-            </div>
+            <SkeletonCard key={i} variant="stat" />
           ))}
+        </div>
+        
+        {/* Skeleton para seções */}
+        <div className="dashboard-grid">
+          <div className="dashboard-section">
+            <SkeletonCard variant="table" />
+            <SkeletonCard variant="table" />
+            <SkeletonCard variant="chart" />
+          </div>
+          <div className="dashboard-section">
+            <SkeletonCard variant="list" />
+          </div>
         </div>
       </div>
     );
@@ -487,475 +393,98 @@ const Dashboard = () => {
         </button>
       </div>
 
-      {/* Cards de resumo */}
+      {/* Cards de resumo usando MetricCard */}
       <div className="cards-grid">
-        <div className="stat-card">
-          <div className="card-icon produtos">
-            <FaBoxOpen />
-          </div>
-          <div className="card-content">
-            <h3>Total de Produtos</h3>
-            <p className="card-value">
-              {resumo.totalProdutos}
-              {renderTrend(salesTrend.produtos)}
-            </p>
-            <Link to="/produtos" className="card-link">
-              Ver todos
-            </Link>
-          </div>
-        </div>
+        <MetricCard
+          title="Total de Produtos"
+          value={resumo.totalProdutos}
+          icon={FaBoxOpen}
+          iconColor="primary"
+          trend={salesTrend.produtos}
+          link="/produtos"
+          linkText="Ver todos"
+        />
 
-        <div className="stat-card">
-          <div className="card-icon estoque">
-            <FaExchangeAlt />
-          </div>
-          <div className="card-content">
-            <h3>Estoque Total</h3>
-            <p className="card-value">{resumo.totalEstoque} itens</p>
-            <Link to="/movimentacao" className="card-link">
-              Gerenciar
-            </Link>
-          </div>
-        </div>
+        <MetricCard
+          title="Estoque Total"
+          value={resumo.totalEstoque}
+          suffix="itens"
+          icon={FaExchangeAlt}
+          iconColor="success"
+          link="/movimentacao"
+          linkText="Gerenciar"
+        />
 
-        <div className="stat-card">
-          <div className="card-icon movimentacoes">
-            <FaChartLine />
-          </div>
-          <div className="card-content">
-            <h3>Movimentações</h3>
-            <p className="card-value">
-              {resumo.movimentacoesRecentes} recentes
-            </p>
-            <Link to="/relatorios" className="card-link">
-              Relatórios
-            </Link>
-          </div>
-        </div>
+        <MetricCard
+          title="Movimentações"
+          value={resumo.movimentacoesRecentes}
+          suffix="recentes"
+          icon={FaChartLine}
+          iconColor="purple"
+          link="/relatorios"
+          linkText="Relatórios"
+        />
 
-        <div className="stat-card">
-          <div className="card-icon vendas">
-            <FaShoppingCart />
-          </div>
-          <div className="card-content">
-            <h3>Vendas</h3>
-            <p className="card-value">
-              {resumo.vendasRecentes} hoje
-              {renderTrend(salesTrend.vendas)}
-            </p>
-            <Link to="/historico" className="card-link">
-              Detalhes
-            </Link>
-          </div>
-        </div>
+        <MetricCard
+          title="Vendas"
+          value={resumo.vendasRecentes}
+          suffix="hoje"
+          icon={FaShoppingCart}
+          iconColor="warning"
+          trend={salesTrend.vendas}
+          link="/historico"
+          linkText="Detalhes"
+        />
 
-        <div className="stat-card">
-          <div className="card-icon alertas">
-            <FaExclamationTriangle />
-          </div>
-          <div className="card-content">
-            <h3>Alertas</h3>
-            <p className="card-value">
-              {resumo.alertasEstoque} estoque baixo
-              {renderTrend(salesTrend.estoqueBaixo)}
-            </p>
-            <Link to="/relatorios" className="card-link">
-              Ver alertas
-            </Link>
-          </div>
-        </div>
+        <MetricCard
+          title="Alertas"
+          value={resumo.alertasEstoque}
+          suffix="estoque baixo"
+          icon={FaExclamationTriangle}
+          iconColor="danger"
+          trend={salesTrend.estoqueBaixo}
+          link="/produtos"
+          linkText="Ver alertas"
+        />
       </div>
 
       <div className="dashboard-grid">
         <div className="dashboard-section">
-          {/* Top Produtos */}
-          <div
-            className={`dashboard-card ${
-              topProdutosQuery.isFetching ? "card-fetching" : ""
-            }`}
-          >
-            <div className="card-header">
-              <h2>
-                <FaTrophy className="header-icon" /> Top Produtos
-                {topProdutosQuery.isError && (
-                  <span
-                    className="error-badge"
-                    title={
-                      topProdutosQuery.error?.message ||
-                      "Erro ao carregar dados"
-                    }
-                  >
-                    !
-                  </span>
-                )}
-              </h2>
-              <Link to="/produtos" className="btn-sm">
-                <FaPlus /> Adicionar Produto
-              </Link>
-            </div>
+          {/* Top Produtos - usando SalesChart component */}
+          <SalesChart 
+            topProdutos={topProdutosQuery.data || []}
+            loading={topProdutosQuery.isFetching && !topProdutosQuery.data}
+            error={topProdutosQuery.isError ? topProdutosQuery.error : null}
+          />
 
-            <div className="table-responsive">
-              <table className="dashboard-table">
-                <thead>
-                  <tr>
-                    <th>Produto</th>
-                    <th>Vendas</th>
-                    <th>Desempenho</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topProdutosQuery.data?.length > 0 ? (
-                    topProdutosQuery.data.map((produto, index) => {
-                      // Normalizar campos para diferentes formatos de API
-                      const nome = produto.nome || produto.name;
-                      const vendas =
-                        produto.quantidadeVendas || produto.salesCount || 0;
+          {/* Produtos com Estoque Baixo - usando StockAlerts component */}
+          <StockAlerts 
+            produtos={estoqueBaixoQuery.data || []}
+            loading={estoqueBaixoQuery.isFetching && !estoqueBaixoQuery.data}
+            error={estoqueBaixoQuery.isError ? estoqueBaixoQuery.error : null}
+            onRefresh={refreshAllData}
+          />
 
-                      // Calcular o progresso relativo para a barra
-                      const maxSales = Math.max(
-                        ...topProdutosQuery.data.map(
-                          (p) => p.quantidadeVendas || p.salesCount || 0
-                        )
-                      );
-                      const progresso = Math.round(
-                        (vendas / Math.max(maxSales, 1)) * 100
-                      );
-
-                      return (
-                        <tr key={produto.id || produto._id || index}>
-                          <td>{nome}</td>
-                          <td>{vendas} transações</td>
-                          <td>
-                            <div className="progress-container">
-                              <div
-                                className={`progress-bar rank-${index + 1}`}
-                                style={{ width: `${progresso}%` }}
-                              ></div>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan="3" className="no-data">
-                        {topProdutosQuery.isFetching
-                          ? "Carregando..."
-                          : "Nenhum dado de vendas disponível"}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Produtos com Estoque Baixo */}
-          <div
-            className={`dashboard-card ${
-              estoqueBaixoQuery.isFetching ? "card-fetching" : ""
-            }`}
-          >
-            <div className="card-header">
-              <h2>
-                <FaExclamationTriangle className="header-icon" /> Produtos com
-                Estoque Baixo
-                {estoqueBaixoQuery.isError && (
-                  <span
-                    className="error-badge"
-                    title={
-                      estoqueBaixoQuery.error?.message ||
-                      "Erro ao carregar dados"
-                    }
-                  >
-                    !
-                  </span>
-                )}
-              </h2>
-              <Link to="/produtos" className="btn-sm">
-                <FaPlus /> Repor Estoque
-              </Link>
-            </div>
-
-            <div className="table-responsive">
-              <table className="dashboard-table">
-                <thead>
-                  <tr>
-                    <th>Produto</th>
-                    <th>Local</th>
-                    <th>Estoque</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {estoqueBaixoQuery.data?.length > 0 ? (
-                    estoqueBaixoQuery.data.map((produto, index) => {
-                      // Normalizar campos para diferentes formatos de API
-                      const nome = produto.nome || produto.name;
-                      const local =
-                        produto.local ||
-                        produto.location ||
-                        "Depósito Principal";
-                      const estoqueAtual =
-                        produto.estoqueAtual || produto.currentStock || 0;
-                      const estoqueMinimo =
-                        produto.estoqueMinimo || produto.minStock || 5;
-
-                      // Determinar status
-                      let statusClass;
-                      let statusText;
-
-                      if (estoqueAtual === 0) {
-                        statusClass = "esgotado";
-                        statusText = "Esgotado";
-                      } else if (estoqueAtual <= estoqueMinimo / 2) {
-                        statusClass = "critico";
-                        statusText = "Crítico";
-                      } else {
-                        statusClass = "baixo";
-                        statusText = "Baixo";
-                      }
-
-                      return (
-                        <tr key={produto.id || produto._id || index}>
-                          <td>{nome}</td>
-                          <td>{local}</td>
-                          <td>
-                            {estoqueAtual} / {estoqueMinimo}
-                          </td>
-                          <td>
-                            <span className={`status-badge ${statusClass}`}>
-                              {statusText}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan="4" className="no-data">
-                        {estoqueBaixoQuery.isFetching
-                          ? "Carregando..."
-                          : "Nenhum produto com estoque baixo"}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Distribuição por Categoria */}
-          <div
-            className={`dashboard-card ${
-              categoriasQuery.isFetching ? "card-fetching" : ""
-            }`}
-          >
-            <div className="card-header">
-              <h2>
-                <FaChartPie className="header-icon" /> Distribuição por
-                Categoria
-                {categoriasQuery.isError && (
-                  <span
-                    className="error-badge"
-                    title={
-                      categoriasQuery.error?.message || "Erro ao carregar dados"
-                    }
-                  >
-                    !
-                  </span>
-                )}
-              </h2>
-            </div>
-
-            <div className="categorias-container">
-              {categoriasQuery.data?.length > 0 ? (
-                <div className="categorias-grid">
-                  {categoriasQuery.data.map((categoria, index) => {
-                    // Normalizar campos para diferentes formatos de API
-                    const nome = categoria.nome || categoria.name;
-                    const quantidade =
-                      categoria.quantidade || categoria.count || 0;
-
-                    const total = categoriasQuery.data.reduce(
-                      (sum, cat) => sum + (cat.quantidade || cat.count || 0),
-                      0
-                    );
-                    const percentual = Math.round(
-                      (quantidade / Math.max(total, 1)) * 100
-                    );
-
-                    // Array de cores para as categorias
-                    const cores = [
-                      "#3498db",
-                      "#2ecc71",
-                      "#9b59b6",
-                      "#f39c12",
-                      "#e74c3c",
-                      "#1abc9c",
-                      "#34495e",
-                      "#d35400",
-                      "#16a085",
-                      "#8e44ad",
-                    ];
-
-                    return (
-                      <div
-                        className="categoria-item"
-                        key={categoria.id || categoria._id || index}
-                      >
-                        <div className="categoria-info">
-                          <div
-                            className="categoria-cor"
-                            style={{
-                              backgroundColor: cores[index % cores.length],
-                            }}
-                          ></div>
-                          <span className="categoria-nome">{nome}</span>
-                        </div>
-                        <div className="categoria-dados">
-                          <span className="categoria-contagem">
-                            {quantidade}
-                          </span>
-                          <span className="categoria-percentual">
-                            {percentual}%
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="no-data">
-                  {categoriasQuery.isFetching
-                    ? "Carregando categorias..."
-                    : "Nenhuma categoria encontrada"}
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Distribuição por Categoria - usando CategoryDistribution component */}
+          <CategoryDistribution 
+            categorias={categoriasQuery.data || []}
+            loading={categoriasQuery.isFetching && !categoriasQuery.data}
+            error={categoriasQuery.isError ? categoriasQuery.error : null}
+          />
         </div>
 
         <div className="dashboard-section">
-          {/* Movimentações Recentes */}
-          <div
-            className={`dashboard-card ${
-              movimentacoesQuery.isFetching ? "card-fetching" : ""
-            }`}
-          >
-            <div className="card-header">
-              <h2>
-                <FaExchangeAlt className="header-icon" /> Movimentações Recentes
-                {movimentacoesQuery.isError && (
-                  <span
-                    className="error-badge"
-                    title={
-                      movimentacoesQuery.error?.message ||
-                      "Erro ao carregar dados"
-                    }
-                  >
-                    !
-                  </span>
-                )}
-              </h2>
-              <Link to="/movimentacao" className="btn-sm">
-                <FaExchangeAlt /> Nova Movimentação
-              </Link>
-            </div>
-
-            <div className="movimentacoes-list">
-              {movimentacoesQuery.data?.length > 0 ? (
-                movimentacoesQuery.data.map((mov, index) => {
-                  // Normalizar campos para diferentes formatos de API
-                  const tipo = mov.tipo || mov.type;
-                  const produtoNome =
-                    mov.produto?.nome || mov.produtoNome || mov.productName;
-                  const quantidade = mov.quantidade || mov.quantity;
-                  const localOrigem =
-                    mov.localOrigem || mov.origem || mov.origin;
-                  const localDestino =
-                    mov.localDestino || mov.destino || mov.destination;
-                  const data = mov.data || mov.date || new Date().toISOString();
-                  const local = mov.local || mov.location;
-
-                  // Determinar o tipo de movimentação e ícone
-                  let tipoClass;
-                  let icone;
-                  let tipoTexto;
-
-                  switch (tipo) {
-                    case "transferencia":
-                    case "transfer":
-                      tipoClass = "transferencia";
-                      icone = <FaExchangeAlt />;
-                      tipoTexto = "Transferência";
-                      break;
-                    case "venda":
-                    case "sale":
-                      tipoClass = "venda";
-                      icone = <FaArrowUp />;
-                      tipoTexto = "Venda";
-                      break;
-                    case "entrada":
-                    case "entry":
-                      tipoClass = "entrada";
-                      icone = <FaArrowDown />;
-                      tipoTexto = "Entrada";
-                      break;
-                    default:
-                      tipoClass = "outro";
-                      icone = <FaExchangeAlt />;
-                      tipoTexto = "Movimentação";
-                  }
-
-                  return (
-                    <div
-                      className="movimentacao-item"
-                      key={mov.id || mov._id || index}
-                    >
-                      <div className={`movimentacao-tipo ${tipoClass}`}>
-                        {icone}
-                      </div>
-
-                      <div className="movimentacao-info">
-                        <h4>{tipoTexto}</h4>
-                        <p className="produto">{produtoNome}</p>
-                        <p className="detalhes">
-                          {tipoClass === "transferencia"
-                            ? `${localOrigem} → ${localDestino}`
-                            : `${
-                                localOrigem || local || "Local não especificado"
-                              }`}
-                        </p>
-                      </div>
-
-                      <div className="movimentacao-quantidade">
-                        <span className="quantidade">{quantidade}</span>
-                        <span className="data">{formatarData(data)}</span>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="no-data">
-                  {movimentacoesQuery.isFetching
-                    ? "Carregando movimentações..."
-                    : "Nenhuma movimentação recente"}
-                </div>
-              )}
-            </div>
-
-            <Link to="/historico" className="ver-tudo-link">
-              Ver todas as transações
-            </Link>
-          </div>
-
-          {/* Componente "Últimas Transações" foi removido conforme solicitado */}
-          
+          {/* Movimentações Recentes - usando RecentActivity component */}
+          <RecentActivity 
+            movimentacoes={movimentacoesQuery.data || []}
+            loading={movimentacoesQuery.isFetching && !movimentacoesQuery.data}
+            error={movimentacoesQuery.isError ? movimentacoesQuery.error : null}
+            onRefresh={refreshAllData}
+          />
         </div>
       </div>
     </div>
   );
 };
 
-export default DashboardWithQueryProvider;
+export default Dashboard;

@@ -1,0 +1,217 @@
+/**
+ * StockAlerts CSS - Estilos do componente de alertas
+ */
+
+.stock-alerts-card {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  height: fit-content;
+}
+
+.stock-alerts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e3e6f0;
+}
+
+.stock-alerts-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #EF4444;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stock-alerts-header .header-icon {
+  color: #EF4444;
+}
+
+.btn-add {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  background-color: #2563EB;
+  color: white;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-add:hover {
+  background-color: #1D4ED8;
+}
+
+.stock-alerts-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.stock-alerts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stock-alerts-table th,
+.stock-alerts-table td {
+  padding: 10px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.stock-alerts-table th {
+  font-weight: 500;
+  color: #6B7280;
+  border-bottom: 1px solid #e3e6f0;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.stock-alerts-table td {
+  font-size: 14px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.stock-alerts-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.produto-nome {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.produto-local {
+  color: #6B7280;
+}
+
+.produto-quantidade {
+  font-weight: 600;
+  text-align: center;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.esgotado {
+  background-color: #EF4444;
+  color: white;
+  animation: pulse-alert 2s infinite;
+}
+
+.status-badge.critico {
+  background-color: #F97316;
+  color: white;
+  animation: pulse-alert 3s infinite;
+}
+
+.status-badge.baixo {
+  background-color: #F59E0B;
+  color: white;
+}
+
+.status-badge.normal {
+  background-color: #10B981;
+  color: white;
+}
+
+@keyframes pulse-alert {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.stock-alerts-empty {
+  text-align: center;
+  padding: 30px 20px;
+  color: #6B7280;
+}
+
+.stock-alerts-footer-link {
+  display: block;
+  text-align: center;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e3e6f0;
+  color: #2563EB;
+  font-size: 14px;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.stock-alerts-footer-link:hover {
+  color: #1D4ED8;
+  text-decoration: underline;
+}
+
+.stock-alerts-error {
+  border: 1px solid #FEE2E2;
+}
+
+.stock-alerts-error-content {
+  text-align: center;
+  padding: 30px 20px;
+  color: #B91C1C;
+}
+
+.btn-retry {
+  margin-top: 10px;
+  padding: 8px 16px;
+  background-color: #2563EB;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn-retry:hover {
+  background-color: #1D4ED8;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  .stock-alerts-table th,
+  .stock-alerts-table td {
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+
+  .produto-nome {
+    max-width: 100px;
+  }
+
+  .status-badge {
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+}
+
+/* Respeita preferência de movimento reduzido */
+@media (prefers-reduced-motion: reduce) {
+  .status-badge.esgotado,
+  .status-badge.critico {
+    animation: none;
+  }
+}

@@ -1,0 +1,98 @@
+/**
+ * ExportButtons CSS - Estilos dos botões de exportação
+ */
+
+.export-buttons {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+}
+
+.export-buttons h4 {
+  margin: 0 0 15px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1F2937;
+}
+
+.export-buttons-group {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-export {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-export:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-export-pdf {
+  background-color: #EF4444;
+  color: white;
+}
+
+.btn-export-pdf:hover:not(:disabled) {
+  background-color: #DC2626;
+}
+
+.btn-export-csv {
+  background-color: #10B981;
+  color: white;
+}
+
+.btn-export-csv:hover:not(:disabled) {
+  background-color: #059669;
+}
+
+.export-hint {
+  margin: 15px 0 0 0;
+  font-size: 12px;
+  color: #6B7280;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.export-hint svg {
+  color: #9CA3AF;
+}
+
+/* Spinner animation */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsivo */
+@media (max-width: 576px) {
+  .export-buttons-group {
+    flex-direction: column;
+  }
+
+  .btn-export {
+    width: 100%;
+  }
+}

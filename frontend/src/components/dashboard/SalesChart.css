@@ -1,0 +1,198 @@
+/**
+ * SalesChart CSS - Estilos do componente de gráfico de vendas
+ */
+
+.sales-chart-card {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  height: fit-content;
+}
+
+.sales-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e3e6f0;
+}
+
+.sales-chart-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #F59E0B;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sales-chart-header .header-icon {
+  color: #F59E0B;
+}
+
+.btn-ver-relatorio {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  background-color: #F59E0B;
+  color: white;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-ver-relatorio:hover {
+  background-color: #D97706;
+}
+
+.sales-chart-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sales-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sales-rank {
+  flex-shrink: 0;
+}
+
+.rank-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  background-color: #f3f4f6;
+  color: #6B7280;
+}
+
+.rank-badge.rank-gold {
+  background: linear-gradient(135deg, #FCD34D, #F59E0B);
+  color: white;
+}
+
+.rank-badge.rank-silver {
+  background: linear-gradient(135deg, #D1D5DB, #9CA3AF);
+  color: white;
+}
+
+.rank-badge.rank-bronze {
+  background: linear-gradient(135deg, #D97706, #B45309);
+  color: white;
+}
+
+.sales-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sales-produto-nome {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1F2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sales-bar-container {
+  width: 100%;
+  height: 8px;
+  background-color: #f3f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.sales-bar {
+  height: 100%;
+  border-radius: 4px;
+  background-color: #10B981;
+  transition: width 0.5s ease;
+}
+
+.sales-bar.rank-gold {
+  background: linear-gradient(90deg, #FCD34D, #F59E0B);
+}
+
+.sales-bar.rank-silver {
+  background: linear-gradient(90deg, #D1D5DB, #9CA3AF);
+}
+
+.sales-bar.rank-bronze {
+  background: linear-gradient(90deg, #D97706, #B45309);
+}
+
+.sales-count {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 60px;
+}
+
+.sales-number {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.sales-label {
+  font-size: 11px;
+  color: #9CA3AF;
+}
+
+.sales-chart-empty {
+  text-align: center;
+  padding: 30px 20px;
+  color: #6B7280;
+}
+
+.sales-chart-error {
+  border: 1px solid #FEE2E2;
+}
+
+.sales-chart-error-content {
+  text-align: center;
+  padding: 30px 20px;
+  color: #B91C1C;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  .sales-item {
+    gap: 10px;
+  }
+
+  .rank-badge {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+  }
+
+  .sales-produto-nome {
+    font-size: 13px;
+  }
+
+  .sales-number {
+    font-size: 16px;
+  }
+
+  .btn-ver-relatorio {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+}
