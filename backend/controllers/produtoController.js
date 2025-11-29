@@ -647,7 +647,8 @@ exports.obterUltimasTransacoes = async (req, res) => {
 };
 
 // Endpoint otimizado para busca em dropdowns/autocomplete
-// Retorna apenas _id e nome para melhor performance
+// Retorna apenas campos essenciais para melhor performance
+// Default limit: 50 results (sufficient for most autocomplete use cases)
 exports.buscarProdutosParaSelecao = async (req, res) => {
   try {
     const { busca, tipo, categoria, subcategoria, limit = 50 } = req.query;
@@ -669,7 +670,7 @@ exports.buscarProdutosParaSelecao = async (req, res) => {
     
     // Limitar resultado e retornar apenas campos essenciais
     const produtos = await Produto.find(filtro)
-      .select('_id id nome tipo categoria subcategoria imagemUrl')
+      .select('_id id nome tipo categoria subcategoria')
       .sort({ nome: 1 })
       .limit(parseInt(limit))
       .lean();
