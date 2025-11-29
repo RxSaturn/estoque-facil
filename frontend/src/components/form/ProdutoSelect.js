@@ -8,16 +8,19 @@ import "./ProdutoSelect.css";
  * Otimizado para buscar produtos conforme o usuário digita
  * 
  * @param {Object} props
- * @param {string} props.id - ID do elemento
- * @param {string} props.name - Nome do campo para formulário
- * @param {string} props.value - ID do produto selecionado
+ * @param {string} [props.id="produto-select"] - ID do elemento
+ * @param {string} [props.name="produto"] - Nome do campo para formulário
+ * @param {string} [props.value=""] - ID do produto selecionado
  * @param {Function} props.onChange - Callback quando um produto é selecionado
- * @param {Object} props.selectedProduct - Objeto do produto selecionado (opcional)
- * @param {Function} props.onProductSelect - Callback com o objeto completo do produto selecionado
- * @param {boolean} props.disabled - Se o campo está desabilitado
- * @param {string} props.placeholder - Texto placeholder
- * @param {boolean} props.required - Se o campo é obrigatório
- * @param {number} props.debounceMs - Tempo de debounce em milissegundos (padrão: 300)
+ * @param {Object} [props.selectedProduct=null] - Objeto do produto selecionado (opcional)
+ * @param {Function} [props.onProductSelect] - Callback com o objeto completo do produto selecionado
+ * @param {boolean} [props.disabled=false] - Se o campo está desabilitado
+ * @param {string} [props.placeholder="Digite para buscar produtos..."] - Texto placeholder
+ * @param {boolean} [props.required=false] - Se o campo é obrigatório
+ * @param {number} [props.debounceMs=300] - Tempo de debounce em milissegundos.
+ *        Valores recomendados: 200-500ms. Valores menores aumentam carga na API.
+ * @param {number} [props.minSearchLength=2] - Número mínimo de caracteres para iniciar a busca.
+ *        Pode ser ajustado para 1 em casos onde caracteres únicos são significativos.
  */
 const ProdutoSelect = ({
   id = "produto-select",
@@ -30,6 +33,7 @@ const ProdutoSelect = ({
   placeholder = "Digite para buscar produtos...",
   required = false,
   debounceMs = 300,
+  minSearchLength = 2,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [options, setOptions] = useState([]);
@@ -75,7 +79,7 @@ const ProdutoSelect = ({
 
   // Search products with debounce
   const searchProducts = useCallback(async (query) => {
-    if (!query || query.trim().length < 2) {
+    if (!query || query.trim().length < minSearchLength) {
       setOptions([]);
       setIsLoading(false);
       return;
@@ -98,7 +102,7 @@ const ProdutoSelect = ({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [minSearchLength]);
 
   // Handle search term change with debounce
   const handleSearchChange = useCallback((e) => {
@@ -207,11 +211,11 @@ const ProdutoSelect = ({
   const handleFocus = useCallback(() => {
     if (!disabled) {
       setIsOpen(true);
-      if (searchTerm.length >= 2 && options.length === 0) {
+      if (searchTerm.length >= minSearchLength && options.length === 0) {
         searchProducts(searchTerm);
       }
     }
-  }, [disabled, searchTerm, options.length, searchProducts]);
+  }, [disabled, searchTerm, minSearchLength, options.length, searchProducts]);
 
   // Get stock status
   const getStockStatus = (estoque) => {
@@ -318,13 +322,13 @@ const ProdutoSelect = ({
                 );
               })}
             </ul>
-          ) : searchTerm.length >= 2 ? (
+          ) : searchTerm.length >= minSearchLength ? (
             <div className="dropdown-empty">
               <span>Nenhum produto encontrado</span>
             </div>
           ) : searchTerm.length > 0 ? (
             <div className="dropdown-hint">
-              <span>Digite pelo menos 2 caracteres para buscar</span>
+              <span>Digite pelo menos {minSearchLength} caractere{minSearchLength !== 1 ? 's' : ''} para buscar</span>
             </div>
           ) : (
             <div className="dropdown-hint">

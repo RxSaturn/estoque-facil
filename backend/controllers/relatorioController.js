@@ -1170,7 +1170,10 @@ async function calcularEstatisticas(
                 totalTransacoes: { $sum: 1 },
               },
             },
-            { $sort: { [metodoCalculo === "transacoes" ? "totalTransacoes" : "totalQuantidade"]: -1 } },
+            // Sort by transactions or quantity based on the calculation method
+            metodoCalculo === "transacoes"
+              ? { $sort: { totalTransacoes: -1 } }
+              : { $sort: { totalQuantidade: -1 } },
             { $limit: 1 },
           ],
         },

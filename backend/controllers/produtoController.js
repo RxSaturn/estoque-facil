@@ -651,6 +651,10 @@ exports.buscarProdutos = async (req, res) => {
   try {
     const { q = "", limit = 20 } = req.query;
 
+    // Validate and sanitize limit parameter (prevent DoS, enforce max of 50)
+    const MAX_LIMIT = 50;
+    const sanitizedLimit = Math.min(Math.max(1, parseInt(limit) || 20), MAX_LIMIT);
+
     // Build search filter
     const filtro = {};
     if (q && q.trim()) {
@@ -664,7 +668,7 @@ exports.buscarProdutos = async (req, res) => {
     const produtos = await Produto.find(filtro)
       .select("_id id nome")
       .sort({ nome: 1 })
-      .limit(parseInt(limit))
+      .limit(sanitizedLimit)
       .lean();
 
     // Get stock information for each product
