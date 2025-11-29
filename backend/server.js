@@ -36,6 +36,10 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 
+// Configurar proxy trust para funcionar corretamente atrás de proxies reversos
+// (evita erros de ValidationError com headers X-Forwarded-For)
+app.set('trust proxy', 1);
+
 // Middlewares de segurança
 app.use(helmet());
 app.use(cors());
