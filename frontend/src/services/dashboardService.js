@@ -680,6 +680,7 @@ const getLowStockProductsLegacy = async () => {
 };
 
 // Obter distribuição de categorias com cache
+// Otimizado para usar endpoint dedicado com MongoDB Aggregation Pipeline
 export const getCategoryDistribution = async (useCache = true) => {
   const cacheKey = "categoryDistribution";
   
@@ -693,48 +694,20 @@ export const getCategoryDistribution = async (useCache = true) => {
     console.log("🔍 Iniciando busca de distribuição de categorias");
 
     const result = await withRetry(async () => {
-      // Buscar produtos com timeout
-      const response = await withTimeout(api.get("/api/produtos"));
+      // Usar endpoint dedicado que retorna dados já agregados pelo MongoDB
+      const response = await withTimeout(api.get("/api/dashboard/categories"));
 
-      // Processar produtos
-      let produtos = [];
-      if (response?.data) {
-        if (Array.isArray(response.data)) {
-          produtos = response.data;
-        } else if (
-          response.data.produtos &&
-          Array.isArray(response.data.produtos)
-        ) {
-          produtos = response.data.produtos;
-        }
+      // Processar resposta do endpoint otimizado
+      let categorias = [];
+      if (response?.data?.categorias && Array.isArray(response.data.categorias)) {
+        categorias = response.data.categorias;
+      } else if (Array.isArray(response?.data)) {
+        categorias = response.data;
       }
 
-      console.log(`✅ Produtos analisados para categorias: ${produtos.length}`);
+      console.log(`✅ Categorias obtidas do servidor: ${categorias.length}`);
 
-      // Se não houver produtos, retornar array vazio
-      if (produtos.length === 0) {
-        return [];
-      }
-
-      // Agrupar por categoria
-      const categorias = {};
-      produtos.forEach((produto) => {
-        const categoria = produto.categoria || "Sem categoria";
-
-        if (!categorias[categoria]) {
-          categorias[categoria] = 0;
-        }
-
-        categorias[categoria]++;
-      });
-
-      // Converter para array e ordenar
-      return Object.keys(categorias)
-        .map((categoria) => ({
-          nome: categoria,
-          quantidade: categorias[categoria],
-        }))
-        .sort((a, b) => b.quantidade - a.quantidade);
+      return categorias;
     }, CONFIG.MAX_RETRIES, "distribuição de categorias");
     
     // Armazenar no cache
