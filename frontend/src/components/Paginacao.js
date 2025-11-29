@@ -6,7 +6,8 @@ const Paginacao = ({
   totalItems, 
   onPageChange, 
   onItemsPerPageChange,
-  pageName // identificador único para persistência 
+  pageName, // identificador único para persistência
+  pagina // prop externa para sincronizar a página atual
 }) => {
   const itemsPerPageOptions = [10, 20, 30, 50];
   
@@ -29,6 +30,13 @@ const Paginacao = ({
   
   const [prefs, setPrefs] = useState(loadUserPrefs());
   const { currentPage, itemsPerPage } = prefs;
+  
+  // Sincronizar com prop externa quando ela mudar (ex: ao filtrar)
+  useEffect(() => {
+    if (pagina !== undefined && pagina !== currentPage) {
+      setPrefs(prev => ({ ...prev, currentPage: pagina }));
+    }
+  }, [pagina, currentPage]);
   
   // Calcular total de páginas
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));

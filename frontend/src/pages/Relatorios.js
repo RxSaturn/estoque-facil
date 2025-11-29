@@ -375,6 +375,35 @@ const Relatorios = () => {
 
   const gerarRelatorio = (e) => {
     e.preventDefault();
+    
+    // Validação de datas antes de gerar o relatório
+    if (!filtros.dataInicio || !filtros.dataFim) {
+      toast.error("Por favor, selecione as datas de início e fim.", {
+        toastId: 'date-validation-error',
+      });
+      return;
+    }
+    
+    const dataInicio = new Date(filtros.dataInicio);
+    const dataFim = new Date(filtros.dataFim);
+    
+    if (dataInicio > dataFim) {
+      toast.error("A data inicial não pode ser posterior à data final.", {
+        toastId: 'date-range-error',
+      });
+      return;
+    }
+    
+    // Verificar se o período é muito grande (mais de 1 ano pode ser lento)
+    const diffTime = Math.abs(dataFim - dataInicio);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays > 365) {
+      toast.warning("Período muito extenso. O relatório pode demorar para carregar.", {
+        toastId: 'long-period-warning',
+      });
+    }
+    
     carregarResumo();
   };
 
@@ -432,16 +461,17 @@ const Relatorios = () => {
       setGerandoPDF(true);
 
       // Construir query string com filtros
-      let query = `dataInicio=${filtros.dataInicio}&dataFim=${filtros.dataFim}`;
-      if (filtros.tipo) query += `&tipo=${filtros.tipo}`;
-      if (filtros.categoria) query += `&categoria=${filtros.categoria}`;
+      let query = `dataInicio=${encodeURIComponent(filtros.dataInicio)}&dataFim=${encodeURIComponent(filtros.dataFim)}`;
+      if (filtros.tipo) query += `&tipo=${encodeURIComponent(filtros.tipo)}`;
+      if (filtros.categoria) query += `&categoria=${encodeURIComponent(filtros.categoria)}`;
       if (filtros.subcategoria)
-        query += `&subcategoria=${filtros.subcategoria}`;
-      if (filtros.local) query += `&local=${filtros.local}`;
-      query += `&metodoCalculo=${metodoCalculo}`;
+        query += `&subcategoria=${encodeURIComponent(filtros.subcategoria)}`;
+      if (filtros.local) query += `&local=${encodeURIComponent(filtros.local)}`;
+      query += `&metodoCalculo=${encodeURIComponent(metodoCalculo)}`;
 
       const resposta = await api.get(`/api/relatorios/pdf?${query}`, {
         responseType: "blob",
+        timeout: 60000, // 60 segundos para PDFs grandes
       });
 
       // Criar objeto URL para o blob
@@ -467,7 +497,25 @@ const Relatorios = () => {
       toast.success("Relatório gerado com sucesso!");
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);
-      toast.error("Erro ao gerar PDF. Tente novamente.");
+      
+      // Tratamento de erros específicos para download de PDF
+      if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+        toast.error("O relatório está demorando muito. Tente filtrar por um período menor.", {
+          toastId: 'pdf-timeout-error',
+        });
+      } else if (error.response?.status === 404) {
+        toast.error("Nenhum dado encontrado para gerar o relatório.", {
+          toastId: 'pdf-nodata-error',
+        });
+      } else if (error.response?.status >= 500) {
+        toast.error("Erro no servidor ao gerar PDF. Tente novamente mais tarde.", {
+          toastId: 'pdf-server-error',
+        });
+      } else {
+        toast.error("Erro ao gerar PDF. Verifique sua conexão e tente novamente.", {
+          toastId: 'pdf-generic-error',
+        });
+      }
     } finally {
       setGerandoPDF(false);
     }

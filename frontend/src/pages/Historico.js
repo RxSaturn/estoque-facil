@@ -1084,6 +1084,7 @@ const Historico = () => {
                   onPageChange={handleVendasPageChange}
                   onItemsPerPageChange={handleVendasItemsPerPageChange}
                   pageName="historico_vendas"
+                  pagina={paginacaoVendas.currentPage}
                 />
               </>
             ) : (
@@ -1224,6 +1225,7 @@ const Historico = () => {
                   onPageChange={handleMovimentacoesPageChange}
                   onItemsPerPageChange={handleMovimentacoesItemsPerPageChange}
                   pageName="historico_movimentacoes"
+                  pagina={paginacaoMovimentacoes.currentPage}
                 />
               </>
             ) : (

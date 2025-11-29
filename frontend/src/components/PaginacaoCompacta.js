@@ -11,6 +11,7 @@ const PaginacaoCompacta = ({
   onPageChange,
   itemsPerPage = 20,
   pageName,
+  pagina, // prop externa para sincronizar a página atual
 }) => {
   // Carregar preferências do usuário do localStorage
   const loadUserPrefs = useCallback(() => {
@@ -51,6 +52,13 @@ const PaginacaoCompacta = ({
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [pageName, loadUserPrefs]);
+
+  // Sincronizar com prop externa quando ela mudar (ex: ao filtrar)
+  useEffect(() => {
+    if (pagina !== undefined && pagina !== currentPage) {
+      setPrefs(prev => ({ ...prev, currentPage: pagina }));
+    }
+  }, [pagina, currentPage]);
 
   // Manipuladores de eventos
   const changePage = useCallback((page) => {

@@ -518,6 +518,7 @@ const Produtos = () => {
             onPageChange={handlePageChange}
             itemsPerPage={paginacao.itemsPerPage}
             pageName="produtos"
+            pagina={paginacao.currentPage}
           />
         )}
       </div>
@@ -529,6 +530,7 @@ const Produtos = () => {
           onPageChange={handlePageChange}
           onItemsPerPageChange={handleItemsPerPageChange}
           pageName="produtos_top"
+          pagina={paginacao.currentPage}
         />
       )}
 
@@ -625,6 +627,7 @@ const Produtos = () => {
               onPageChange={handlePageChange}
               onItemsPerPageChange={handleItemsPerPageChange}
               pageName="produtos"
+              pagina={paginacao.currentPage}
             />
           )}
         </>
