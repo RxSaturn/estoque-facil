@@ -1,0 +1,122 @@
+/**
+ * Theme CSS - Estoque Fácil
+ * CSS variables for consistent design system
+ * This file complements design-system.css with additional theming variables
+ */
+
+:root {
+  /* ===== Theme Colors ===== */
+  --theme-primary: var(--color-primary, #2563EB);
+  --theme-primary-hover: var(--color-primary-hover, #1D4ED8);
+  --theme-primary-light: var(--color-primary-light, #DBEAFE);
+  
+  --theme-secondary: #6366F1;
+  --theme-secondary-hover: #4F46E5;
+  --theme-secondary-light: #E0E7FF;
+
+  /* ===== Component-specific colors ===== */
+  --input-border-color: var(--color-border, #E5E7EB);
+  --input-focus-border-color: var(--color-primary, #2563EB);
+  --input-focus-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  --input-background: var(--color-surface, #FFFFFF);
+  --input-placeholder-color: var(--color-text-muted, #9CA3AF);
+  
+  /* ===== Dropdown/Select specific ===== */
+  --dropdown-background: var(--color-surface, #FFFFFF);
+  --dropdown-border-color: var(--color-border, #E5E7EB);
+  --dropdown-shadow: var(--shadow-lg);
+  --dropdown-item-hover: var(--color-background, #F3F4F6);
+  --dropdown-item-selected: var(--color-primary-light, #DBEAFE);
+  --dropdown-max-height: 280px;
+  
+  /* ===== Autocomplete/Search component ===== */
+  --autocomplete-min-width: 300px;
+  --autocomplete-item-padding: 10px 12px;
+  --autocomplete-loading-color: var(--color-text-muted, #9CA3AF);
+  --autocomplete-highlight-bg: #FEF3C7;
+  
+  /* ===== Card styling ===== */
+  --card-background: var(--color-surface, #FFFFFF);
+  --card-border-radius: var(--radius-lg, 0.75rem);
+  --card-shadow: var(--shadow-md);
+  --card-padding: var(--spacing-lg, 1.5rem);
+  
+  /* ===== Form elements ===== */
+  --form-group-gap: var(--spacing-md, 1rem);
+  --form-label-color: var(--color-text-primary, #1F2937);
+  --form-label-font-weight: var(--font-weight-medium, 500);
+  
+  /* ===== Animation timings ===== */
+  --animation-fast: 150ms;
+  --animation-normal: 250ms;
+  --animation-slow: 400ms;
+  
+  /* ===== Responsive breakpoints (for reference) ===== */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+}
+
+/* ===== Form Input Consistent Styling ===== */
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--input-border-color);
+  border-radius: var(--radius-md, 0.5rem);
+  background-color: var(--input-background);
+  font-size: var(--font-size-sm, 0.875rem);
+  color: var(--color-text-primary);
+  transition: border-color var(--animation-fast) ease, 
+              box-shadow var(--animation-fast) ease;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--input-focus-border-color);
+  box-shadow: var(--input-focus-shadow);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: var(--input-placeholder-color);
+}
+
+.form-input:disabled,
+.form-select:disabled,
+.form-textarea:disabled {
+  background-color: var(--color-background-alt, #F9FAFB);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* ===== Loading states ===== */
+.loading-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-background) 0%,
+    var(--color-surface) 50%,
+    var(--color-background) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ===== Focus visible improvements ===== */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

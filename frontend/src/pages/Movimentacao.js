@@ -5,16 +5,14 @@ import {
   FaExchangeAlt,
   FaBoxOpen,
   FaArrowRight,
-  FaSearch,
   FaPlus,
   FaTrash,
   FaShoppingCart,
-  FaFilter,
-  FaTimes,
   FaBoxes,
 } from "react-icons/fa";
 import api from "../services/api";
 import { toast } from "react-toastify";
+import ProdutoSelect from "../components/form/ProdutoSelect";
 import "./Movimentacao.css";
 
 const Movimentacao = () => {
@@ -46,21 +44,7 @@ const Movimentacao = () => {
     observacao: "",
   });
 
-  // Estados para busca e filtros
-  const [produtoBusca, setProdutoBusca] = useState("");
-  const [filtroAvancado, setFiltroAvancado] = useState(false);
-  const [filtros, setFiltros] = useState({
-    tipo: "",
-    categoria: "",
-    subcategoria: "",
-  });
-
-  // Dados para formulários e filtros
-  const [produtos, setProdutos] = useState([]);
-  const [produtosFiltrados, setProdutosFiltrados] = useState([]);
-  const [tipos, setTipos] = useState([]);
-  const [categorias, setCategorias] = useState([]);
-  const [subcategorias, setSubcategorias] = useState([]);
+  // Dados para formulários
   const [locais, setLocais] = useState([]);
   const [estoqueOrigem, setEstoqueOrigem] = useState(0);
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
@@ -70,20 +54,11 @@ const Movimentacao = () => {
   // Para vendas múltiplas
   const [carrinhoProdutos, setCarrinhoProdutos] = useState([]);
 
-  // Carregar produtos e locais ao montar o componente
+  // Carregar locais ao montar o componente
   useEffect(() => {
     const carregarDados = async () => {
       try {
         setCarregando(true);
-
-        // Carregar produtos
-        const resProdutos = await api.get("/api/produtos");
-        const produtosCarregados = resProdutos.data.produtos || [];
-        setProdutos(produtosCarregados);
-        setProdutosFiltrados(produtosCarregados);
-
-        // Extrair opções de filtros dos produtos
-        extrairOpcoesFiltro(produtosCarregados);
 
         // Carregar locais
         const resLocais = await api.get("/api/estoque/locais");
@@ -128,57 +103,6 @@ const Movimentacao = () => {
     carregarDados();
   }, [produtoIdParam, tipoMovimentacaoParam]);
 
-  // Extrair opções de filtro dos produtos
-  const extrairOpcoesFiltro = (produtos) => {
-    const tiposSet = new Set();
-    const categoriasSet = new Set();
-    const subcategoriasSet = new Set();
-
-    produtos.forEach((produto) => {
-      if (produto.tipo) tiposSet.add(produto.tipo);
-      if (produto.categoria) categoriasSet.add(produto.categoria);
-      if (produto.subcategoria) subcategoriasSet.add(produto.subcategoria);
-    });
-
-    setTipos(Array.from(tiposSet).sort());
-    setCategorias(Array.from(categoriasSet).sort());
-    setSubcategorias(Array.from(subcategoriasSet).sort());
-  };
-
-  // Aplicar filtros quando mudam
-  useEffect(() => {
-    filtrarProdutos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [produtoBusca, filtros, produtos]);
-
-  // Filtrar produtos com base nos critérios de busca e filtros
-  const filtrarProdutos = () => {
-    if (!produtos || produtos.length === 0) return;
-
-    const resultados = produtos.filter((produto) => {
-      // Verificar termo de busca
-      const matchBusca =
-        !produtoBusca ||
-        (produto.nome &&
-          produto.nome.toLowerCase().includes(produtoBusca.toLowerCase())) ||
-        (produto.id &&
-          produto.id.toLowerCase().includes(produtoBusca.toLowerCase())) ||
-        (produto.categoria &&
-          produto.categoria.toLowerCase().includes(produtoBusca.toLowerCase()));
-
-      // Verificar filtros avançados
-      const matchTipo = !filtros.tipo || produto.tipo === filtros.tipo;
-      const matchCategoria =
-        !filtros.categoria || produto.categoria === filtros.categoria;
-      const matchSubcategoria =
-        !filtros.subcategoria || produto.subcategoria === filtros.subcategoria;
-
-      return matchBusca && matchTipo && matchCategoria && matchSubcategoria;
-    });
-
-    setProdutosFiltrados(resultados);
-  };
-
   // Verificar estoque ao selecionar produto e local origem
   useEffect(() => {
     const verificarEstoque = async () => {
@@ -188,10 +112,6 @@ const Movimentacao = () => {
             `/api/estoque/verificar?produto=${formData.produto}&local=${formData.localOrigem}`
           );
           setEstoqueOrigem(resposta.data.quantidade || 0);
-
-          // Buscar dados do produto selecionado
-          const produtoInfo = produtos.find((p) => p._id === formData.produto);
-          setProdutoSelecionado(produtoInfo);
         } catch (error) {
           console.error("Erro ao verificar estoque:", error);
           setEstoqueOrigem(0);
@@ -202,7 +122,12 @@ const Movimentacao = () => {
     };
 
     verificarEstoque();
-  }, [formData.produto, formData.localOrigem, produtos]);
+  }, [formData.produto, formData.localOrigem]);
+
+  // Handle product selection from ProdutoSelect component
+  const handleProdutoChange = (produto) => {
+    setProdutoSelecionado(produto);
+  };
 
   const handleChangeMovimentacao = (tipo) => {
     setTipoMovimentacao(tipo);
@@ -226,26 +151,6 @@ const Movimentacao = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleBuscaProduto = (e) => {
-    setProdutoBusca(e.target.value);
-  };
-
-  // Atualizar filtros
-  const handleChangeFiltro = (e) => {
-    const { name, value } = e.target;
-    setFiltros((prev) => ({ ...prev, [name]: value }));
-  };
-
-  // Limpar filtros
-  const limparFiltros = () => {
-    setProdutoBusca("");
-    setFiltros({
-      tipo: "",
-      categoria: "",
-      subcategoria: "",
-    });
   };
 
   const adicionarAoCarrinho = () => {
@@ -575,152 +480,25 @@ const Movimentacao = () => {
         </h2>
 
         <form onSubmit={handleSubmit}>
-          {/* Seleção de Produto com Busca e Filtros */}
+          {/* Seleção de Produto com Autocomplete */}
           <div className="produto-selecao">
             <h3>Seleção de Produto</h3>
 
-            <div className="search-filter-container">
-              <div className="search-box">
-                <div className="search-input-wrapper">
-                  <FaSearch className="search-icon" />
-                  <input
-                    type="text"
-                    placeholder="Buscar por nome, ID ou categoria..."
-                    value={produtoBusca}
-                    onChange={handleBuscaProduto}
-                  />
-                </div>
-              </div>
-
-              <div className="filter-controls">
-                <button
-                  type="button"
-                  className={`btn btn-outline filter-btn ${
-                    filtroAvancado ? "active" : ""
-                  }`}
-                  onClick={() => setFiltroAvancado(!filtroAvancado)}
-                >
-                  <FaFilter />{" "}
-                  {filtroAvancado ? "Ocultar Filtros" : "Mostrar Filtros"}
-                </button>
-
-                {(produtoBusca ||
-                  filtros.tipo ||
-                  filtros.categoria ||
-                  filtros.subcategoria) && (
-                  <button
-                    type="button"
-                    className="btn btn-outline clear-btn"
-                    onClick={limparFiltros}
-                  >
-                    <FaTimes /> Limpar Filtros
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Filtros avançados */}
-            {filtroAvancado && (
-              <div className="advanced-filters">
-                <div className="filter-row">
-                  <div className="filter-group">
-                    <label>Tipo</label>
-                    <select
-                      name="tipo"
-                      value={filtros.tipo}
-                      onChange={handleChangeFiltro}
-                    >
-                      <option value="">Todos</option>
-                      {tipos.map((tipo, index) => (
-                        <option key={index} value={tipo}>
-                          {tipo}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="filter-group">
-                    <label>Categoria</label>
-                    <select
-                      name="categoria"
-                      value={filtros.categoria}
-                      onChange={handleChangeFiltro}
-                    >
-                      <option value="">Todas</option>
-                      {categorias.map((categoria, index) => (
-                        <option key={index} value={categoria}>
-                          {categoria}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="filter-group">
-                    <label>Subcategoria</label>
-                    <select
-                      name="subcategoria"
-                      value={filtros.subcategoria}
-                      onChange={handleChangeFiltro}
-                    >
-                      <option value="">Todas</option>
-                      {subcategorias.map((subcategoria, index) => (
-                        <option key={index} value={subcategoria}>
-                          {subcategoria}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className="form-row">
-              <div className="form-group">
+              <div className="form-group" style={{ flex: 2 }}>
                 <label htmlFor="produto">Produto *</label>
-                <select
+                <ProdutoSelect
                   id="produto"
                   name="produto"
                   value={formData.produto}
                   onChange={handleChange}
+                  onProdutoChange={handleProdutoChange}
+                  produtoSelecionado={produtoSelecionado}
+                  placeholder="Buscar produto por nome ou código..."
+                  disabled={Boolean(produtoIdParam && produtoSelecionado)}
                   required={tipoMovimentacao !== "venda"}
-                  disabled={produtoIdParam && produtoSelecionado}
-                >
-                  <option value="">Selecione um produto</option>
-                  {produtosFiltrados.map((produto) => (
-                    <option key={produto._id} value={produto._id}>
-                      {produto.id} - {produto.nome} ({produto.categoria})
-                    </option>
-                  ))}
-                </select>
-                <small>
-                  {produtosFiltrados.length === produtos.length
-                    ? `Mostrando todos os ${produtos.length} produtos`
-                    : `Mostrando ${produtosFiltrados.length} de ${produtos.length} produtos`}
-                </small>
+                />
               </div>
-
-              {produtoSelecionado && (
-                <div className="produto-selecionado">
-                  <div className="produto-info">
-                    <img
-                      src={produtoSelecionado.imagemUrl}
-                      alt={produtoSelecionado.nome}
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = "/placeholder-image.png";
-                      }}
-                    />
-                    <div className="detalhes">
-                      <h4>{produtoSelecionado.nome}</h4>
-                      <p>
-                        {produtoSelecionado.tipo} -{" "}
-                        {produtoSelecionado.categoria} -
-                        {produtoSelecionado.subcategoria}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 

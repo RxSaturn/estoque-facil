@@ -34,6 +34,7 @@ const upload = multer({
 router.get("/tipos", proteger, produtoController.listarTipos);
 router.get("/categorias", proteger, produtoController.listarCategorias);
 router.get("/subcategorias", proteger, produtoController.listarSubcategorias);
+router.get("/buscar", proteger, produtoController.buscarProdutos); // NEW: Optimized autocomplete search
 router.get(
   "/mais-vendidos",
   proteger,

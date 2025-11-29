@@ -17,6 +17,7 @@ import Dashboard from "./pages/Dashboard";
 import { AuthProvider } from "./contexts/AuthContext";
 
 // Importação de estilos
+import "./styles/theme.css";
 import "./styles/design-system.css";
 import "./styles/components.css";
 import "./App.css";

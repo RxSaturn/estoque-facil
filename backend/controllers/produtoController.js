@@ -619,6 +619,72 @@ exports.obterEstatisticas = async (req, res) => {
   }
 };
 
+// Buscar produtos para autocomplete (search-as-you-type)
+// Retorna apenas id, nome, e estoque total para otimização
+exports.buscarProdutos = async (req, res) => {
+  try {
+    const { q = "", limite = 20 } = req.query;
+
+    // Construir filtro de busca
+    const filtro = q
+      ? {
+          $or: [
+            { nome: { $regex: q, $options: "i" } },
+            { id: { $regex: q, $options: "i" } },
+          ],
+        }
+      : {};
+
+    // Buscar produtos com campos mínimos para autocomplete
+    const produtos = await Produto.find(filtro)
+      .select("_id id nome imagemUrl tipo categoria subcategoria")
+      .limit(parseInt(limite))
+      .lean();
+
+    // Buscar estoque para cada produto em paralelo
+    const produtosIds = produtos.map((p) => p._id);
+    const estoques = await Estoque.aggregate([
+      { $match: { produto: { $in: produtosIds } } },
+      {
+        $group: {
+          _id: "$produto",
+          estoqueTotal: { $sum: "$quantidade" },
+        },
+      },
+    ]);
+
+    // Criar mapa de estoque
+    const estoqueMap = {};
+    estoques.forEach((e) => {
+      estoqueMap[e._id.toString()] = e.estoqueTotal;
+    });
+
+    // Combinar produtos com estoque
+    const resultado = produtos.map((p) => ({
+      _id: p._id,
+      id: p.id,
+      nome: p.nome,
+      imagemUrl: p.imagemUrl,
+      tipo: p.tipo,
+      categoria: p.categoria,
+      subcategoria: p.subcategoria,
+      estoque: estoqueMap[p._id.toString()] || 0,
+    }));
+
+    res.json({
+      sucesso: true,
+      produtos: resultado,
+    });
+  } catch (error) {
+    console.error("Erro ao buscar produtos:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao buscar produtos",
+      erro: error.message,
+    });
+  }
+};
+
 exports.obterUltimasTransacoes = async (req, res) => {
   try {
     const limite = parseInt(req.query.limite) || 10;
