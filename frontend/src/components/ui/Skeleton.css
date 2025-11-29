@@ -1,0 +1,67 @@
+/**
+ * Skeleton CSS - Estilos do componente de loading
+ */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-background, #f3f4f6) 25%,
+    var(--color-border-light, #e5e7eb) 50%,
+    var(--color-background, #f3f4f6) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-text {
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.skeleton-text:last-child {
+  margin-bottom: 0;
+}
+
+.skeleton-rectangular {
+  border-radius: 8px;
+}
+
+.skeleton-circular {
+  border-radius: 50%;
+}
+
+.skeleton-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Variantes de tamanho */
+.skeleton-sm {
+  height: 0.75em;
+}
+
+.skeleton-md {
+  height: 1em;
+}
+
+.skeleton-lg {
+  height: 1.5em;
+}
+
+/* Respeita preferência de movimento reduzido */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--color-background, #f3f4f6);
+  }
+}

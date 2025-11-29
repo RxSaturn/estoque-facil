@@ -1,0 +1,216 @@
+/**
+ * RecentActivity CSS - Estilos do componente de atividades recentes
+ */
+
+.recent-activity-card {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  height: fit-content;
+}
+
+.recent-activity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e3e6f0;
+}
+
+.recent-activity-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #8B5CF6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recent-activity-header .header-icon {
+  color: #8B5CF6;
+}
+
+.recent-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.activity-item:hover {
+  background-color: #f3f4f6;
+}
+
+.activity-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 15px;
+  flex-shrink: 0;
+}
+
+.activity-icon.transferencia {
+  background-color: rgba(139, 92, 246, 0.15);
+  color: #8B5CF6;
+}
+
+.activity-icon.venda {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #EF4444;
+}
+
+.activity-icon.entrada {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+}
+
+.activity-icon.saida {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #F59E0B;
+}
+
+.activity-icon.outro {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #3B82F6;
+}
+
+.activity-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-info h4 {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1F2937;
+}
+
+.activity-produto {
+  margin: 0;
+  font-size: 13px;
+  color: #4B5563;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-local {
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  color: #9CA3AF;
+}
+
+.activity-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.activity-quantidade {
+  font-weight: 600;
+  font-size: 15px;
+  color: #1F2937;
+}
+
+.activity-data {
+  font-size: 11px;
+  color: #9CA3AF;
+  margin-top: 4px;
+}
+
+.recent-activity-empty {
+  text-align: center;
+  padding: 30px 20px;
+  color: #6B7280;
+}
+
+.recent-activity-footer-link {
+  display: block;
+  text-align: center;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e3e6f0;
+  color: #8B5CF6;
+  font-size: 14px;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.recent-activity-footer-link:hover {
+  color: #7C3AED;
+  text-decoration: underline;
+}
+
+.recent-activity-error {
+  border: 1px solid #FEE2E2;
+}
+
+.recent-activity-error-content {
+  text-align: center;
+  padding: 30px 20px;
+  color: #B91C1C;
+}
+
+.btn-retry {
+  margin-top: 10px;
+  padding: 8px 16px;
+  background-color: #2563EB;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn-retry:hover {
+  background-color: #1D4ED8;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  .activity-item {
+    padding: 10px;
+    flex-wrap: wrap;
+  }
+
+  .activity-icon {
+    width: 36px;
+    height: 36px;
+    margin-right: 12px;
+  }
+
+  .activity-info {
+    min-width: 120px;
+  }
+
+  .activity-info h4 {
+    font-size: 13px;
+  }
+
+  .activity-produto {
+    font-size: 12px;
+  }
+
+  .activity-meta {
+    min-width: 70px;
+  }
+
+  .activity-quantidade {
+    font-size: 14px;
+  }
+}
