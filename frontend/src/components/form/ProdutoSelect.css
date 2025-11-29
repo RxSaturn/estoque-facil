@@ -98,6 +98,18 @@
   background-color: var(--color-surface, #FFFFFF);
 }
 
+.produto-select-img-placeholder {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-background-alt, #F9FAFB);
+  border-radius: var(--radius-sm, 0.25rem);
+  color: var(--color-text-muted, #9CA3AF);
+  flex-shrink: 0;
+}
+
 .produto-select-details {
   display: flex;
   flex-direction: column;

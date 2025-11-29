@@ -95,6 +95,11 @@
 }
 
 /* ===== Loading states ===== */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .loading-shimmer {
   background: linear-gradient(
     90deg,

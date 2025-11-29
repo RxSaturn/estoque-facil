@@ -35,6 +35,7 @@ const ProdutoSelect = ({
   const [carregando, setCarregando] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [produtoSelecionado, setProdutoSelecionado] = useState(produtoInicialProp);
+  const [imagensComErro, setImagensComErro] = useState({});
   
   const containerRef = useRef(null);
   const inputRef = useRef(null);
@@ -47,6 +48,11 @@ const ProdutoSelect = ({
       setProdutoSelecionado(produtoInicialProp);
     }
   }, [produtoInicialProp]);
+
+  // Handle image load error
+  const handleImageError = useCallback((produtoId) => {
+    setImagensComErro((prev) => ({ ...prev, [produtoId]: true }));
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -230,15 +236,17 @@ const ProdutoSelect = ({
       {produtoSelecionado && !isOpen ? (
         <div className="produto-select-selected" onClick={() => !disabled && setIsOpen(true)}>
           <div className="produto-select-info">
-            {produtoSelecionado.imagemUrl && (
+            {produtoSelecionado.imagemUrl && !imagensComErro[produtoSelecionado._id] ? (
               <img
                 src={produtoSelecionado.imagemUrl}
                 alt={produtoSelecionado.nome}
                 className="produto-select-img"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                }}
+                onError={() => handleImageError(produtoSelecionado._id)}
               />
+            ) : (
+              <div className="produto-select-img-placeholder">
+                <FaBoxOpen />
+              </div>
             )}
             <div className="produto-select-details">
               <span className="produto-select-nome">{produtoSelecionado.nome}</span>
@@ -306,20 +314,18 @@ const ProdutoSelect = ({
                   aria-selected={value === produto._id}
                 >
                   <div className="produto-item-content">
-                    {produto.imagemUrl ? (
+                    {produto.imagemUrl && !imagensComErro[produto._id] ? (
                       <img
                         src={produto.imagemUrl}
                         alt={produto.nome}
                         className="produto-item-img"
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                          e.target.nextSibling && (e.target.nextSibling.style.display = 'flex');
-                        }}
+                        onError={() => handleImageError(produto._id)}
                       />
-                    ) : null}
-                    <div className="produto-item-placeholder" style={{ display: produto.imagemUrl ? 'none' : 'flex' }}>
-                      <FaBoxOpen />
-                    </div>
+                    ) : (
+                      <div className="produto-item-placeholder">
+                        <FaBoxOpen />
+                      </div>
+                    )}
                     <div className="produto-item-details">
                       <span className="produto-item-nome">{produto.nome}</span>
                       <div className="produto-item-meta">
