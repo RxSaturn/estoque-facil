@@ -11,8 +11,8 @@ const Movimentacao = require('../models/Movimentacao');
 /**
  * Obtém dados de relatório de vendas para o período especificado
  * @param {Object} filtros - Filtros do relatório
- * @param {Date} filtros.dataInicio - Data de início
- * @param {Date} filtros.dataFim - Data de fim
+ * @param {Date} filtros.dataInicio - Data de início (formato YYYY-MM-DD)
+ * @param {Date} filtros.dataFim - Data de fim (formato YYYY-MM-DD)
  * @param {string} [filtros.tipo] - Tipo de produto
  * @param {string} [filtros.categoria] - Categoria do produto
  * @param {string} [filtros.subcategoria] - Subcategoria do produto
@@ -32,8 +32,19 @@ const getReportData = async (filtros) => {
       metodoCalculo = 'transacoes'
     } = filtros;
 
+    // Validar formato de data
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(dataInicio) || !dateRegex.test(dataFim)) {
+      throw new Error('Formato de data inválido. Use YYYY-MM-DD');
+    }
+
     const dataInicioObj = new Date(`${dataInicio}T00:00:00.000Z`);
     const dataFimObj = new Date(`${dataFim}T23:59:59.999Z`);
+    
+    // Validar se as datas são válidas
+    if (isNaN(dataInicioObj.getTime()) || isNaN(dataFimObj.getTime())) {
+      throw new Error('Data inválida fornecida');
+    }
 
     // Construir filtros
     const filtroVendas = {

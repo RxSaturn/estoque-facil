@@ -135,10 +135,13 @@ const ReportPreview = memo(({
             <div className="stat-info">
               <span className="stat-label">Dia de Maior Venda</span>
               <span className="stat-value">
-                {data.diaMaiorVenda 
-                  ? new Date(data.diaMaiorVenda + 'T12:00:00').toLocaleDateString('pt-BR')
-                  : '-'
-                }
+                {(() => {
+                  if (!data.diaMaiorVenda) return '-';
+                  const date = new Date(data.diaMaiorVenda);
+                  // Verificar se a data é válida
+                  if (isNaN(date.getTime())) return '-';
+                  return date.toLocaleDateString('pt-BR');
+                })()}
               </span>
             </div>
           </div>

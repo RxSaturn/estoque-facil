@@ -159,18 +159,22 @@ export const useExportCSV = () => {
         throw new Error('Dados inválidos para exportação');
       }
 
-      // Converter dados para CSV
+      // Converter dados para CSV com tratamento de valores nulos/undefined
       const headers = Object.keys(dados[0]);
       const csvContent = [
         headers.join(','),
         ...dados.map(row =>
           headers.map(header => {
             const value = row[header];
+            // Tratar valores nulos/undefined como string vazia
+            if (value === null || value === undefined) {
+              return '';
+            }
             // Escapar valores com vírgula ou aspas
             if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
               return `"${value.replace(/"/g, '""')}"`;
             }
-            return value;
+            return String(value);
           }).join(',')
         )
       ].join('\n');

@@ -143,7 +143,20 @@ const registrarVenda = async (dadosVenda) => {
     };
   } catch (error) {
     await session.abortTransaction();
-    console.error('Erro ao registrar venda:', error);
+    
+    // Identificar tipo de erro MongoDB
+    const errorCode = error.code || error.codeName;
+    const isTransactionError = ['WriteConflict', 'TransientTransactionError', 11000].some(
+      code => errorCode === code || error.hasErrorLabel?.(code)
+    );
+    
+    console.error('Erro ao registrar venda:', {
+      message: error.message,
+      code: errorCode,
+      isTransactionError,
+      stack: error.stack
+    });
+    
     throw error;
   } finally {
     session.endSession();

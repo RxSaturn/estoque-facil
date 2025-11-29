@@ -27,11 +27,11 @@ const MetricCard = memo(({
 
   if (loading) {
     return (
-      <div className="metric-card metric-card-loading">
+      <div className="metric-card metric-card-loading" aria-busy="true" aria-label="Carregando dados da métrica">
         <div className="metric-card-icon skeleton-pulse" />
         <div className="metric-card-content">
-          <div className="skeleton-line skeleton-line-sm" />
-          <div className="skeleton-line skeleton-line-lg" />
+          <div className="skeleton-line skeleton-line-sm" aria-hidden="true" />
+          <div className="skeleton-line skeleton-line-lg" aria-hidden="true" />
         </div>
       </div>
     );

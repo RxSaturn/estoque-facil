@@ -51,53 +51,59 @@ const getStockByLocationPipeline = () => [
  * @param {number} limit - Número máximo de resultados
  * @returns {Array} Pipeline de agregação
  */
-const getLowStockPipeline = (limites, limit = 5) => [
-  {
-    $match: {
-      quantidade: { $lt: limites.BAIXO }
-    }
-  },
-  {
-    $lookup: {
-      from: 'produtos',
-      localField: 'produto',
-      foreignField: '_id',
-      as: 'produtoInfo'
-    }
-  },
-  { $unwind: '$produtoInfo' },
-  {
-    $addFields: {
-      status: {
-        $cond: [
-          { $eq: ['$quantidade', 0] },
-          'esgotado',
-          {
-            $cond: [
-              { $lt: ['$quantidade', limites.CRITICO] },
-              'critico',
-              'baixo'
-            ]
-          }
-        ]
+const getLowStockPipeline = (limites, limit = 5) => {
+  // Validar parâmetros obrigatórios
+  const limiteBaixo = limites?.BAIXO ?? 20;
+  const limiteCritico = limites?.CRITICO ?? 10;
+  
+  return [
+    {
+      $match: {
+        quantidade: { $lt: limiteBaixo }
       }
-    }
-  },
-  {
-    $project: {
-      _id: 1,
-      produto: '$produtoInfo._id',
-      produtoId: '$produtoInfo.id',
-      produtoNome: '$produtoInfo.nome',
-      produtoCategoria: '$produtoInfo.categoria',
-      local: 1,
-      quantidade: 1,
-      status: 1
-    }
-  },
-  { $sort: { quantidade: 1, produtoNome: 1 } },
-  { $limit: limit }
-];
+    },
+    {
+      $lookup: {
+        from: 'produtos',
+        localField: 'produto',
+        foreignField: '_id',
+        as: 'produtoInfo'
+      }
+    },
+    { $unwind: '$produtoInfo' },
+    {
+      $addFields: {
+        status: {
+          $cond: [
+            { $eq: ['$quantidade', 0] },
+            'esgotado',
+            {
+              $cond: [
+                { $lt: ['$quantidade', limiteCritico] },
+                'critico',
+                'baixo'
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      $project: {
+        _id: 1,
+        produto: '$produtoInfo._id',
+        produtoId: '$produtoInfo.id',
+        produtoNome: '$produtoInfo.nome',
+        produtoCategoria: '$produtoInfo.categoria',
+        local: 1,
+        quantidade: 1,
+        status: 1
+      }
+    },
+    { $sort: { quantidade: 1, produtoNome: 1 } },
+    { $limit: limit }
+  ];
+};
 
 /**
  * Pipeline para calcular vendas do dia
