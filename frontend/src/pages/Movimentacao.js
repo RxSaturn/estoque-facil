@@ -76,8 +76,8 @@ const Movimentacao = () => {
       try {
         setCarregando(true);
 
-        // Carregar produtos
-        const resProdutos = await api.get("/api/produtos");
+        // Carregar todos os produtos com campos mínimos (endpoint otimizado para dropdowns)
+        const resProdutos = await api.get("/api/produtos/select");
         const produtosCarregados = resProdutos.data.produtos || [];
         setProdutos(produtosCarregados);
         setProdutosFiltrados(produtosCarregados);

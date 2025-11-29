@@ -42,6 +42,11 @@ router.get(
 router.get("/estatisticas", proteger, produtoController.obterEstatisticas);
 router.get("/count", proteger, produtoController.contarProdutos); // NOVO: Endpoint otimizado para contagem
 
+// Endpoint otimizado para dropdowns/autocomplete (retorna apenas campos essenciais)
+router.get("/search", proteger, produtoController.buscarProdutosParaSelecao);
+// Endpoint para listar todos os produtos com campos mínimos (para dropdowns)
+router.get("/select", proteger, produtoController.listarProdutosMinimo);
+
 // Rotas CRUD principais
 router.post(
   "/",
