@@ -122,21 +122,6 @@ const Produtos = () => {
           totalItems: resposta.data.total,
         }));
       }
-
-      // Extrair opções de filtro
-      const tiposSet = new Set();
-      const categoriasSet = new Set();
-      const subcategoriasSet = new Set();
-
-      dadosProdutos.forEach((produto) => {
-        if (produto.tipo) tiposSet.add(produto.tipo);
-        if (produto.categoria) categoriasSet.add(produto.categoria);
-        if (produto.subcategoria) subcategoriasSet.add(produto.subcategoria);
-      });
-
-      setTipos(Array.from(tiposSet).sort());
-      setCategorias(Array.from(categoriasSet).sort());
-      setSubcategorias(Array.from(subcategoriasSet).sort());
     } catch (error) {
       console.error("Erro ao carregar produtos:", error);
       toast.error("Erro ao carregar produtos. Tente novamente.", {
@@ -154,6 +139,32 @@ const Produtos = () => {
           carregarProdutosFn();
         }, 100);
       }
+    }
+  }, []);
+
+  // Função para carregar opções de filtros de endpoints dedicados
+  const carregarOpcoesFiltroDedicado = useCallback(async () => {
+    try {
+      // Carregar tipos, categorias e subcategorias de endpoints dedicados
+      const [tiposRes, categoriasRes, subcategoriasRes] = await Promise.all([
+        api.get("/api/produtos/tipos"),
+        api.get("/api/produtos/categorias"),
+        api.get("/api/produtos/subcategorias"),
+      ]);
+
+      // Atualizar estados com as opções retornadas
+      if (Array.isArray(tiposRes.data)) {
+        setTipos(tiposRes.data.sort());
+      }
+      if (Array.isArray(categoriasRes.data)) {
+        setCategorias(categoriasRes.data.sort());
+      }
+      if (Array.isArray(subcategoriasRes.data)) {
+        setSubcategorias(subcategoriasRes.data.sort());
+      }
+    } catch (error) {
+      console.error("Erro ao carregar opções de filtro:", error);
+      // Não mostrar toast para não poluir a UI - filtros podem ficar vazios
     }
   }, []);
 
@@ -208,8 +219,9 @@ const Produtos = () => {
     paginacaoRef.current = { ...paginacao };
     filtrosRef.current = { ...filtros, busca };
 
-    // Carregar produtos apenas uma vez na montagem
+    // Carregar produtos e opções de filtro em paralelo
     carregarProdutosFn();
+    carregarOpcoesFiltroDedicado();
 
     // Cleanup function
     return () => {

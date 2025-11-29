@@ -1107,121 +1107,119 @@ async function calcularEstatisticas(
   dataFim,
   metodoCalculo = "quantidade"
 ) {
+  // Default return values for empty/error cases
+  const defaultResult = {
+    totalItensVendidos: 0,
+    totalTransacoes: 0,
+    mediaVendasDiarias: 0,
+    diaMaiorVenda: null,
+    numeroDias: 1,
+  };
+
   try {
-    // Calcular total de itens vendidos (sempre útil independente do método)
-    const resultadoQuantidade = await Venda.aggregate([
-      { $match: filtro },
-      { $group: { _id: null, total: { $sum: "$quantidade" } } },
-    ]);
-
-    const totalItensVendidos =
-      resultadoQuantidade.length > 0 ? resultadoQuantidade[0].total : 0;
-
-    // Calcular o número total de transações (vendas)
-    const resultadoTransacoes = await Venda.aggregate([
-      { $match: filtro },
-      { $group: { _id: null, total: { $count: {} } } }, // Conta o número de documentos
-    ]);
-
-    const totalTransacoes =
-      resultadoTransacoes.length > 0 ? resultadoTransacoes[0].total : 0;
-
-    // Calcular a média diária com base no método de cálculo
+    // Validate dates first to prevent crashes on short/invalid periods
     const dataInicioUTC = new Date(dataInicio);
     const dataFimUTC = new Date(dataFim);
 
-    // Calcular diferença em milissegundos e converter para dias
+    if (isNaN(dataInicioUTC.getTime()) || isNaN(dataFimUTC.getTime())) {
+      console.warn("Datas inválidas fornecidas para cálculo de estatísticas");
+      return defaultResult;
+    }
+
+    // Ensure dataInicio <= dataFim
+    if (dataInicioUTC > dataFimUTC) {
+      console.warn("Data de início maior que data de fim");
+      return defaultResult;
+    }
+
+    // Calculate number of days first (used throughout)
     const diferencaEmMilissegundos = dataFimUTC - dataInicioUTC;
     const diferencaEmDias = diferencaEmMilissegundos / (1000 * 60 * 60 * 24);
+    const numeroDias = Math.max(1, Math.ceil(diferencaEmDias) || 1);
 
-    // Garantir que temos pelo menos 1 dia para evitar divisão por zero
-    const numeroDias = Math.max(1, Math.ceil(diferencaEmDias));
+    // Use MongoDB Aggregation Pipeline for combined calculations (more efficient)
+    const resultadoAgregado = await Venda.aggregate([
+      { $match: filtro || {} },
+      {
+        $facet: {
+          totais: [
+            {
+              $group: {
+                _id: null,
+                totalQuantidade: { $sum: "$quantidade" },
+                totalTransacoes: { $sum: 1 },
+              },
+            },
+          ],
+          vendasPorDia: [
+            {
+              $addFields: {
+                dataString: {
+                  $dateToString: {
+                    format: "%Y-%m-%d",
+                    date: "$dataVenda",
+                    timezone: "UTC",
+                  },
+                },
+              },
+            },
+            {
+              $group: {
+                _id: "$dataString",
+                totalQuantidade: { $sum: "$quantidade" },
+                totalTransacoes: { $sum: 1 },
+              },
+            },
+            { $sort: { [metodoCalculo === "transacoes" ? "totalTransacoes" : "totalQuantidade"]: -1 } },
+            { $limit: 1 },
+          ],
+        },
+      },
+    ]);
 
-    // Média baseada no método de cálculo
+    // Handle empty results gracefully
+    if (!resultadoAgregado || resultadoAgregado.length === 0) {
+      return { ...defaultResult, numeroDias };
+    }
+
+    const { totais, vendasPorDia } = resultadoAgregado[0];
+
+    // Extract totals safely
+    const totalItensVendidos =
+      totais && totais.length > 0 ? (totais[0].totalQuantidade || 0) : 0;
+    const totalTransacoes =
+      totais && totais.length > 0 ? (totais[0].totalTransacoes || 0) : 0;
+
+    // Calculate daily average safely
     const mediaVendasDiarias =
       metodoCalculo === "transacoes"
         ? totalTransacoes / numeroDias
         : totalItensVendidos / numeroDias;
 
-    // Encontrar o dia com maior volume (baseado no método de cálculo)
-    const agregarPor =
-      metodoCalculo === "transacoes"
-        ? { $count: {} } // Contagem de documentos
-        : { $sum: "$quantidade" }; // Soma das quantidades
+    // Get day with most sales
+    let diaMaiorVenda = null;
+    if (vendasPorDia && vendasPorDia.length > 0 && vendasPorDia[0]._id) {
+      const dataStr = vendasPorDia[0]._id;
+      const dataInStr = dataInicioUTC.toISOString().split("T")[0];
+      const dataFimStr = dataFimUTC.toISOString().split("T")[0];
 
-    // CORREÇÃO: Utilizar a data como string no formato "YYYY-MM-DD" para evitar problemas de fuso horário
-    const vendasPorDia = await Venda.aggregate([
-      { $match: filtro },
-      {
-        $addFields: {
-          // Converter a data para string no formato YYYY-MM-DD usando operadores do MongoDB
-          dataString: {
-            $dateToString: {
-              format: "%Y-%m-%d",
-              date: "$dataVenda",
-              timezone: "UTC", // Garantir que estamos usando UTC consistentemente
-            },
-          },
-        },
-      },
-      {
-        $group: {
-          _id: "$dataString",
-          total: agregarPor,
-        },
-      },
-      { $sort: { total: -1 } },
-      { $limit: 1 },
-    ]);
-
-    // Log para depuração
-    console.log(
-      "Vendas por dia (após agregação):",
-      JSON.stringify(vendasPorDia, null, 2)
-    );
-
-    const diaMaiorVenda = vendasPorDia.length > 0 ? vendasPorDia[0]._id : null;
-
-    // Log adicional para verificar
-    if (diaMaiorVenda) {
-      console.log(
-        `Dia com maior venda: ${diaMaiorVenda}, dentro do período ${
-          dataInicio.toISOString().split("T")[0]
-        } a ${dataFim.toISOString().split("T")[0]}`
-      );
-    }
-
-    // Verificar se a data está dentro do período filtrado
-    if (diaMaiorVenda) {
-      const dataStr = diaMaiorVenda;
-      const dataInStr = dataInicio.toISOString().split("T")[0];
-      const dataFimStr = dataFim.toISOString().split("T")[0];
-
-      // Se a data não estiver no período, ignorar
-      if (dataStr < dataInStr || dataStr > dataFimStr) {
-        console.warn(
-          `Aviso: Dia com maior venda (${dataStr}) está fora do período filtrado (${dataInStr} a ${dataFimStr}). Ignorando.`
-        );
-        return {
-          totalItensVendidos,
-          totalTransacoes,
-          mediaVendasDiarias,
-          diaMaiorVenda: null,
-          numeroDias,
-        };
+      // Only include if within the filtered period
+      if (dataStr >= dataInStr && dataStr <= dataFimStr) {
+        diaMaiorVenda = dataStr;
       }
     }
 
     return {
       totalItensVendidos,
       totalTransacoes,
-      mediaVendasDiarias,
+      mediaVendasDiarias: isNaN(mediaVendasDiarias) ? 0 : mediaVendasDiarias,
       diaMaiorVenda,
       numeroDias,
     };
   } catch (error) {
     console.error("Erro ao calcular estatísticas:", error);
-    throw error;
+    // Return safe defaults instead of throwing
+    return defaultResult;
   }
 }
 

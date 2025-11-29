@@ -18,6 +18,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 
 // Importação de estilos
 import "./styles/design-system.css";
+import "./styles/theme.css";
 import "./styles/components.css";
 import "./App.css";
 
