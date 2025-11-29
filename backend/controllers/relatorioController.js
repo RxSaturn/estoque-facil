@@ -416,8 +416,8 @@ exports.gerarPDF = async (req, res) => {
       const tableX = (doc.page.width - tableWidth) / 2;
       let tableY = 90;
 
-      // Calcular total para percentuais
-      const total = estoquePorLocal.dados.reduce((sum, val) => sum + val, 0);
+      // Calcular total para percentuais - garantir que não seja zero
+      const total = estoquePorLocal.dados.reduce((sum, val) => sum + val, 0) || 1;
 
       // Cabeçalho da tabela
       doc.rect(tableX, tableY, tableWidth, 25).fill("#4472C4");

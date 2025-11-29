@@ -645,3 +645,78 @@ exports.obterUltimasTransacoes = async (req, res) => {
     // Tratamento de erro...
   }
 };
+
+// Endpoint otimizado para busca em dropdowns/autocomplete
+// Retorna apenas _id e nome para melhor performance
+exports.buscarProdutosParaSelecao = async (req, res) => {
+  try {
+    const { busca, tipo, categoria, subcategoria, limit = 50 } = req.query;
+    
+    // Construir filtro
+    const filtro = {};
+    
+    if (tipo) filtro.tipo = tipo;
+    if (categoria) filtro.categoria = categoria;
+    if (subcategoria) filtro.subcategoria = subcategoria;
+    
+    if (busca) {
+      // Busca por nome ou ID com regex case-insensitive
+      filtro.$or = [
+        { nome: { $regex: busca, $options: "i" } },
+        { id: { $regex: busca, $options: "i" } },
+      ];
+    }
+    
+    // Limitar resultado e retornar apenas campos essenciais
+    const produtos = await Produto.find(filtro)
+      .select('_id id nome tipo categoria subcategoria imagemUrl')
+      .sort({ nome: 1 })
+      .limit(parseInt(limit))
+      .lean();
+    
+    res.json({
+      sucesso: true,
+      total: produtos.length,
+      produtos,
+    });
+  } catch (error) {
+    console.error("Erro ao buscar produtos para seleção:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao buscar produtos",
+      erro: error.message,
+    });
+  }
+};
+
+// Listar todos os produtos apenas com campos mínimos (para dropdowns)
+exports.listarProdutosMinimo = async (req, res) => {
+  try {
+    const { tipo, categoria, subcategoria } = req.query;
+    
+    // Construir filtro
+    const filtro = {};
+    if (tipo) filtro.tipo = tipo;
+    if (categoria) filtro.categoria = categoria;
+    if (subcategoria) filtro.subcategoria = subcategoria;
+    
+    // Retornar apenas campos essenciais sem paginação
+    const produtos = await Produto.find(filtro)
+      .select('_id id nome tipo categoria subcategoria')
+      .sort({ nome: 1 })
+      .lean();
+    
+    res.json({
+      sucesso: true,
+      total: produtos.length,
+      produtos,
+    });
+  } catch (error) {
+    console.error("Erro ao listar produtos mínimos:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao listar produtos",
+      erro: error.message,
+    });
+  }
+};
