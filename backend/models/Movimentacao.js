@@ -41,6 +41,12 @@ const movimentacaoSchema = new mongoose.Schema({
   }
 });
 
+// Índices compostos para otimização de relatórios e consultas frequentes
+movimentacaoSchema.index({ data: -1, tipo: 1 });
+movimentacaoSchema.index({ produto: 1, data: -1 });
+movimentacaoSchema.index({ tipo: 1, data: -1 });
+movimentacaoSchema.index({ realizadoPor: 1, data: -1 });
+
 const Movimentacao = mongoose.model('Movimentacao', movimentacaoSchema);
 
 module.exports = Movimentacao;

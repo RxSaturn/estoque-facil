@@ -395,11 +395,11 @@ exports.atualizarProduto = async (req, res) => {
   }
 };
 
-// Zerar estoque de um produto
+// Zerar estoque de um produto - OTIMIZADO com Bulk Operations
 exports.zerarEstoqueProduto = async (req, res) => {
   try {
     // Verificar se o produto existe
-    const produto = await Produto.findById(req.params.id);
+    const produto = await Produto.findById(req.params.id).lean();
     if (!produto) {
       return res.status(404).json({
         sucesso: false,
@@ -407,15 +407,12 @@ exports.zerarEstoqueProduto = async (req, res) => {
       });
     }
 
-    // Obter informações atuais de estoque
-    const estoques = await Estoque.find({ produto: produto._id });
-    const totalEstoque = estoques.reduce(
-      (total, estoque) => total + estoque.quantidade,
-      0
-    );
-
-    // Se não houver estoque, apenas retornar sucesso
-    if (totalEstoque === 0) {
+    // Obter informações atuais de estoque com .lean() para performance
+    const estoques = await Estoque.find({ produto: produto._id }).lean();
+    const estoquesComQuantidade = estoques.filter(e => e.quantidade > 0);
+    
+    // Se não houver estoque para zerar, apenas retornar sucesso
+    if (estoquesComQuantidade.length === 0) {
       return res.status(200).json({
         sucesso: true,
         mensagem: "Produto já está com estoque zerado",
@@ -423,24 +420,24 @@ exports.zerarEstoqueProduto = async (req, res) => {
       });
     }
 
-    // Para cada local de estoque, criar uma movimentação e zerar o estoque
-    for (const estoque of estoques) {
-      if (estoque.quantidade > 0) {
-        // Registrar movimentação de saída para cada local
-        await Movimentacao.create({
-          tipo: "saida",
-          produto: produto._id,
-          quantidade: estoque.quantidade, // Isso já é a quantidade real, então é seguro
-          localOrigem: estoque.local,
-          realizadoPor: req.usuario.id,
-          observacao: "Zeragem de estoque para permitir exclusão do produto",
-        });
+    // Criar todas as movimentações de uma vez usando insertMany (1 query)
+    const movimentacoes = estoquesComQuantidade.map(estoque => ({
+      tipo: "saida",
+      produto: produto._id,
+      quantidade: estoque.quantidade,
+      localOrigem: estoque.local,
+      realizadoPor: req.usuario.id,
+      observacao: "Zeragem de estoque para permitir exclusão do produto",
+      data: new Date()
+    }));
+    
+    await Movimentacao.insertMany(movimentacoes);
 
-        // Zerar o estoque neste local
-        estoque.quantidade = 0;
-        await estoque.save();
-      }
-    }
+    // Zerar todos os estoques de uma vez usando updateMany (1 query)
+    await Estoque.updateMany(
+      { produto: produto._id, quantidade: { $gt: 0 } },
+      { $set: { quantidade: 0, ultimaAtualizacao: new Date() } }
+    );
 
     res.status(200).json({
       sucesso: true,

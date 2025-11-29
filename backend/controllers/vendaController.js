@@ -1,84 +1,34 @@
 const Produto = require('../models/Produto');
-const Estoque = require('../models/Estoque');
-const Movimentacao = require('../models/Movimentacao');
 const Venda = require('../models/Venda');
+const { validarRegistroVenda } = require('../validators/vendaValidator');
+const { registrarVendaAtomico } = require('../services/vendaService');
+const asyncHandler = require('../utils/asyncHandler');
+const ApiError = require('../utils/ApiError');
 
-// Registrar uma venda
-exports.registrarVenda = async (req, res) => {
-  try {
-    const { produto, quantidade, local, data, observacao } = req.body;
-    
-    console.log('Dados recebidos para registrar venda:', req.body);
-    
-    // Validações básicas mais detalhadas
-    const camposFaltantes = [];
-    if (!produto) camposFaltantes.push('produto');
-    if (!quantidade) camposFaltantes.push('quantidade');
-    if (!local) camposFaltantes.push('local');
-    
-    if (camposFaltantes.length > 0) {
-      return res.status(400).json({
-        sucesso: false,
-        mensagem: `Campos obrigatórios não informados: ${camposFaltantes.join(', ')}`
-      });
-    }
-    
-    // Verificar se há estoque suficiente
-    const estoque = await Estoque.findOne({ produto, local });
-    if (!estoque) {
-      return res.status(400).json({
-        sucesso: false,
-        mensagem: `Não há estoque cadastrado para este produto no local ${local}`
-      });
-    }
-    
-    if (estoque.quantidade < quantidade) {
-      return res.status(400).json({
-        sucesso: false,
-        mensagem: `Estoque insuficiente. Disponível: ${estoque.quantidade}, Solicitado: ${quantidade}`
-      });
-    }
-    
-    // Atualizar estoque (diminuir)
-    estoque.quantidade -= parseInt(quantidade);
-    estoque.ultimaAtualizacao = new Date();
-    estoque.atualizadoPor = req.usuario.id;
-    await estoque.save();
-    
-    // Registrar venda
-    const venda = await Venda.create({
-      produto,
-      quantidade: parseInt(quantidade),
-      local,
-      dataVenda: data ? new Date(data) : new Date(),
-      registradoPor: req.usuario.id
-    });
-    
-    // Registrar movimentação
-    await Movimentacao.create({
-      tipo: 'venda',
-      produto,
-      quantidade: parseInt(quantidade),
-      localOrigem: local,
-      data: data ? new Date(data) : new Date(),
-      realizadoPor: req.usuario.id,
-      observacao: observacao || 'Venda de produto'
-    });
-    
-    res.status(201).json({
-      sucesso: true,
-      mensagem: 'Venda registrada com sucesso',
-      venda
-    });
-  } catch (error) {
-    console.error('Erro ao registrar venda:', error);
-    res.status(500).json({
-      sucesso: false,
-      mensagem: 'Erro ao registrar venda',
-      erro: error.message
-    });
+// Registrar uma venda - Refatorado com Service Layer e Validator
+exports.registrarVenda = asyncHandler(async (req, res) => {
+  console.log('Dados recebidos para registrar venda:', req.body);
+  
+  // Validação com Zod
+  const validacao = validarRegistroVenda(req.body);
+  if (!validacao.success) {
+    throw new ApiError(400, validacao.error.mensagem);
   }
-};
+  
+  const { produto, quantidade, local, data, observacao } = validacao.data;
+  
+  // Usar serviço com operações atômicas e transações
+  const resultado = await registrarVendaAtomico({
+    produto,
+    quantidade,
+    local,
+    data,
+    observacao,
+    usuarioId: req.usuario.id
+  });
+  
+  res.status(201).json(resultado);
+});
 
 // Listar vendas
 exports.listarVendas = async (req, res) => {
