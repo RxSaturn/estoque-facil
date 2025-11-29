@@ -121,45 +121,28 @@ exports.gerarPDF = async (req, res) => {
       filtroEstoque.local = local;
     }
 
-    // Calcular dados para o PDF
-    const totalProdutos = await Produto.countDocuments(filtroProdutos);
-    const totalVendas = await Venda.countDocuments(filtroVendas);
-    const estatisticas = await calcularEstatisticas(
-      filtroVendas,
-      dataInicioObj,
-      dataFimObj,
-      metodoCalculo
-    );
-
-    // Determinar método de cálculo para os top produtos
-    const topProdutos =
+    // Calcular dados para o PDF em paralelo para melhor performance
+    const [
+      totalProdutos,
+      totalVendas,
+      estatisticas,
+      topProdutos,
+      produtosSemMovimentacao,
+      vendasPorCategoria,
+      estoquePorLocal,
+      todosProdutosVendidos
+    ] = await Promise.all([
+      Produto.countDocuments(filtroProdutos),
+      Venda.countDocuments(filtroVendas),
+      calcularEstatisticas(filtroVendas, dataInicioObj, dataFimObj, metodoCalculo),
       metodoCalculo === "transacoes"
-        ? await obterTopProdutosPorTransacoes(
-            filtroVendas,
-            dataInicioObj,
-            dataFimObj
-          )
-        : await obterTopProdutos(filtroVendas, dataInicioObj, dataFimObj);
-
-    const produtosSemMovimentacao = await obterProdutosSemMovimentacao(
-      dataInicioObj,
-      dataFimObj,
-      filtroProdutos,
-      local
-    );
-    const vendasPorCategoria = await calcularVendasPorCategoria(
-      filtroVendas,
-      dataInicioObj,
-      dataFimObj
-    );
-    const estoquePorLocal = await calcularEstoquePorLocal(filtroEstoque);
-
-    // Obter todos os produtos vendidos no período
-    const todosProdutosVendidos = await obterTodosProdutosVendidos(
-      filtroVendas,
-      dataInicioObj,
-      dataFimObj
-    );
+        ? obterTopProdutosPorTransacoes(filtroVendas, dataInicioObj, dataFimObj)
+        : obterTopProdutos(filtroVendas, dataInicioObj, dataFimObj),
+      obterProdutosSemMovimentacao(dataInicioObj, dataFimObj, filtroProdutos, local),
+      calcularVendasPorCategoria(filtroVendas),
+      calcularEstoquePorLocal(filtroEstoque),
+      obterTodosProdutosVendidos(filtroVendas, dataInicioObj, dataFimObj)
+    ]);
 
     // Inicializar PDF com opções melhoradas
     const doc = new PDFDocument({
@@ -1408,54 +1391,37 @@ async function obterProdutosSemMovimentacao(
 }
 
 /**
- * Calcula vendas agrupadas por categoria
+ * Calcula vendas agrupadas por categoria usando MongoDB Aggregation pipeline
  */
-async function calcularVendasPorCategoria(filtroVendas, dataInicio, dataFim) {
+async function calcularVendasPorCategoria(filtroVendas) {
   try {
-    // Obter vendas com o filtro especificado
-    const vendas = await Venda.find(filtroVendas).select("produto quantidade");
+    const resultado = await Venda.aggregate([
+      { $match: filtroVendas },
+      {
+        $lookup: {
+          from: 'produtos',
+          localField: 'produto',
+          foreignField: '_id',
+          as: 'produtoInfo'
+        }
+      },
+      { $unwind: '$produtoInfo' },
+      {
+        $group: {
+          _id: '$produtoInfo.categoria',
+          quantidade: { $sum: '$quantidade' }
+        }
+      },
+      { $sort: { quantidade: -1 } }
+    ]);
 
-    // Extrair os IDs dos produtos para uma consulta em massa
-    const produtosIds = [...new Set(vendas.map((venda) => venda.produto))];
-
-    // Buscar informações de todos os produtos vendidos
-    const produtosInfo = await Produto.find({ _id: { $in: produtosIds } });
-
-    // Criar um mapa para lookup rápido
-    const produtosMap = {};
-    produtosInfo.forEach((produto) => {
-      produtosMap[produto._id.toString()] = produto;
-    });
-
-    // Agrupar vendas por categoria, ignorando produtos excluídos
-    const categorias = {};
-
-    vendas.forEach((venda) => {
-      // Verificar se o produto ainda existe no sistema
-      const produtoExiste = produtosMap[venda.produto.toString()];
-
-      // Se o produto não existir mais, ignorar esta venda
-      if (!produtoExiste) {
-        return; // Pula esta iteração
-      }
-
-      const categoria = produtoExiste.categoria;
-
-      if (!categorias[categoria]) {
-        categorias[categoria] = 0;
-      }
-
-      categorias[categoria] += venda.quantidade;
-    });
-
-    // Converter para arrays para uso em gráficos
-    const labels = Object.keys(categorias);
-    const dados = labels.map((label) => categorias[label]);
+    const labels = resultado.map(item => item._id || 'Sem Categoria');
+    const dados = resultado.map(item => item.quantidade);
 
     return { labels, dados };
   } catch (error) {
     console.error("Erro ao calcular vendas por categoria:", error);
-    throw error;
+    return { labels: [], dados: [] };
   }
 }
 
@@ -1727,98 +1693,62 @@ exports.getResumo = async (req, res) => {
       ];
     }
 
-    // Calcular dados para o relatório com tratamento de erro individual
-    let totalProdutos = 0;
-    let totalVendas = 0;
-
-    try {
-      totalProdutos = await Produto.countDocuments(filtroProdutos);
-    } catch (err) {
-      console.error("Erro ao contar produtos:", err);
-    }
-
-    try {
-      totalVendas = await Venda.countDocuments(filtroVendas);
-    } catch (err) {
-      console.error("Erro ao contar vendas:", err);
-    }
-
-    // Obter top produtos com base no método de cálculo escolhido
-    let topProdutos = [];
-    try {
-      topProdutos =
-        metodoCalculo === "transacoes"
-          ? await obterTopProdutosPorTransacoes(
-              filtroVendas,
-              dataInicioObj,
-              dataFimObj
-            )
-          : await obterTopProdutos(filtroVendas, dataInicioObj, dataFimObj);
-    } catch (err) {
-      console.error("Erro ao obter top produtos:", err);
-      topProdutos = [];
-    }
-
-    let estatisticas = {
+    // Calcular dados para o relatório em paralelo com tratamento de erro individual
+    const defaultEstatisticas = {
       totalItensVendidos: 0,
       totalTransacoes: 0,
       mediaVendasDiarias: 0,
       diaMaiorVenda: null,
       numeroDias: 1,
     };
-    try {
-      estatisticas = await calcularEstatisticas(
-        filtroVendas,
-        dataInicioObj,
-        dataFimObj,
-        metodoCalculo
-      );
-    } catch (err) {
-      console.error("Erro ao calcular estatísticas:", err);
-    }
 
-    let vendasPorCategoria = { labels: [], dados: [] };
-    try {
-      vendasPorCategoria = await calcularVendasPorCategoria(
-        filtroVendas,
-        dataInicioObj,
-        dataFimObj
-      );
-    } catch (err) {
-      console.error("Erro ao calcular vendas por categoria:", err);
-    }
+    // Executar todas as consultas em paralelo para melhor performance
+    const [
+      totalProdutosResult,
+      totalVendasResult,
+      estatisticasResult,
+      vendasPorCategoriaResult,
+      topProdutosResult,
+      estoquePorLocalResult,
+      produtosSemMovimentacaoResult,
+      produtosEstoqueCriticoResult
+    ] = await Promise.allSettled([
+      Produto.countDocuments(filtroProdutos),
+      Venda.countDocuments(filtroVendas),
+      calcularEstatisticas(filtroVendas, dataInicioObj, dataFimObj, metodoCalculo),
+      calcularVendasPorCategoria(filtroVendas),
+      metodoCalculo === "transacoes"
+        ? obterTopProdutosPorTransacoes(filtroVendas, dataInicioObj, dataFimObj)
+        : obterTopProdutos(filtroVendas, dataInicioObj, dataFimObj),
+      calcularEstoquePorLocal(filtroEstoque),
+      obterProdutosSemMovimentacao(dataInicioObj, dataFimObj, filtroProdutos, local),
+      obterProdutosEstoqueCritico(filtroEstoque)
+    ]);
 
-    let produtosSemMovimentacao = [];
-    try {
-      produtosSemMovimentacao = await obterProdutosSemMovimentacao(
-        dataInicioObj,
-        dataFimObj,
-        filtroProdutos,
-        local
-      );
-    } catch (err) {
-      console.error("Erro ao obter produtos sem movimentação:", err);
-    }
+    // Extrair resultados com valores padrão em caso de erro
+    const totalProdutos = totalProdutosResult.status === 'fulfilled' ? totalProdutosResult.value : 0;
+    const totalVendas = totalVendasResult.status === 'fulfilled' ? totalVendasResult.value : 0;
+    const estatisticas = estatisticasResult.status === 'fulfilled' ? estatisticasResult.value : defaultEstatisticas;
+    const vendasPorCategoria = vendasPorCategoriaResult.status === 'fulfilled' ? vendasPorCategoriaResult.value : { labels: [], dados: [] };
+    const topProdutos = topProdutosResult.status === 'fulfilled' ? topProdutosResult.value : [];
+    const estoquePorLocal = estoquePorLocalResult.status === 'fulfilled' ? estoquePorLocalResult.value : { labels: [], dados: [] };
+    const produtosSemMovimentacao = produtosSemMovimentacaoResult.status === 'fulfilled' ? produtosSemMovimentacaoResult.value : [];
+    const produtosEstoqueCritico = produtosEstoqueCriticoResult.status === 'fulfilled' ? produtosEstoqueCriticoResult.value : [];
 
-    let produtosEstoqueCritico = [];
-    try {
-      produtosEstoqueCritico = await obterProdutosEstoqueCritico(filtroEstoque);
-    } catch (err) {
-      console.error("Erro ao obter produtos com estoque crítico:", err);
-    }
+    // Log de erros para diagnóstico
+    if (totalProdutosResult.status === 'rejected') console.error("Erro ao contar produtos:", totalProdutosResult.reason);
+    if (totalVendasResult.status === 'rejected') console.error("Erro ao contar vendas:", totalVendasResult.reason);
+    if (estatisticasResult.status === 'rejected') console.error("Erro ao calcular estatísticas:", estatisticasResult.reason);
+    if (vendasPorCategoriaResult.status === 'rejected') console.error("Erro ao calcular vendas por categoria:", vendasPorCategoriaResult.reason);
+    if (topProdutosResult.status === 'rejected') console.error("Erro ao obter top produtos:", topProdutosResult.reason);
+    if (estoquePorLocalResult.status === 'rejected') console.error("Erro ao calcular estoque por local:", estoquePorLocalResult.reason);
+    if (produtosSemMovimentacaoResult.status === 'rejected') console.error("Erro ao obter produtos sem movimentação:", produtosSemMovimentacaoResult.reason);
+    if (produtosEstoqueCriticoResult.status === 'rejected') console.error("Erro ao obter produtos com estoque crítico:", produtosEstoqueCriticoResult.reason);
 
-    let estoquePorLocal = { labels: [], dados: [] };
-    try {
-      estoquePorLocal = await calcularEstoquePorLocal(filtroEstoque);
-    } catch (err) {
-      console.error("Erro ao calcular estoque por local:", err);
-    }
-
+    // Calcular estoque sem movimentação (depende do resultado anterior)
     let estoqueSemMovimentacao = { labels: [], dados: [] };
     try {
-      estoqueSemMovimentacao = await calcularEstoqueSemMovimentacao(
-        produtosSemMovimentacao
-      );
+      estoqueSemMovimentacao = await calcularEstoqueSemMovimentacao(produtosSemMovimentacao);
     } catch (err) {
       console.error("Erro ao calcular estoque sem movimentação:", err);
     }

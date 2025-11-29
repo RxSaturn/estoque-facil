@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 // Criar instância do axios com configurações padrão
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || '',
-  timeout: 15000 // Adicionando timeout para evitar esperas infinitas
+  timeout: 60000 // Timeout estendido para permitir relatórios de períodos longos
 });
 
 // Objeto para rastrear requisições em andamento e evitar duplicações
