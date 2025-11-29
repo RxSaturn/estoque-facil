@@ -61,7 +61,6 @@ const UsuariosTab = () => {
   // Estado para modal de confirmação de exclusão
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
   const [usuarioExcluir, setUsuarioExcluir] = useState(null);
-  const [erroExclusao, setErroExclusao] = useState(null);
 
   // Hook para carregar usuários via React Query
   const {
@@ -85,6 +84,9 @@ const UsuariosTab = () => {
   const usuarios = usuariosData?.usuarios || [];
   const totalItems = usuariosData?.total || 0;
   const erro = isError ? "Não foi possível carregar a lista de usuários" : null;
+
+  // Estado de loading para operações de salvamento
+  const isSaving = createMutation.isPending || updateMutation.isPending;
 
   // Funções de paginação
   const handlePageChange = useCallback((page) => {
@@ -269,13 +271,11 @@ const UsuariosTab = () => {
   const confirmarExclusao = (usuario) => {
     setUsuarioExcluir(usuario);
     setModalExclusaoAberto(true);
-    setErroExclusao(null);
   };
 
   const cancelarExclusao = () => {
     setUsuarioExcluir(null);
     setModalExclusaoAberto(false);
-    setErroExclusao(null);
   };
 
   const excluirUsuario = async () => {
@@ -285,10 +285,7 @@ const UsuariosTab = () => {
       await deleteMutation.mutateAsync(usuarioExcluir._id);
       cancelarExclusao();
     } catch (error) {
-      // Mensagem de erro melhorada
-      const mensagemErro =
-        error.response?.data?.mensagem || "Erro ao excluir usuário";
-      setErroExclusao(mensagemErro);
+      // Erro já tratado pelo hook, apenas registrar no console
       console.error("Erro ao excluir usuário:", error);
     }
   };
@@ -572,9 +569,9 @@ const UsuariosTab = () => {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={createMutation.isPending || updateMutation.isPending}
+                  disabled={isSaving}
                 >
-                  {createMutation.isPending || updateMutation.isPending ? "Salvando..." : "Salvar"}
+                  {isSaving ? "Salvando..." : "Salvar"}
                 </button>
               </div>
             </form>
@@ -667,12 +664,6 @@ const UsuariosTab = () => {
                   usuário será mantido, mas ele não poderá mais acessar o
                   sistema.
                 </p>
-
-                {erroExclusao && (
-                  <div className="erro-exclusao">
-                    <p>{erroExclusao}</p>
-                  </div>
-                )}
               </div>
             </div>
 
