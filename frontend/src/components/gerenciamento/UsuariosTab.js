@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   FaPlus,
   FaSearch,
@@ -12,24 +12,27 @@ import {
   FaExclamationTriangle,
   FaUserCog,
 } from "react-icons/fa";
-import api from "../../services/api";
 import { toast } from "react-toastify";
 import Paginacao from "../Paginacao";
+import {
+  useUsuarios,
+  useCreateUsuario,
+  useUpdateUsuario,
+  useAlterarSenha,
+  useDeleteUsuario,
+} from "../../hooks/useUsuarios";
 import "./UsuariosTab.css";
 import "./shared-styles.css";
 
 const UsuariosTab = () => {
-  const [usuarios, setUsuarios] = useState([]);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState(null);
   const [busca, setBusca] = useState("");
+  const [buscaAplicada, setBuscaAplicada] = useState("");
   const [filtroAvancado, setFiltroAvancado] = useState(false);
 
   // Estado para paginação
   const [paginacao, setPaginacao] = useState({
     currentPage: 1,
     itemsPerPage: 20,
-    totalItems: 0,
   });
 
   // Estados para filtros
@@ -58,52 +61,32 @@ const UsuariosTab = () => {
   // Estado para modal de confirmação de exclusão
   const [modalExclusaoAberto, setModalExclusaoAberto] = useState(false);
   const [usuarioExcluir, setUsuarioExcluir] = useState(null);
-  const [excluindo, setExcluindo] = useState(false);
-  const [erroExclusao, setErroExclusao] = useState(null);
 
-  // Função para carregar lista de usuários
-  const carregarUsuarios = useCallback(async () => {
-    try {
-      setCarregando(true);
-      setErro(null);
+  // Hook para carregar usuários via React Query
+  const {
+    data: usuariosData,
+    isLoading: carregando,
+    isError,
+  } = useUsuarios({
+    page: paginacao.currentPage,
+    limit: paginacao.itemsPerPage,
+    busca: buscaAplicada || undefined,
+    perfil: filtros.perfil || undefined,
+  });
 
-      // Construir parâmetros de consulta
-      const params = {
-        page: paginacao.currentPage,
-        limit: paginacao.itemsPerPage,
-        busca: busca || undefined,
-        perfil: filtros.perfil || undefined,
-      };
+  // Mutations para operações CRUD
+  const createMutation = useCreateUsuario();
+  const updateMutation = useUpdateUsuario();
+  const alterarSenhaMutation = useAlterarSenha();
+  const deleteMutation = useDeleteUsuario();
 
-      const response = await api.get("/api/usuarios", { params });
+  // Dados extraídos da query
+  const usuarios = usuariosData?.usuarios || [];
+  const totalItems = usuariosData?.total || 0;
+  const erro = isError ? "Não foi possível carregar a lista de usuários" : null;
 
-      setUsuarios(response.data.usuarios || response.data);
-
-      // Verificar formato da resposta para paginação
-      if (response.data.total !== undefined) {
-        setPaginacao((prev) => ({
-          ...prev,
-          totalItems: response.data.total,
-        }));
-      } else {
-        setPaginacao((prev) => ({
-          ...prev,
-          totalItems: response.data.length || 0,
-        }));
-      }
-    } catch (error) {
-      console.error("Erro ao carregar usuários:", error);
-      setErro("Não foi possível carregar a lista de usuários");
-      toast.error("Erro ao carregar usuários. Tente novamente.");
-    } finally {
-      setCarregando(false);
-    }
-  }, [paginacao.currentPage, paginacao.itemsPerPage, busca, filtros]);
-
-  // Carregar usuários na montagem e quando os filtros mudarem
-  useEffect(() => {
-    carregarUsuarios();
-  }, [carregarUsuarios]);
+  // Estado de loading para operações de salvamento
+  const isSaving = createMutation.isPending || updateMutation.isPending;
 
   // Funções de paginação
   const handlePageChange = useCallback((page) => {
@@ -120,8 +103,8 @@ const UsuariosTab = () => {
   };
 
   const aplicarBusca = () => {
+    setBuscaAplicada(busca);
     setPaginacao((prev) => ({ ...prev, currentPage: 1 }));
-    carregarUsuarios();
   };
 
   const handleChangeFiltro = (e) => {
@@ -132,6 +115,7 @@ const UsuariosTab = () => {
 
   const limparFiltros = () => {
     setBusca("");
+    setBuscaAplicada("");
     setFiltros({
       perfil: "",
     });
@@ -204,8 +188,6 @@ const UsuariosTab = () => {
     }
 
     try {
-      setCarregando(true);
-
       if (modoEdicao && usuarioAtual) {
         // Atualizar usuário existente (sem senha)
         const dadosAtualizacao = {
@@ -214,22 +196,20 @@ const UsuariosTab = () => {
           perfil: formData.perfil,
         };
 
-        await api.put(`/api/usuarios/${usuarioAtual._id}`, dadosAtualizacao);
-        toast.success("Usuário atualizado com sucesso!");
+        await updateMutation.mutateAsync({
+          id: usuarioAtual._id,
+          data: dadosAtualizacao,
+        });
       } else {
         // Criar novo usuário
-        await api.post("/api/usuarios", formData);
-        toast.success("Usuário criado com sucesso!");
+        await createMutation.mutateAsync(formData);
       }
 
-      // Fechar modal e recarregar dados
+      // Fechar modal
       fecharModal();
-      carregarUsuarios();
     } catch (error) {
+      // Erro já tratado pelo hook
       console.error("Erro ao salvar usuário:", error);
-      toast.error(error.response?.data?.mensagem || "Erro ao salvar usuário");
-    } finally {
-      setCarregando(false);
     }
   };
 
@@ -275,19 +255,15 @@ const UsuariosTab = () => {
     }
 
     try {
-      setCarregando(true);
-
-      await api.put(`/api/usuarios/${usuarioAtual._id}/senha`, {
+      await alterarSenhaMutation.mutateAsync({
+        id: usuarioAtual._id,
         senha: formSenha.senha,
       });
 
-      toast.success("Senha alterada com sucesso!");
       fecharModalSenha();
     } catch (error) {
+      // Erro já tratado pelo hook
       console.error("Erro ao alterar senha:", error);
-      toast.error(error.response?.data?.mensagem || "Erro ao alterar senha");
-    } finally {
-      setCarregando(false);
     }
   };
 
@@ -295,37 +271,22 @@ const UsuariosTab = () => {
   const confirmarExclusao = (usuario) => {
     setUsuarioExcluir(usuario);
     setModalExclusaoAberto(true);
-    setErroExclusao(null);
   };
 
   const cancelarExclusao = () => {
     setUsuarioExcluir(null);
     setModalExclusaoAberto(false);
-    setErroExclusao(null);
-    setExcluindo(false);
   };
 
   const excluirUsuario = async () => {
     if (!usuarioExcluir) return;
 
     try {
-      setExcluindo(true);
-
-      await api.delete(`/api/usuarios/${usuarioExcluir._id}`);
-
-      toast.success("Usuário removido com sucesso!");
+      await deleteMutation.mutateAsync(usuarioExcluir._id);
       cancelarExclusao();
-      carregarUsuarios();
     } catch (error) {
+      // Erro já tratado pelo hook, apenas registrar no console
       console.error("Erro ao excluir usuário:", error);
-
-      // Mensagem de erro melhorada
-      const mensagemErro =
-        error.response?.data?.mensagem || "Erro ao excluir usuário";
-      setErroExclusao(mensagemErro);
-      toast.error(mensagemErro);
-    } finally {
-      setExcluindo(false);
     }
   };
 
@@ -391,7 +352,7 @@ const UsuariosTab = () => {
             {filtroAvancado ? "Ocultar Filtros" : "Mostrar Filtros"}
           </button>
 
-          {(busca || filtros.perfil) && (
+          {(buscaAplicada || filtros.perfil) && (
             <button
               type="button"
               className="btn btn-outline clear-btn"
@@ -439,7 +400,7 @@ const UsuariosTab = () => {
           <FaUser className="empty-icon" />
           <h3>Nenhum usuário encontrado</h3>
           <p>
-            {busca || filtros.perfil
+            {buscaAplicada || filtros.perfil
               ? "Tente ajustar os filtros para ver mais resultados."
               : "Comece adicionando um novo usuário ao sistema."}
           </p>
@@ -516,7 +477,7 @@ const UsuariosTab = () => {
 
           {/* Componente de Paginação */}
           <Paginacao
-            totalItems={paginacao.totalItems}
+            totalItems={totalItems}
             onPageChange={handlePageChange}
             onItemsPerPageChange={handleItemsPerPageChange}
             pageName="gerenciamento_usuarios"
@@ -608,9 +569,9 @@ const UsuariosTab = () => {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={carregando}
+                  disabled={isSaving}
                 >
-                  {carregando ? "Salvando..." : "Salvar"}
+                  {isSaving ? "Salvando..." : "Salvar"}
                 </button>
               </div>
             </form>
@@ -669,9 +630,9 @@ const UsuariosTab = () => {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={carregando}
+                  disabled={alterarSenhaMutation.isPending}
                 >
-                  {carregando ? "Salvando..." : "Alterar Senha"}
+                  {alterarSenhaMutation.isPending ? "Salvando..." : "Alterar Senha"}
                 </button>
               </div>
             </form>
@@ -703,12 +664,6 @@ const UsuariosTab = () => {
                   usuário será mantido, mas ele não poderá mais acessar o
                   sistema.
                 </p>
-
-                {erroExclusao && (
-                  <div className="erro-exclusao">
-                    <p>{erroExclusao}</p>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -717,7 +672,7 @@ const UsuariosTab = () => {
                 type="button"
                 className="btn btn-outline"
                 onClick={cancelarExclusao}
-                disabled={excluindo}
+                disabled={deleteMutation.isPending}
               >
                 Cancelar
               </button>
@@ -725,9 +680,9 @@ const UsuariosTab = () => {
                 type="button"
                 className="btn btn-danger"
                 onClick={excluirUsuario}
-                disabled={excluindo}
+                disabled={deleteMutation.isPending}
               >
-                {excluindo ? (
+                {deleteMutation.isPending ? (
                   <>
                     <span className="spinner-tiny"></span>
                     Excluindo...
