@@ -39,7 +39,8 @@ const Paginacao = ({
     if (pagina !== undefined && pagina !== currentPage) {
       setPrefs(prev => ({ ...prev, currentPage: pagina }));
     }
-  }, [pagina, currentPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagina]);
   
   // Persistir preferências quando mudarem
   useEffect(() => {

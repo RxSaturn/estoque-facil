@@ -387,6 +387,14 @@ const Relatorios = () => {
     const dataInicio = new Date(filtros.dataInicio);
     const dataFim = new Date(filtros.dataFim);
     
+    // Verificar se as datas são válidas
+    if (isNaN(dataInicio.getTime()) || isNaN(dataFim.getTime())) {
+      toast.error("Datas inválidas. Verifique o formato das datas.", {
+        toastId: 'invalid-date-error',
+      });
+      return;
+    }
+    
     if (dataInicio > dataFim) {
       toast.error("A data inicial não pode ser posterior à data final.", {
         toastId: 'date-range-error',
