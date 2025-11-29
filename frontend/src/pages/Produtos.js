@@ -71,6 +71,26 @@ const Produtos = () => {
     busca: "",
   });
 
+  // Função para carregar opções de filtro das APIs dedicadas
+  const carregarOpcoesFiltro = useCallback(async () => {
+    try {
+      // Carregar tipos, categorias e subcategorias em paralelo
+      const [tiposRes, categoriasRes, subcategoriasRes] = await Promise.all([
+        api.get("/api/produtos/tipos"),
+        api.get("/api/produtos/categorias"),
+        api.get("/api/produtos/subcategorias"),
+      ]);
+
+      // Atualizar estados com as opções obtidas
+      setTipos(Array.isArray(tiposRes.data) ? tiposRes.data.sort() : []);
+      setCategorias(Array.isArray(categoriasRes.data) ? categoriasRes.data.sort() : []);
+      setSubcategorias(Array.isArray(subcategoriasRes.data) ? subcategoriasRes.data.sort() : []);
+    } catch (error) {
+      console.error("Erro ao carregar opções de filtro:", error);
+      // Não exibir toast para este erro para não poluir a interface
+    }
+  }, []);
+
   // Função para carregar produtos sem depender de estados
   const carregarProdutosFn = useCallback(async (params = {}) => {
     // Se já existe uma requisição em andamento, marcar que nova requisição foi solicitada
@@ -122,21 +142,6 @@ const Produtos = () => {
           totalItems: resposta.data.total,
         }));
       }
-
-      // Extrair opções de filtro
-      const tiposSet = new Set();
-      const categoriasSet = new Set();
-      const subcategoriasSet = new Set();
-
-      dadosProdutos.forEach((produto) => {
-        if (produto.tipo) tiposSet.add(produto.tipo);
-        if (produto.categoria) categoriasSet.add(produto.categoria);
-        if (produto.subcategoria) subcategoriasSet.add(produto.subcategoria);
-      });
-
-      setTipos(Array.from(tiposSet).sort());
-      setCategorias(Array.from(categoriasSet).sort());
-      setSubcategorias(Array.from(subcategoriasSet).sort());
     } catch (error) {
       console.error("Erro ao carregar produtos:", error);
       toast.error("Erro ao carregar produtos. Tente novamente.", {
@@ -210,6 +215,9 @@ const Produtos = () => {
 
     // Carregar produtos apenas uma vez na montagem
     carregarProdutosFn();
+
+    // Carregar opções de filtro das APIs dedicadas
+    carregarOpcoesFiltro();
 
     // Cleanup function
     return () => {
