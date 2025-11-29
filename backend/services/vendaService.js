@@ -22,7 +22,7 @@ const ApiError = require('../utils/ApiError');
  * @param {string} dadosVenda.produto - ID do produto (ObjectId)
  * @param {number} dadosVenda.quantidade - Quantidade a vender
  * @param {string} dadosVenda.local - Local do estoque
- * @param {Date} [dadosVenda.data] - Data da venda (opcional)
+ * @param {string} [dadosVenda.data] - Data da venda (ISO string ou YYYY-MM-DD, opcional)
  * @param {string} [dadosVenda.observacao] - Observação da venda
  * @param {string} dadosVenda.usuarioId - ID do usuário que registra
  * @returns {Promise<Object>} Resultado da venda
@@ -108,14 +108,13 @@ const registrarVendaAtomico = async (dadosVenda) => {
       throw error;
     }
     
-    // Log de erros de transação para debugging
-    console.error('Erro ao registrar venda (transação):', {
-      message: error.message,
-      code: error.code,
-      produto,
-      local,
-      quantidade
-    });
+    // Log de erros de transação para debugging (apenas em development)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Erro ao registrar venda (transação):', {
+        message: error.message,
+        code: error.code
+      });
+    }
     
     throw new ApiError(500, 'Erro ao processar venda. Tente novamente.');
     
