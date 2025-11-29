@@ -200,7 +200,10 @@ const Relatorios = () => {
       query += `&useExactDates=true`;
 
       // Resto do código para buscar produtos e resumo...
-      const resposta = await api.get(`/api/relatorios/resumo?${query}`);
+      // Timeout aumentado para 30s para operações demoradas de relatório
+      const resposta = await api.get(`/api/relatorios/resumo?${query}`, {
+        timeout: 30000
+      });
       
       // Verificar se a resposta contém dados válidos
       if (resposta.data) {

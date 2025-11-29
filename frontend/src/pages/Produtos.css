@@ -25,10 +25,10 @@
   margin-bottom: 20px;
 }
 
-/* Busca ajustada para evitar sobreposição */
+/* Busca ajustada para evitar sobreposição e permitir nomes longos */
 .search-box {
   width: 100%;
-  max-width: 400px;
+  max-width: 500px;
 }
 
 .search-input-wrapper {
@@ -45,6 +45,7 @@
   border-radius: 4px 0 0 4px;
   font-size: 15px;
   width: 100%;
+  min-width: 300px;
 }
 
 .search-button {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   FaPlus,
@@ -20,6 +20,7 @@ const Produtos = () => {
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState("");
+  const [buscaDebounced, setBuscaDebounced] = useState("");
   const [imagensComErro, setImagensComErro] = useState({});
 
   // Filtro avançado visível por padrão
@@ -44,58 +45,37 @@ const Produtos = () => {
   const [erroExclusao, setErroExclusao] = useState(null);
   const [estoqueZerado, setEstoqueZerado] = useState(false);
 
-  // Estado para paginação
-  const [paginacao, setPaginacao] = useState({
-    currentPage: 1,
-    itemsPerPage: 20,
-    totalItems: 0,
-  });
+  // Estado unificado para paginação
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [totalItems, setTotalItems] = useState(0);
 
-  // Refs para controlar carregamentos e evitar ciclos
-  const shouldFetchData = useRef(true);
-  const fetchRequested = useRef(false);
-  const requestInProgress = useRef(false);
+  // Debounce para busca - atualiza buscaDebounced após 500ms
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setBuscaDebounced(busca);
+    }, 500);
 
-  // Controle avançado de estados de paginação
-  const paginacaoRef = useRef({
-    currentPage: 1,
-    itemsPerPage: 20,
-    totalItems: 0,
-  });
+    return () => clearTimeout(timeoutId);
+  }, [busca]);
 
-  // Referência aos filtros atuais para evitar ciclos
-  const filtrosRef = useRef({
-    tipo: "",
-    categoria: "",
-    subcategoria: "",
-    busca: "",
-  });
-
-  // Função para carregar produtos sem depender de estados
-  const carregarProdutosFn = useCallback(async (params = {}) => {
-    // Se já existe uma requisição em andamento, marcar que nova requisição foi solicitada
-    if (requestInProgress.current) {
-      fetchRequested.current = true;
-      return;
-    }
-
-    requestInProgress.current = true;
+  // Função para carregar produtos
+  const carregarProdutos = useCallback(async () => {
     setCarregando(true);
 
     try {
-      const mergedParams = {
-        page: paginacaoRef.current.currentPage,
-        limit: paginacaoRef.current.itemsPerPage,
-        tipo: filtrosRef.current.tipo,
-        categoria: filtrosRef.current.categoria,
-        subcategoria: filtrosRef.current.subcategoria,
-        busca: filtrosRef.current.busca || undefined,
-        ...params,
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage,
+        tipo: filtros.tipo || undefined,
+        categoria: filtros.categoria || undefined,
+        subcategoria: filtros.subcategoria || undefined,
+        busca: buscaDebounced || undefined,
       };
 
-      console.log("Buscando produtos com params:", mergedParams);
+      console.log("Buscando produtos com params:", params);
 
-      const resposta = await api.get("/api/produtos", { params: mergedParams });
+      const resposta = await api.get("/api/produtos", { params });
 
       console.log("Resposta recebida:", resposta.data);
 
@@ -111,16 +91,10 @@ const Produtos = () => {
         dadosProdutos = resposta.data.produtos;
       }
 
-      // Atualizar dados sem disparar ciclos de renderização
       setProdutosFiltrados(dadosProdutos);
 
-      // Atualizar total sem causar renderização em cascata
-      if (resposta.data.total) {
-        paginacaoRef.current.totalItems = resposta.data.total;
-        setPaginacao((prev) => ({
-          ...prev,
-          totalItems: resposta.data.total,
-        }));
+      if (resposta.data.total !== undefined) {
+        setTotalItems(resposta.data.total);
       }
     } catch (error) {
       console.error("Erro ao carregar produtos:", error);
@@ -130,17 +104,8 @@ const Produtos = () => {
       setProdutosFiltrados([]);
     } finally {
       setCarregando(false);
-      requestInProgress.current = false;
-
-      // Se uma nova requisição foi solicitada durante esta, executar após um pequeno delay
-      if (fetchRequested.current) {
-        fetchRequested.current = false;
-        setTimeout(() => {
-          carregarProdutosFn();
-        }, 100);
-      }
     }
-  }, []);
+  }, [currentPage, itemsPerPage, filtros, buscaDebounced]);
 
   // Função para carregar opções de filtros de endpoints dedicados
   const carregarOpcoesFiltroDedicado = useCallback(async () => {
@@ -168,95 +133,33 @@ const Produtos = () => {
     }
   }, []);
 
-  // Handler de mudança de página - versão segura
-  const handlePageChange = useCallback(
-    (page) => {
-      console.log(`Mudando para página ${page}`);
-
-      if (page === paginacaoRef.current.currentPage) return;
-
-      // Atualizar ref antes do estado
-      paginacaoRef.current.currentPage = page;
-
-      // Atualizar estado
-      setPaginacao((prev) => ({ ...prev, currentPage: page }));
-
-      // Carregar novos dados com a página atualizada
-      carregarProdutosFn({ page });
-    },
-    [carregarProdutosFn]
-  );
-
-  // Handler de mudança de itens por página - versão segura
-  const handleItemsPerPageChange = useCallback(
-    (itemsPerPage) => {
-      console.log(`Mudando para ${itemsPerPage} itens por página`);
-
-      if (itemsPerPage === paginacaoRef.current.itemsPerPage) return;
-
-      // Atualizar ref antes do estado
-      paginacaoRef.current.itemsPerPage = itemsPerPage;
-      paginacaoRef.current.currentPage = 1;
-
-      // Atualizar estado
-      setPaginacao((prev) => ({
-        ...prev,
-        itemsPerPage,
-        currentPage: 1,
-      }));
-
-      // Carregar novos dados com os parâmetros atualizados
-      carregarProdutosFn({ limit: itemsPerPage, page: 1 });
-    },
-    [carregarProdutosFn]
-  );
-
-  // Efeito para carregar dados iniciais - executado apenas UMA vez
-  useEffect(() => {
-    console.log("Montagem inicial do componente - carregando dados");
-
-    // Garantir que as refs estão sincronizadas com os estados iniciais
-    paginacaoRef.current = { ...paginacao };
-    filtrosRef.current = { ...filtros, busca };
-
-    // Carregar produtos e opções de filtro em paralelo
-    carregarProdutosFn();
-    carregarOpcoesFiltroDedicado();
-
-    // Cleanup function
-    return () => {
-      shouldFetchData.current = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Handler de mudança de página
+  const handlePageChange = useCallback((page) => {
+    console.log(`Mudando para página ${page}`);
+    setCurrentPage(page);
   }, []);
 
-  // Função para aplicar filtros sem causar loops
-  const aplicarFiltros = useCallback(
-    (novosFiltros, novaBusca) => {
-      console.log("Aplicando filtros:", novosFiltros, novaBusca);
+  // Handler de mudança de itens por página
+  const handleItemsPerPageChange = useCallback((newItemsPerPage) => {
+    console.log(`Mudando para ${newItemsPerPage} itens por página`);
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1); // Reset para primeira página ao mudar itens por página
+  }, []);
 
-      // Atualizar refs primeiro
-      filtrosRef.current = {
-        ...novosFiltros,
-        busca: novaBusca,
-      };
+  // Efeito para carregar produtos quando dependências mudam
+  useEffect(() => {
+    carregarProdutos();
+  }, [carregarProdutos]);
 
-      paginacaoRef.current.currentPage = 1;
+  // Efeito para carregar opções de filtro na montagem
+  useEffect(() => {
+    carregarOpcoesFiltroDedicado();
+  }, [carregarOpcoesFiltroDedicado]);
 
-      // Atualizar estados
-      setFiltros(novosFiltros);
-      setBusca(novaBusca);
-      setPaginacao((prev) => ({ ...prev, currentPage: 1 }));
-
-      // Carregar dados com novos filtros
-      carregarProdutosFn({
-        ...novosFiltros,
-        busca: novaBusca || undefined,
-        page: 1,
-      });
-    },
-    [carregarProdutosFn]
-  );
+  // Reset para primeira página quando filtros ou busca mudam
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtros, buscaDebounced]);
 
   // Função para atualizar busca
   const handleBuscaChange = (e) => {
@@ -264,38 +167,20 @@ const Produtos = () => {
     setBusca(novaBusca);
   };
 
-  // Aplicar busca após digitar
-  const aplicarBusca = useCallback(() => {
-    aplicarFiltros(filtros, busca);
-  }, [aplicarFiltros, filtros, busca]);
-
-  // Efeito para aplicar busca apenas quando o usuário parar de digitar
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (busca !== filtrosRef.current.busca) {
-        aplicarBusca();
-      }
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [busca, aplicarBusca]);
-
   // Atualizar filtro
   const handleChangeFiltro = (e) => {
     const { name, value } = e.target;
-    const novosFiltros = { ...filtros, [name]: value };
-    aplicarFiltros(novosFiltros, busca);
+    setFiltros(prev => ({ ...prev, [name]: value }));
   };
 
   // Limpar todos os filtros
   const limparFiltros = () => {
-    const novosFiltros = {
+    setFiltros({
       tipo: "",
       categoria: "",
       subcategoria: "",
-    };
-
-    aplicarFiltros(novosFiltros, "");
+    });
+    setBusca("");
   };
 
   // Função para confirmar exclusão (agora com carregamento dos dados do produto)
@@ -386,7 +271,7 @@ const Produtos = () => {
       await api.delete(`/api/produtos/${excluirId}`);
 
       // Atualizar lista de produtos recarregando os dados
-      carregarProdutosFn();
+      carregarProdutos();
 
       toast.success("Produto removido com sucesso!");
 
@@ -518,19 +403,19 @@ const Produtos = () => {
       {/* Indicador de resultados e paginação compacta no topo */}
       <div className="resultados-header">
         <div className="resultados-info">
-          Exibindo {produtosFiltrados.length} de {paginacao.totalItems} produtos
+          Exibindo {produtosFiltrados.length} de {totalItems} produtos
           {busca || filtros.tipo || filtros.categoria || filtros.subcategoria
             ? " (filtrados)"
             : ""}
         </div>
         
-        {produtosFiltrados.length > 0 && paginacao.totalItems > paginacao.itemsPerPage && (
+        {produtosFiltrados.length > 0 && totalItems > itemsPerPage && (
           <PaginacaoCompacta
-            totalItems={paginacao.totalItems}
+            totalItems={totalItems}
             onPageChange={handlePageChange}
-            itemsPerPage={paginacao.itemsPerPage}
+            itemsPerPage={itemsPerPage}
             pageName="produtos"
-            pagina={paginacao.currentPage}
+            pagina={currentPage}
           />
         )}
       </div>
@@ -538,11 +423,11 @@ const Produtos = () => {
       {/* Componente de Paginação no topo */}
       {!carregando && produtosFiltrados.length > 0 && (
         <Paginacao
-          totalItems={paginacao.totalItems}
+          totalItems={totalItems}
           onPageChange={handlePageChange}
           onItemsPerPageChange={handleItemsPerPageChange}
           pageName="produtos_top"
-          pagina={paginacao.currentPage}
+          pagina={currentPage}
         />
       )}
 
@@ -635,11 +520,11 @@ const Produtos = () => {
           {/* Componente de Paginação no final */}
           {produtosFiltrados.length > 0 && (
             <Paginacao
-              totalItems={paginacao.totalItems}
+              totalItems={totalItems}
               onPageChange={handlePageChange}
               onItemsPerPageChange={handleItemsPerPageChange}
               pageName="produtos"
-              pagina={paginacao.currentPage}
+              pagina={currentPage}
             />
           )}
         </>

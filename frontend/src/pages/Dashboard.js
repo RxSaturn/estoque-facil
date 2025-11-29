@@ -30,185 +30,55 @@ import SkeletonCard from "../components/dashboard/SkeletonCard";
 
 import "./Dashboard.css";
 
+// Configurações comuns para as queries do dashboard
+const DASHBOARD_QUERY_CONFIG = {
+  staleTime: 2 * 60 * 1000, // 2 minutos - dados são considerados frescos
+  cacheTime: 5 * 60 * 1000, // 5 minutos - manter no cache
+  retry: 2, // Tentar 2 vezes em caso de falha
+  retryDelay: 1000, // Esperar 1 segundo entre tentativas
+  refetchOnWindowFocus: false, // Não refetch ao focar na janela
+};
+
 // Componente principal do Dashboard
 const Dashboard = () => {
   const { usuario } = useContext(AuthContext);
   const queryClient = useQueryClient();
 
-  // Timeout aumentado de 8s para 15s para redes mais lentas
-  const QUERY_TIMEOUT = 15000;
-
-  // Consultas TanStack Query para cada tipo de dados com promessas com timeout
+  // Consultas TanStack Query para cada tipo de dados
   const produtosQuery = useQuery({
     queryKey: ["estatisticasProdutos"],
-    queryFn: async () => {
-      console.log("🔄 Iniciando query de produtos");
-      try {
-        const result = await Promise.race([
-          getProductStats(),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Timeout na consulta de produtos")),
-              QUERY_TIMEOUT
-            )
-          ),
-        ]);
-        console.log("✅ Query de produtos concluída com sucesso");
-        return result;
-      } catch (error) {
-        console.error("❌ Erro na query de produtos:", error);
-        throw error;
-      }
-    },
-    onError: (err) => {
-      console.error("❌ Erro final na query de produtos:", err);
-      toast.error("Erro ao carregar dados de produtos. Tente atualizar.");
-      // Retornar dados padrão para evitar erros de UI
-      return { total: 0, quantidadeTotal: 0 };
-    },
+    queryFn: getProductStats,
+    ...DASHBOARD_QUERY_CONFIG,
   });
 
   const vendasQuery = useQuery({
     queryKey: ["estatisticasVendas"],
-    queryFn: async () => {
-      console.log("🔄 Iniciando query de vendas");
-      try {
-        const result = await Promise.race([
-          getSalesStats(),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Timeout na consulta de vendas")),
-              QUERY_TIMEOUT
-            )
-          ),
-        ]);
-        console.log("✅ Query de vendas concluída com sucesso");
-        return result;
-      } catch (error) {
-        console.error("❌ Erro na query de vendas:", error);
-        throw error;
-      }
-    },
-    onError: (err) => {
-      console.error("❌ Erro final na query de vendas:", err);
-      toast.error("Erro ao carregar dados de vendas. Tente atualizar.");
-      // Retornar dados padrão
-      return { vendasHoje: 0, tendenciaVendas: 0 };
-    },
+    queryFn: getSalesStats,
+    ...DASHBOARD_QUERY_CONFIG,
   });
 
   const topProdutosQuery = useQuery({
     queryKey: ["topProdutos"],
-    queryFn: async () => {
-      console.log("🔄 Iniciando query de top produtos");
-      try {
-        const result = await Promise.race([
-          getTopProducts(5),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Timeout na consulta de top produtos")),
-              QUERY_TIMEOUT
-            )
-          ),
-        ]);
-        console.log("✅ Query de top produtos concluída com sucesso");
-        return result;
-      } catch (error) {
-        console.error("❌ Erro na query de top produtos:", error);
-        throw error;
-      }
-    },
-    onError: (err) => {
-      console.error("❌ Erro final na query de top produtos:", err);
-      toast.error("Erro ao carregar top produtos. Tente atualizar.");
-      return [];
-    },
+    queryFn: () => getTopProducts(5),
+    ...DASHBOARD_QUERY_CONFIG,
   });
 
   const estoqueBaixoQuery = useQuery({
     queryKey: ["produtosBaixoEstoque"],
-    queryFn: async () => {
-      console.log("🔄 Iniciando query de estoque baixo");
-      try {
-        const result = await Promise.race([
-          getLowStockProducts(),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Timeout na consulta de estoque baixo")),
-              QUERY_TIMEOUT
-            )
-          ),
-        ]);
-        console.log("✅ Query de estoque baixo concluída com sucesso");
-        return result;
-      } catch (error) {
-        console.error("❌ Erro na query de estoque baixo:", error);
-        throw error;
-      }
-    },
-    onError: (err) => {
-      console.error("❌ Erro final na query de estoque baixo:", err);
-      toast.error(
-        "Erro ao carregar produtos com estoque baixo. Tente atualizar."
-      );
-      return [];
-    },
+    queryFn: getLowStockProducts,
+    ...DASHBOARD_QUERY_CONFIG,
   });
 
   const categoriasQuery = useQuery({
     queryKey: ["categorias"],
-    queryFn: async () => {
-      console.log("🔄 Iniciando query de categorias");
-      try {
-        const result = await Promise.race([
-          getCategoryDistribution(),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Timeout na consulta de categorias")),
-              QUERY_TIMEOUT
-            )
-          ),
-        ]);
-        console.log("✅ Query de categorias concluída com sucesso");
-        return result;
-      } catch (error) {
-        console.error("❌ Erro na query de categorias:", error);
-        throw error;
-      }
-    },
-    onError: (err) => {
-      console.error("❌ Erro final na query de categorias:", err);
-      toast.error("Erro ao carregar categorias. Tente atualizar.");
-      return [];
-    },
+    queryFn: getCategoryDistribution,
+    ...DASHBOARD_QUERY_CONFIG,
   });
 
   const movimentacoesQuery = useQuery({
     queryKey: ["movimentacoesRecentes"],
-    queryFn: async () => {
-      console.log("🔄 Iniciando query de movimentações");
-      try {
-        const result = await Promise.race([
-          getRecentTransactions(8),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Timeout na consulta de movimentações")),
-              QUERY_TIMEOUT
-            )
-          ),
-        ]);
-        console.log("✅ Query de movimentações concluída com sucesso");
-        return result;
-      } catch (error) {
-        console.error("❌ Erro na query de movimentações:", error);
-        throw error;
-      }
-    },
-    onError: (err) => {
-      console.error("❌ Erro final na query de movimentações:", err);
-      toast.error("Erro ao carregar movimentações. Tente atualizar.");
-      return [];
-    },
+    queryFn: () => getRecentTransactions(8),
+    ...DASHBOARD_QUERY_CONFIG,
   });
 
   // Verificar se todos os dados essenciais estão carregando
