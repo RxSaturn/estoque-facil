@@ -1,0 +1,187 @@
+/**
+ * Theme CSS - Estoque Fácil
+ * CSS variables for consistent design system
+ * This file complements design-system.css with theme-specific overrides
+ */
+
+:root {
+  /* ===== Component-Specific Theme Variables ===== */
+
+  /* Form Controls */
+  --input-bg: var(--color-surface, #FFFFFF);
+  --input-border: var(--color-border, #E5E7EB);
+  --input-border-focus: var(--color-primary, #2563EB);
+  --input-text: var(--color-text-primary, #1F2937);
+  --input-placeholder: var(--color-text-muted, #9CA3AF);
+  --input-disabled-bg: var(--color-background, #F3F4F6);
+  --input-height: 2.5rem;
+  --input-padding-x: 0.75rem;
+  --input-padding-y: 0.5rem;
+
+  /* Select/Dropdown */
+  --select-dropdown-bg: var(--color-surface, #FFFFFF);
+  --select-dropdown-shadow: var(--shadow-lg);
+  --select-option-hover-bg: var(--color-primary-light, #DBEAFE);
+  --select-option-selected-bg: var(--color-primary, #2563EB);
+  --select-option-selected-text: var(--color-text-inverse, #FFFFFF);
+  --select-max-height: 300px;
+
+  /* Autocomplete */
+  --autocomplete-highlight-bg: var(--color-warning-light, #FEF3C7);
+  --autocomplete-loading-color: var(--color-primary, #2563EB);
+
+  /* Cards */
+  --card-bg: var(--color-surface, #FFFFFF);
+  --card-border: var(--color-border, #E5E7EB);
+  --card-shadow: var(--shadow-md);
+  --card-padding: var(--spacing-lg, 1.5rem);
+  --card-radius: var(--radius-lg, 0.75rem);
+
+  /* Buttons */
+  --btn-height: 2.5rem;
+  --btn-padding-x: 1rem;
+  --btn-font-weight: var(--font-weight-medium, 500);
+  --btn-radius: var(--radius-md, 0.5rem);
+
+  /* Tables */
+  --table-header-bg: var(--color-background, #F3F4F6);
+  --table-row-hover: var(--color-background-alt, #F9FAFB);
+  --table-border: var(--color-border-light, #F3F4F6);
+
+  /* Badges */
+  --badge-font-size: var(--font-size-xs, 0.75rem);
+  --badge-padding-x: 0.5rem;
+  --badge-padding-y: 0.25rem;
+  --badge-radius: var(--radius-full, 9999px);
+
+  /* Modals */
+  --modal-overlay-bg: rgba(0, 0, 0, 0.5);
+  --modal-bg: var(--color-surface, #FFFFFF);
+  --modal-shadow: var(--shadow-xl);
+  --modal-radius: var(--radius-xl, 1rem);
+
+  /* Sidebar/Navigation */
+  --nav-bg: var(--color-surface, #FFFFFF);
+  --nav-border: var(--color-border, #E5E7EB);
+  --nav-item-hover: var(--color-background, #F3F4F6);
+  --nav-item-active: var(--color-primary-light, #DBEAFE);
+
+  /* Status Colors */
+  --status-available: var(--color-success, #10B981);
+  --status-low-stock: var(--color-warning, #F59E0B);
+  --status-out-of-stock: var(--color-danger, #EF4444);
+  --status-critical: var(--color-danger-dark, #B91C1C);
+
+  /* Loading States */
+  --skeleton-bg: #E5E7EB;
+  --skeleton-shine: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+}
+
+/* ===== Component Base Styles ===== */
+
+/* Form Inputs */
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  height: var(--input-height);
+  padding: var(--input-padding-y) var(--input-padding-x);
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  color: var(--input-text);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--input-border-focus);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.form-input:disabled,
+.form-select:disabled,
+.form-textarea:disabled {
+  background-color: var(--input-disabled-bg);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: var(--input-placeholder);
+}
+
+.form-textarea {
+  height: auto;
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: var(--badge-padding-y) var(--badge-padding-x);
+  font-size: var(--badge-font-size);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--badge-radius);
+}
+
+.status-badge.available {
+  background-color: var(--color-success-light);
+  color: var(--color-success-dark);
+}
+
+.status-badge.low-stock {
+  background-color: var(--color-warning-light);
+  color: var(--color-warning-dark);
+}
+
+.status-badge.out-of-stock {
+  background-color: var(--color-danger-light);
+  color: var(--color-danger-dark);
+}
+
+/* Card Component */
+.theme-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  padding: var(--card-padding);
+}
+
+/* Stock Indicator */
+.stock-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--font-size-sm);
+}
+
+.stock-indicator .indicator-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+.stock-indicator.high .indicator-dot {
+  background-color: var(--status-available);
+}
+
+.stock-indicator.medium .indicator-dot {
+  background-color: var(--status-low-stock);
+}
+
+.stock-indicator.low .indicator-dot {
+  background-color: var(--status-out-of-stock);
+}
+
+.stock-indicator.critical .indicator-dot {
+  background-color: var(--status-critical);
+}

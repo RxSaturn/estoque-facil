@@ -645,3 +645,68 @@ exports.obterUltimasTransacoes = async (req, res) => {
     // Tratamento de erro...
   }
 };
+
+// Buscar produtos para autocomplete - OTIMIZADO para retornar apenas campos necessários
+exports.buscarProdutos = async (req, res) => {
+  try {
+    const { q = "", limit = 20 } = req.query;
+
+    // Validate and sanitize limit parameter (prevent DoS, enforce max of 50)
+    const MAX_LIMIT = 50;
+    const sanitizedLimit = Math.min(Math.max(1, parseInt(limit) || 20), MAX_LIMIT);
+
+    // Build search filter
+    const filtro = {};
+    if (q && q.trim()) {
+      filtro.$or = [
+        { nome: { $regex: q.trim(), $options: "i" } },
+        { id: { $regex: q.trim(), $options: "i" } },
+      ];
+    }
+
+    // Find products with only required fields for autocomplete
+    const produtos = await Produto.find(filtro)
+      .select("_id id nome")
+      .sort({ nome: 1 })
+      .limit(sanitizedLimit)
+      .lean();
+
+    // Get stock information for each product
+    const produtoIds = produtos.map((p) => p._id);
+    const estoques = await Estoque.aggregate([
+      { $match: { produto: { $in: produtoIds } } },
+      {
+        $group: {
+          _id: "$produto",
+          estoqueTotal: { $sum: "$quantidade" },
+        },
+      },
+    ]);
+
+    // Create map of stock by product ID
+    const estoqueMap = {};
+    estoques.forEach((e) => {
+      estoqueMap[e._id.toString()] = e.estoqueTotal;
+    });
+
+    // Combine product info with stock
+    const resultado = produtos.map((p) => ({
+      _id: p._id,
+      id: p.id,
+      nome: p.nome,
+      estoque: estoqueMap[p._id.toString()] || 0,
+    }));
+
+    res.json({
+      sucesso: true,
+      produtos: resultado,
+    });
+  } catch (error) {
+    console.error("Erro ao buscar produtos:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao buscar produtos",
+      erro: error.message,
+    });
+  }
+};
