@@ -18,7 +18,7 @@ const helmet = require("helmet");
 const path = require("path");
 
 // Importando middlewares
-const { apiLimiter, authLimiter, relatorioLimiter, recuperacaoSenhaLimiter } = require("./middlewares/rateLimit");
+const { apiLimiter, authLimiter, relatorioLimiter, recuperacaoSenhaLimiter, dashboardLimiter } = require("./middlewares/rateLimit");
 const errorHandler = require("./middlewares/errorHandler");
 
 // Importando as rotas
@@ -69,7 +69,7 @@ app.use("/api/usuarios", usuarioRoutes);
 app.use("/api/locais", localRoutes);
 app.use("/api/movimentacoes", movimentacaoRoutes);
 app.use('/api/recuperacao-senha', recuperacaoSenhaLimiter, recuperacaoSenhaRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/dashboard', dashboardLimiter, dashboardRoutes);
 
 // Endpoint de health check para verificação de conexão
 app.get('/api/health', (req, res) => {

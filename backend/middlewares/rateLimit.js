@@ -1,9 +1,9 @@
 const rateLimit = require('express-rate-limit');
 
-// Limite geral da API - 100 requisições por 15 minutos por IP
+// Limite geral da API - 300 requisições por 15 minutos por IP
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100,
+  max: 300,
   message: {
     sucesso: false,
     mensagem: 'Muitas requisições deste IP. Por favor, tente novamente em 15 minutos.'
@@ -60,10 +60,24 @@ const recuperacaoSenhaLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// Limite para rotas de dashboard - 120 requisições por minuto
+// Dashboard carrega múltiplos widgets simultaneamente
+const dashboardLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 120,
+  message: {
+    sucesso: false,
+    mensagem: 'Muitas requisições ao dashboard. Por favor, aguarde um momento.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 module.exports = {
   apiLimiter,
   authLimiter,
   relatorioLimiter,
   pdfLimiter,
-  recuperacaoSenhaLimiter
+  recuperacaoSenhaLimiter,
+  dashboardLimiter
 };
