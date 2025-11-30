@@ -14,5 +14,10 @@ router.get("/pdf", pdfLimiter, relatorioController.gerarPDF);
 // Para a funcionalidade de top produtos baseada em número de vendas
 router.get("/top-produtos", relatorioController.getTopProdutosPorVendas);
 
+// Novos endpoints otimizados
+router.get("/resumo-geral", relatorioController.getResumoGeral);
+router.get("/grafico-vendas", relatorioController.getGraficoVendas);
+router.get("/top-produtos-otimizado", relatorioController.getTopProdutos);
+
 
 module.exports = router;
