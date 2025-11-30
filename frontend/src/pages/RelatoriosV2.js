@@ -482,8 +482,8 @@ const RelatoriosV2 = () => {
         <div className="relatorio-resultados-v2">
           <div className="relatorio-header-v2">
             <div className="relatorio-info">
-              <div className="skeleton-line" style={{ width: 200, height: 24, marginBottom: 10 }}></div>
-              <div className="skeleton-line" style={{ width: 300, height: 16 }}></div>
+              <div className="skeleton-line skeleton-header-title"></div>
+              <div className="skeleton-line skeleton-header-subtitle"></div>
             </div>
             <div className="resumo-cards">
               <SkeletonCard />
@@ -704,7 +704,7 @@ const RelatoriosV2 = () => {
                     </div>
 
                     {/* Gráfico de barras horizontais */}
-                    <div style={{ height: 400, marginTop: 30 }}>
+                    <div className="chart-container-fixed">
                       <Bar
                         data={{
                           labels: dados.tabelas.topProdutos.slice(0, 10).map((item) => item.nome),
@@ -781,7 +781,7 @@ const RelatoriosV2 = () => {
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr style={{ backgroundColor: "#F3F4F6", fontWeight: "bold" }}>
+                        <tr className="table-footer-row">
                           <td colSpan={4}>TOTAL</td>
                           <td>
                             {dados.tabelas.todosProdutos.reduce((sum, p) => sum + p.qtdVendida, 0)}

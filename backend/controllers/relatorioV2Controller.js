@@ -6,6 +6,9 @@ const Estoque = require("../models/Estoque");
 // Constants for time calculations
 const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
 
+// Constants for default values
+const DEFAULT_USER_NAME = "Usuário";
+
 /**
  * Construir filtros base para vendas
  */
@@ -649,7 +652,7 @@ exports.gerarPDFOtimizado = async (req, res) => {
     doc
       .moveDown(6)
       .fontSize(10)
-      .text(`Gerado por: ${req.usuario?.nome || "Usuário"}`, { align: "center" })
+      .text(`Gerado por: ${req.usuario?.nome || DEFAULT_USER_NAME}`, { align: "center" })
       .text(`Data: ${new Date().toLocaleDateString("pt-BR")}`, { align: "center" });
 
     // ===== PÁGINA DE RESUMO =====

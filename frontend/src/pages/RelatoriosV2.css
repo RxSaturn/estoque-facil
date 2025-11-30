@@ -608,6 +608,30 @@
   background-color: rgba(0, 0, 0, 0.02);
 }
 
+/* ===== Additional Skeleton Styles ===== */
+.skeleton-header-title {
+  width: 200px;
+  height: 24px;
+  margin-bottom: 10px;
+}
+
+.skeleton-header-subtitle {
+  width: 300px;
+  height: 16px;
+}
+
+/* Chart container with fixed height */
+.chart-container-fixed {
+  height: 400px;
+  margin-top: 30px;
+}
+
+/* Table footer row */
+.table-footer-row {
+  background-color: #F3F4F6;
+  font-weight: bold;
+}
+
 /* ===== Responsividade ===== */
 @media (max-width: 768px) {
   .filtros-header {
