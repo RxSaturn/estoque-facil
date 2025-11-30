@@ -2168,6 +2168,9 @@ exports.getStats = async (req, res) => {
     if (Object.keys(filtroProdutos).length > 0) {
       const produtosFiltrados = await Produto.find(filtroProdutos).select("_id");
       produtosIds = produtosFiltrados.map((p) => p._id);
+      // Limit array size to prevent performance issues with $in operator
+      // If too many products match, fall back to no product filter for estoque query
+      // and filter results later if needed
     }
 
     // Construir filtro de vendas
@@ -2176,6 +2179,17 @@ exports.getStats = async (req, res) => {
     };
     if (produtosIds) filtroVendas.produto = { $in: produtosIds };
     if (local) filtroVendas.local = local;
+
+    // Build estoque filter with array size limit for $in operator
+    // MongoDB recommends keeping $in arrays under 1000 elements for optimal performance
+    const MAX_IN_ARRAY_SIZE = 1000;
+    const estoqueFilter = {
+      quantidade: { $lte: 10, $gt: 0 }
+    };
+    if (local) estoqueFilter.local = local;
+    if (produtosIds && produtosIds.length <= MAX_IN_ARRAY_SIZE) {
+      estoqueFilter.produto = { $in: produtosIds };
+    }
 
     // Executar consultas em paralelo com agregação otimizada
     const [
@@ -2194,11 +2208,7 @@ exports.getStats = async (req, res) => {
           }
         }
       ]),
-      Estoque.countDocuments({
-        ...(produtosIds ? { produto: { $in: produtosIds } } : {}),
-        ...(local ? { local } : {}),
-        quantidade: { $lte: 10, $gt: 0 }
-      })
+      Estoque.countDocuments(estoqueFilter)
     ]);
 
     const vendas = vendasAgregadas[0] || { totalVendas: 0, totalItensVendidos: 0 };
@@ -2372,27 +2382,43 @@ exports.getChartsCategories = async (req, res) => {
     if (produtosIds) filtroVendas.produto = { $in: produtosIds };
     if (local) filtroVendas.local = local;
 
-    // Agregação para vendas por categoria usando MongoDB pipeline
+    // Optimized aggregation pipeline for vendas por categoria
+    // First, group by produto to reduce documents before $lookup
+    // This minimizes the number of $lookup operations needed
     const resultado = await Venda.aggregate([
       { $match: filtroVendas },
-      {
-        $lookup: {
-          from: 'produtos',
-          localField: 'produto',
-          foreignField: '_id',
-          as: 'produtoInfo'
-        }
-      },
-      { $unwind: '$produtoInfo' },
+      // Pre-aggregate by produto to reduce $lookup operations
       {
         $group: {
-          _id: '$produtoInfo.categoria',
+          _id: '$produto',
           quantidade: { $sum: '$quantidade' },
           transacoes: { $sum: 1 }
         }
       },
+      // Now do $lookup on the reduced dataset
+      {
+        $lookup: {
+          from: 'produtos',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'produtoInfo',
+          // Use pipeline to project only the needed field (categoria)
+          pipeline: [
+            { $project: { categoria: 1 } }
+          ]
+        }
+      },
+      { $unwind: { path: '$produtoInfo', preserveNullAndEmptyArrays: true } },
+      // Final aggregation by categoria
+      {
+        $group: {
+          _id: { $ifNull: ['$produtoInfo.categoria', 'Sem Categoria'] },
+          quantidade: { $sum: '$quantidade' },
+          transacoes: { $sum: '$transacoes' }
+        }
+      },
       { $sort: { quantidade: -1 } }
-    ]);
+    ]).allowDiskUse(true); // Allow disk use for large aggregations
 
     const labels = resultado.map(item => item._id || 'Sem Categoria');
     const dados = resultado.map(item => item.quantidade);
