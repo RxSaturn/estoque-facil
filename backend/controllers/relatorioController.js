@@ -144,6 +144,15 @@ exports.gerarPDF = async (req, res) => {
       obterTodosProdutosVendidos(filtroVendas, dataInicioObj, dataFimObj)
     ]);
 
+    // Configurar resposta HTTP antes de iniciar o stream
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=relatorio-estoque-${
+        new Date().toISOString().split("T")[0]
+      }.pdf`
+    );
+    res.setHeader("Content-Type", "application/pdf");
+
     // Inicializar PDF com opções melhoradas
     const doc = new PDFDocument({
       margin: 50,
@@ -158,27 +167,20 @@ exports.gerarPDF = async (req, res) => {
       },
     });
 
-    // Coletar todos os dados em um buffer
-    const chunks = [];
-    doc.on("data", (chunk) => {
-      chunks.push(chunk);
-    });
+    // Stream PDF directly to response for better TTFB and memory efficiency
+    doc.pipe(res);
 
-    // Quando terminar, enviar para o cliente
-    doc.on("end", () => {
-      const result = Buffer.concat(chunks);
-      res.contentType("application/pdf");
-      res.send(result);
+    // Handle stream errors
+    doc.on("error", (err) => {
+      console.error("Erro no stream do PDF:", err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          sucesso: false,
+          mensagem: "Erro ao gerar PDF",
+          erro: err.message,
+        });
+      }
     });
-
-    // Configurar resposta HTTP
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=relatorio-estoque-${
-        new Date().toISOString().split("T")[0]
-      }.pdf`
-    );
-    res.setHeader("Content-Type", "application/pdf");
 
     // Função auxiliar para desenhar cabeçalho de páginas internas
     const drawHeader = () => {
@@ -2121,6 +2123,351 @@ exports.getTopProdutos = async (req, res) => {
     res.status(500).json({
       sucesso: false,
       mensagem: "Erro ao obter top produtos",
+      erro: error.message,
+    });
+  }
+};
+
+/**
+ * Endpoint granular para estatísticas de resumo (stats cards)
+ * GET /api/relatorios/stats
+ */
+exports.getStats = async (req, res) => {
+  try {
+    const { dataInicio, dataFim, tipo, categoria, subcategoria, local, metodoCalculo = "transacoes" } = req.query;
+
+    // Validar parâmetros obrigatórios
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Datas de início e fim são obrigatórias",
+      });
+    }
+
+    const dataInicioObj = new Date(`${dataInicio}T00:00:00.000Z`);
+    const dataFimObj = new Date(`${dataFim}T23:59:59.999Z`);
+
+    // Validar datas
+    if (isNaN(dataInicioObj.getTime()) || isNaN(dataFimObj.getTime())) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Datas inválidas",
+      });
+    }
+
+    // Construir filtros
+    const filtroProdutos = {};
+    if (tipo) filtroProdutos.tipo = tipo;
+    if (categoria) filtroProdutos.categoria = categoria;
+    if (subcategoria) filtroProdutos.subcategoria = subcategoria;
+
+    let produtosIds = null;
+    if (Object.keys(filtroProdutos).length > 0) {
+      const produtosFiltrados = await Produto.find(filtroProdutos).select("_id");
+      produtosIds = produtosFiltrados.map((p) => p._id);
+    }
+
+    // Construir filtro de vendas
+    const filtroVendas = {
+      dataVenda: { $gte: dataInicioObj, $lte: dataFimObj },
+    };
+    if (produtosIds) filtroVendas.produto = { $in: produtosIds };
+    if (local) filtroVendas.local = local;
+
+    // Executar consultas em paralelo com agregação otimizada
+    const [
+      totalProdutos,
+      vendasAgregadas,
+      estoqueBaixoCount
+    ] = await Promise.all([
+      Produto.countDocuments(filtroProdutos),
+      Venda.aggregate([
+        { $match: filtroVendas },
+        {
+          $group: {
+            _id: null,
+            totalVendas: { $sum: 1 },
+            totalItensVendidos: { $sum: "$quantidade" }
+          }
+        }
+      ]),
+      Estoque.countDocuments({
+        ...(produtosIds ? { produto: { $in: produtosIds } } : {}),
+        ...(local ? { local } : {}),
+        quantidade: { $lte: 10, $gt: 0 }
+      })
+    ]);
+
+    const vendas = vendasAgregadas[0] || { totalVendas: 0, totalItensVendidos: 0 };
+
+    // Calcular média diária
+    const diffDays = Math.max(1, Math.ceil((dataFimObj - dataInicioObj) / (1000 * 60 * 60 * 24)));
+    const mediaVendasDiarias = metodoCalculo === "transacoes" 
+      ? vendas.totalVendas / diffDays 
+      : vendas.totalItensVendidos / diffDays;
+
+    res.json({
+      sucesso: true,
+      totalProdutos: totalProdutos || 0,
+      totalVendas: vendas.totalVendas || 0,
+      totalItensVendidos: vendas.totalItensVendidos || 0,
+      estoqueBaixo: estoqueBaixoCount || 0,
+      mediaVendasDiarias: isNaN(mediaVendasDiarias) ? 0 : parseFloat(mediaVendasDiarias.toFixed(2))
+    });
+  } catch (error) {
+    console.error("Erro ao obter estatísticas:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao obter estatísticas",
+      erro: error.message,
+    });
+  }
+};
+
+/**
+ * Endpoint granular para gráfico de vendas ao longo do tempo
+ * GET /api/relatorios/charts/sales
+ */
+exports.getChartsSales = async (req, res) => {
+  try {
+    const { dataInicio, dataFim, tipo, categoria, subcategoria, local } = req.query;
+
+    // Validar parâmetros obrigatórios
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Datas de início e fim são obrigatórias",
+      });
+    }
+
+    const dataInicioObj = new Date(`${dataInicio}T00:00:00.000Z`);
+    const dataFimObj = new Date(`${dataFim}T23:59:59.999Z`);
+
+    // Validar datas
+    if (isNaN(dataInicioObj.getTime()) || isNaN(dataFimObj.getTime())) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Datas inválidas",
+      });
+    }
+
+    // Construir filtros
+    const filtroProdutos = {};
+    if (tipo) filtroProdutos.tipo = tipo;
+    if (categoria) filtroProdutos.categoria = categoria;
+    if (subcategoria) filtroProdutos.subcategoria = subcategoria;
+
+    let produtosIds = null;
+    if (Object.keys(filtroProdutos).length > 0) {
+      const produtosFiltrados = await Produto.find(filtroProdutos).select("_id");
+      produtosIds = produtosFiltrados.map((p) => p._id);
+    }
+
+    // Construir filtro de vendas
+    const filtroVendas = {
+      dataVenda: { $gte: dataInicioObj, $lte: dataFimObj },
+    };
+    if (produtosIds) filtroVendas.produto = { $in: produtosIds };
+    if (local) filtroVendas.local = local;
+
+    // Agregação para agrupar vendas por dia
+    const vendasPorDia = await Venda.aggregate([
+      { $match: filtroVendas },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: "%Y-%m-%d",
+              date: "$dataVenda",
+              timezone: "UTC"
+            }
+          },
+          quantidade: { $sum: "$quantidade" },
+          transacoes: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Formatar resultado para gráficos
+    const labels = vendasPorDia.map(item => {
+      const [, mes, dia] = item._id.split("-");
+      return `${dia}/${mes}`;
+    });
+    
+    const dados = vendasPorDia.map(item => item.quantidade);
+    const transacoes = vendasPorDia.map(item => item.transacoes);
+
+    // Encontrar dia com mais vendas
+    let diaMaiorVenda = null;
+    if (vendasPorDia.length > 0) {
+      const maiorDia = vendasPorDia.reduce((max, item) => 
+        item.transacoes > max.transacoes ? item : max, vendasPorDia[0]);
+      diaMaiorVenda = maiorDia._id;
+    }
+
+    res.json({
+      sucesso: true,
+      labels,
+      dados,
+      transacoes,
+      diaMaiorVenda
+    });
+  } catch (error) {
+    console.error("Erro ao obter gráfico de vendas:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao obter dados do gráfico de vendas",
+      erro: error.message,
+    });
+  }
+};
+
+/**
+ * Endpoint granular para gráfico de vendas por categoria
+ * GET /api/relatorios/charts/categories
+ */
+exports.getChartsCategories = async (req, res) => {
+  try {
+    const { dataInicio, dataFim, tipo, categoria, subcategoria, local } = req.query;
+
+    // Validar parâmetros obrigatórios
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Datas de início e fim são obrigatórias",
+      });
+    }
+
+    const dataInicioObj = new Date(`${dataInicio}T00:00:00.000Z`);
+    const dataFimObj = new Date(`${dataFim}T23:59:59.999Z`);
+
+    // Validar datas
+    if (isNaN(dataInicioObj.getTime()) || isNaN(dataFimObj.getTime())) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Datas inválidas",
+      });
+    }
+
+    // Construir filtros
+    const filtroProdutos = {};
+    if (tipo) filtroProdutos.tipo = tipo;
+    if (categoria) filtroProdutos.categoria = categoria;
+    if (subcategoria) filtroProdutos.subcategoria = subcategoria;
+
+    let produtosIds = null;
+    if (Object.keys(filtroProdutos).length > 0) {
+      const produtosFiltrados = await Produto.find(filtroProdutos).select("_id");
+      produtosIds = produtosFiltrados.map((p) => p._id);
+    }
+
+    // Construir filtro de vendas
+    const filtroVendas = {
+      dataVenda: { $gte: dataInicioObj, $lte: dataFimObj },
+    };
+    if (produtosIds) filtroVendas.produto = { $in: produtosIds };
+    if (local) filtroVendas.local = local;
+
+    // Agregação para vendas por categoria usando MongoDB pipeline
+    const resultado = await Venda.aggregate([
+      { $match: filtroVendas },
+      {
+        $lookup: {
+          from: 'produtos',
+          localField: 'produto',
+          foreignField: '_id',
+          as: 'produtoInfo'
+        }
+      },
+      { $unwind: '$produtoInfo' },
+      {
+        $group: {
+          _id: '$produtoInfo.categoria',
+          quantidade: { $sum: '$quantidade' },
+          transacoes: { $sum: 1 }
+        }
+      },
+      { $sort: { quantidade: -1 } }
+    ]);
+
+    const labels = resultado.map(item => item._id || 'Sem Categoria');
+    const dados = resultado.map(item => item.quantidade);
+    const transacoes = resultado.map(item => item.transacoes);
+
+    res.json({
+      sucesso: true,
+      labels,
+      dados,
+      transacoes
+    });
+  } catch (error) {
+    console.error("Erro ao obter vendas por categoria:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao obter vendas por categoria",
+      erro: error.message,
+    });
+  }
+};
+
+/**
+ * Endpoint granular para gráfico de distribuição de estoque por local
+ * GET /api/relatorios/charts/stock
+ */
+exports.getChartsStock = async (req, res) => {
+  try {
+    const { tipo, categoria, subcategoria, local } = req.query;
+
+    // Construir filtros
+    const filtroProdutos = {};
+    if (tipo) filtroProdutos.tipo = tipo;
+    if (categoria) filtroProdutos.categoria = categoria;
+    if (subcategoria) filtroProdutos.subcategoria = subcategoria;
+
+    let produtosIds = null;
+    if (Object.keys(filtroProdutos).length > 0) {
+      const produtosFiltrados = await Produto.find(filtroProdutos).select("_id");
+      produtosIds = produtosFiltrados.map((p) => p._id);
+    }
+
+    // Construir filtro de estoque
+    const filtroEstoque = {};
+    if (produtosIds) filtroEstoque.produto = { $in: produtosIds };
+    if (local) filtroEstoque.local = local;
+
+    // Agregação para estoque por local
+    const estoquePorLocal = await Estoque.aggregate([
+      { $match: filtroEstoque },
+      {
+        $group: {
+          _id: "$local",
+          total: { $sum: "$quantidade" },
+          itens: { $sum: 1 }
+        }
+      },
+      { $sort: { total: -1 } }
+    ]);
+
+    const labels = estoquePorLocal.map(item => item._id);
+    const dados = estoquePorLocal.map(item => item.total);
+    const itens = estoquePorLocal.map(item => item.itens);
+
+    // Calcular total geral
+    const totalGeral = dados.reduce((sum, val) => sum + val, 0);
+
+    res.json({
+      sucesso: true,
+      labels,
+      dados,
+      itens,
+      totalGeral
+    });
+  } catch (error) {
+    console.error("Erro ao obter estoque por local:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao obter distribuição de estoque",
       erro: error.message,
     });
   }

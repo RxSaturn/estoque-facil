@@ -19,5 +19,11 @@ router.get("/resumo-geral", relatorioController.getResumoGeral);
 router.get("/grafico-vendas", relatorioController.getGraficoVendas);
 router.get("/top-produtos-otimizado", relatorioController.getTopProdutos);
 
+// Endpoints granulares para carregamento paralelo
+router.get("/stats", relatorioController.getStats);
+router.get("/charts/sales", relatorioController.getChartsSales);
+router.get("/charts/categories", relatorioController.getChartsCategories);
+router.get("/charts/stock", relatorioController.getChartsStock);
+
 
 module.exports = router;

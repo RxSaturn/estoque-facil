@@ -138,16 +138,16 @@ const Relatorios = () => {
     return query;
   }, [filtros, metodoCalculo]);
 
-  // React Query para resumo geral (otimizado)
+  // React Query para estatísticas (stats cards) - novo endpoint granular
   const {
-    data: resumoGeral,
-    isFetching: isFetchingResumoGeral,
-    isError: isErrorResumoGeral,
-    refetch: refetchResumoGeral,
+    data: statsData,
+    isFetching: isFetchingStats,
+    isError: isErrorStats,
+    refetch: refetchStats,
   } = useQuery({
-    queryKey: ["resumoGeral", filtros, metodoCalculo],
+    queryKey: ["stats", filtros, metodoCalculo],
     queryFn: async () => {
-      const response = await api.get(`/api/relatorios/resumo-geral?${buildQueryString()}`);
+      const response = await api.get(`/api/relatorios/stats?${buildQueryString()}`);
       return response.data;
     },
     enabled: shouldFetch,
@@ -155,13 +155,48 @@ const Relatorios = () => {
     retry: 2,
   });
 
-  // React Query para gráfico de vendas (data will be used for enhanced charts in future iterations)
+  // React Query para gráfico de vendas ao longo do tempo
   const {
-    isFetching: isFetchingGraficoVendas,
+    data: chartsSalesData,
+    isFetching: isFetchingChartsSales,
   } = useQuery({
-    queryKey: ["graficoVendas", filtros, metodoCalculo],
+    queryKey: ["chartsSales", filtros, metodoCalculo],
     queryFn: async () => {
-      const response = await api.get(`/api/relatorios/grafico-vendas?${buildQueryString()}`);
+      const response = await api.get(`/api/relatorios/charts/sales?${buildQueryString()}`);
+      return response.data;
+    },
+    enabled: shouldFetch,
+    staleTime: 1000 * 60 * 5,
+    retry: 2,
+  });
+
+  // React Query para gráfico de vendas por categoria
+  const {
+    data: chartsCategoriesData,
+    isFetching: isFetchingChartsCategories,
+    isError: isErrorChartsCategories,
+    refetch: refetchChartsCategories,
+  } = useQuery({
+    queryKey: ["chartsCategories", filtros, metodoCalculo],
+    queryFn: async () => {
+      const response = await api.get(`/api/relatorios/charts/categories?${buildQueryString()}`);
+      return response.data;
+    },
+    enabled: shouldFetch,
+    staleTime: 1000 * 60 * 5,
+    retry: 2,
+  });
+
+  // React Query para gráfico de estoque por local
+  const {
+    data: chartsStockData,
+    isFetching: isFetchingChartsStock,
+    isError: isErrorChartsStock,
+    refetch: refetchChartsStock,
+  } = useQuery({
+    queryKey: ["chartsStock", filtros],
+    queryFn: async () => {
+      const response = await api.get(`/api/relatorios/charts/stock?${buildQueryString()}`);
       return response.data;
     },
     enabled: shouldFetch,
@@ -186,7 +221,7 @@ const Relatorios = () => {
     retry: 2,
   });
 
-  // React Query para resumo completo (para abas que precisam de mais dados)
+  // React Query para resumo completo (para abas que precisam de mais dados - produtos sem movimentação)
   const {
     data: resumo,
     isFetching: isFetchingResumo,
@@ -534,8 +569,8 @@ const Relatorios = () => {
     toast.info("Filtros resetados com sucesso!");
   };
 
-  const isLoading = isFetchingResumoGeral || isFetchingGraficoVendas || isFetchingTopProdutos || isFetchingResumo;
-  const hasData = shouldFetch && (resumoGeral || resumo);
+  const isLoading = isFetchingStats || isFetchingChartsSales || isFetchingChartsCategories || isFetchingChartsStock || isFetchingTopProdutos || isFetchingResumo;
+  const hasData = shouldFetch && (statsData || resumo);
 
   return (
     <div className="relatorios-container">
@@ -765,32 +800,32 @@ const Relatorios = () => {
             </div>
 
             <div className="relatorio-sumario">
-              {isFetchingResumoGeral ? (
+              {isFetchingStats ? (
                 <>
                   <SkeletonCard />
                   <SkeletonCard />
                   <SkeletonCard />
                 </>
-              ) : isErrorResumoGeral ? (
+              ) : isErrorStats ? (
                 <SectionError 
                   message="Erro ao carregar resumo" 
-                  onRetry={() => refetchResumoGeral()} 
+                  onRetry={() => refetchStats()} 
                 />
               ) : (
                 <>
                   <div className="sumario-item">
                     <p>Total de Produtos</p>
-                    <h3>{resumoGeral?.totalProdutos || resumo?.totalProdutos || 0}</h3>
+                    <h3>{statsData?.totalProdutos || resumo?.totalProdutos || 0}</h3>
                   </div>
 
                   <div className="sumario-item">
                     <p>Total de Vendas</p>
-                    <h3>{resumoGeral?.totalVendas || resumo?.totalVendas || 0}</h3>
+                    <h3>{statsData?.totalVendas || resumo?.totalVendas || 0}</h3>
                   </div>
 
                   <div className="sumario-item">
                     <p>Estoque Baixo</p>
-                    <h3>{resumoGeral?.estoqueBaixo || resumo?.semMovimentacao || 0}</h3>
+                    <h3>{statsData?.estoqueBaixo || resumo?.semMovimentacao || 0}</h3>
                   </div>
                 </>
               )}
@@ -831,21 +866,21 @@ const Relatorios = () => {
                   <div className="grafico-card">
                     <h3>Vendas por Categoria</h3>
                     <div className="grafico">
-                      {isFetchingResumo ? (
+                      {isFetchingChartsCategories ? (
                         <SkeletonChart />
-                      ) : isErrorResumo ? (
+                      ) : isErrorChartsCategories ? (
                         <SectionError 
                           message="Erro ao carregar gráfico" 
-                          onRetry={() => refetchResumo()} 
+                          onRetry={() => refetchChartsCategories()} 
                         />
-                      ) : resumo?.vendasPorCategoria?.labels?.length > 0 ? (
+                      ) : chartsCategoriesData?.labels?.length > 0 ? (
                         <Bar
                           data={{
-                            labels: resumo.vendasPorCategoria.labels,
+                            labels: chartsCategoriesData.labels,
                             datasets: [
                               {
                                 label: "Quantidade Vendida",
-                                data: resumo.vendasPorCategoria.dados,
+                                data: chartsCategoriesData.dados,
                                 backgroundColor: "rgba(54, 162, 235, 0.6)",
                                 borderColor: "rgba(54, 162, 235, 1)",
                                 borderWidth: 1,
@@ -870,20 +905,20 @@ const Relatorios = () => {
                   <div className="grafico-card">
                     <h3>Estoque por Local</h3>
                     <div className="grafico">
-                      {isFetchingResumo ? (
+                      {isFetchingChartsStock ? (
                         <SkeletonChart />
-                      ) : isErrorResumo ? (
+                      ) : isErrorChartsStock ? (
                         <SectionError 
                           message="Erro ao carregar gráfico" 
-                          onRetry={() => refetchResumo()} 
+                          onRetry={() => refetchChartsStock()} 
                         />
-                      ) : resumo?.estoquePorLocal?.labels?.length > 0 ? (
+                      ) : chartsStockData?.labels?.length > 0 ? (
                         <Pie
                           data={{
-                            labels: resumo.estoquePorLocal.labels,
+                            labels: chartsStockData.labels,
                             datasets: [
                               {
-                                data: resumo.estoquePorLocal.dados,
+                                data: chartsStockData.dados,
                                 backgroundColor: [
                                   "rgba(54, 162, 235, 0.6)",
                                   "rgba(255, 99, 132, 0.6)",
@@ -908,7 +943,7 @@ const Relatorios = () => {
                 <div className="indicadores">
                   <h3>Estatísticas do Período</h3>
                   <div className="indicadores-grid">
-                    {isFetchingResumo ? (
+                    {isFetchingStats || isFetchingChartsSales ? (
                       <>
                         <SkeletonCard />
                         <SkeletonCard />
@@ -926,7 +961,7 @@ const Relatorios = () => {
                             Diária
                           </p>
                           <p className="indicador-valor">
-                            {resumo?.mediaVendasDiarias?.toFixed(2) || "0.00"}
+                            {statsData?.mediaVendasDiarias?.toFixed(2) || resumo?.mediaVendasDiarias?.toFixed(2) || "0.00"}
                           </p>
                         </div>
 
@@ -935,24 +970,24 @@ const Relatorios = () => {
                             Total de Itens Vendidos
                           </p>
                           <p className="indicador-valor">
-                            {resumo?.totalItensVendidos || resumoGeral?.totalItensVendidos || 0}
+                            {statsData?.totalItensVendidos || resumo?.totalItensVendidos || 0}
                           </p>
                         </div>
 
                         <div className="indicador">
                           <p className="indicador-titulo">Dia com Maior Venda</p>
                           <p className="indicador-valor">
-                            {resumo?.diaMaiorVenda
+                            {(chartsSalesData?.diaMaiorVenda || resumo?.diaMaiorVenda)
                               ? (() => {
                                   try {
-                                    const [ano, mes, dia] =
-                                      resumo.diaMaiorVenda.split("-");
+                                    const diaMaiorVenda = chartsSalesData?.diaMaiorVenda || resumo?.diaMaiorVenda;
+                                    const [ano, mes, dia] = diaMaiorVenda.split("-");
                                     return `${dia.padStart(2, "0")}/${mes.padStart(
                                       2,
                                       "0"
                                     )}/${ano}`;
                                   } catch (e) {
-                                    return resumo.diaMaiorVenda;
+                                    return chartsSalesData?.diaMaiorVenda || resumo?.diaMaiorVenda;
                                   }
                                 })()
                               : "-"}
