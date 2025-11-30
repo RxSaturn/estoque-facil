@@ -569,7 +569,14 @@ const Relatorios = () => {
     toast.info("Filtros resetados com sucesso!");
   };
 
-  const isLoading = isFetchingStats || isFetchingChartsSales || isFetchingChartsCategories || isFetchingChartsStock || isFetchingTopProdutos || isFetchingResumo;
+  const isLoading = [
+    isFetchingStats,
+    isFetchingChartsSales,
+    isFetchingChartsCategories,
+    isFetchingChartsStock,
+    isFetchingTopProdutos,
+    isFetchingResumo
+  ].some(Boolean);
   const hasData = shouldFetch && (statsData || resumo);
 
   return (

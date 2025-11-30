@@ -6,6 +6,9 @@ const Venda = require("../models/Venda");
 const Movimentacao = require("../models/Movimentacao");
 const Estoque = require("../models/Estoque");
 
+// Constants for time calculations
+const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
+
 /**
  * Obtém todos os produtos vendidos no período especificado
  * @param {Object} filtro - Filtro para as vendas
@@ -1119,7 +1122,7 @@ async function calcularEstatisticas(
 
     // Calculate number of days first (used throughout)
     const diferencaEmMilissegundos = dataFimUTC - dataInicioUTC;
-    const diferencaEmDias = diferencaEmMilissegundos / (1000 * 60 * 60 * 24);
+    const diferencaEmDias = diferencaEmMilissegundos / MILLISECONDS_PER_DAY;
     const numeroDias = Math.max(1, Math.ceil(diferencaEmDias) || 1);
 
     // Use MongoDB Aggregation Pipeline for combined calculations (more efficient)
@@ -2201,7 +2204,7 @@ exports.getStats = async (req, res) => {
     const vendas = vendasAgregadas[0] || { totalVendas: 0, totalItensVendidos: 0 };
 
     // Calcular média diária
-    const diffDays = Math.max(1, Math.ceil((dataFimObj - dataInicioObj) / (1000 * 60 * 60 * 24)));
+    const diffDays = Math.max(1, Math.ceil((dataFimObj - dataInicioObj) / MILLISECONDS_PER_DAY));
     const mediaVendasDiarias = metodoCalculo === "transacoes" 
       ? vendas.totalVendas / diffDays 
       : vendas.totalItensVendidos / diffDays;
