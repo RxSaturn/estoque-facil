@@ -141,7 +141,7 @@ const Relatorios = () => {
   // React Query para resumo geral (otimizado)
   const {
     data: resumoGeral,
-    isLoading: isLoadingResumoGeral,
+    isFetching: isFetchingResumoGeral,
     isError: isErrorResumoGeral,
     refetch: refetchResumoGeral,
   } = useQuery({
@@ -157,7 +157,7 @@ const Relatorios = () => {
 
   // React Query para gráfico de vendas (data will be used for enhanced charts in future iterations)
   const {
-    isLoading: isLoadingGraficoVendas,
+    isFetching: isFetchingGraficoVendas,
   } = useQuery({
     queryKey: ["graficoVendas", filtros, metodoCalculo],
     queryFn: async () => {
@@ -172,7 +172,7 @@ const Relatorios = () => {
   // React Query para top produtos
   const {
     data: topProdutosData,
-    isLoading: isLoadingTopProdutos,
+    isFetching: isFetchingTopProdutos,
     isError: isErrorTopProdutos,
     refetch: refetchTopProdutos,
   } = useQuery({
@@ -189,7 +189,7 @@ const Relatorios = () => {
   // React Query para resumo completo (para abas que precisam de mais dados)
   const {
     data: resumo,
-    isLoading: isLoadingResumo,
+    isFetching: isFetchingResumo,
     isError: isErrorResumo,
     error: errorResumo,
     refetch: refetchResumo,
@@ -534,7 +534,7 @@ const Relatorios = () => {
     toast.info("Filtros resetados com sucesso!");
   };
 
-  const isLoading = isLoadingResumoGeral || isLoadingGraficoVendas || isLoadingTopProdutos || isLoadingResumo;
+  const isLoading = isFetchingResumoGeral || isFetchingGraficoVendas || isFetchingTopProdutos || isFetchingResumo;
   const hasData = shouldFetch && (resumoGeral || resumo);
 
   return (
@@ -765,7 +765,7 @@ const Relatorios = () => {
             </div>
 
             <div className="relatorio-sumario">
-              {isLoadingResumoGeral ? (
+              {isFetchingResumoGeral ? (
                 <>
                   <SkeletonCard />
                   <SkeletonCard />
@@ -831,7 +831,7 @@ const Relatorios = () => {
                   <div className="grafico-card">
                     <h3>Vendas por Categoria</h3>
                     <div className="grafico">
-                      {isLoadingResumo ? (
+                      {isFetchingResumo ? (
                         <SkeletonChart />
                       ) : isErrorResumo ? (
                         <SectionError 
@@ -870,7 +870,7 @@ const Relatorios = () => {
                   <div className="grafico-card">
                     <h3>Estoque por Local</h3>
                     <div className="grafico">
-                      {isLoadingResumo ? (
+                      {isFetchingResumo ? (
                         <SkeletonChart />
                       ) : isErrorResumo ? (
                         <SectionError 
@@ -908,7 +908,7 @@ const Relatorios = () => {
                 <div className="indicadores">
                   <h3>Estatísticas do Período</h3>
                   <div className="indicadores-grid">
-                    {isLoadingResumo ? (
+                    {isFetchingResumo ? (
                       <>
                         <SkeletonCard />
                         <SkeletonCard />
@@ -1001,7 +1001,7 @@ const Relatorios = () => {
                     : "por Quantidade Vendida"}
                 </h3>
 
-                {isLoadingTopProdutos || isLoadingResumo ? (
+                {isFetchingTopProdutos || isFetchingResumo ? (
                   <SkeletonTable rows={10} />
                 ) : isErrorTopProdutos && isErrorResumo ? (
                   <SectionError 
@@ -1113,7 +1113,7 @@ const Relatorios = () => {
               <div className="tab-sem-movimentacao">
                 <h3>Produtos Sem Movimentação</h3>
 
-                {isLoadingResumo ? (
+                {isFetchingResumo ? (
                   <SkeletonTable rows={8} />
                 ) : isErrorResumo ? (
                   <SectionError 
