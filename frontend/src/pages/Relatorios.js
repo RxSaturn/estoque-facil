@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   FaFileAlt,
   FaDownload,
@@ -12,6 +13,7 @@ import {
   FaExchangeAlt,
   FaExclamationCircle,
   FaInfoCircle,
+  FaSync,
 } from "react-icons/fa";
 import api from "../services/api";
 import { toast } from "react-toastify";
@@ -38,6 +40,47 @@ ChartJS.register(
   Tooltip,
   Legend,
   ArcElement
+);
+
+// Componente Skeleton para loading
+const SkeletonCard = () => (
+  <div className="skeleton-card">
+    <div className="skeleton-line skeleton-title"></div>
+    <div className="skeleton-line skeleton-value"></div>
+  </div>
+);
+
+const SkeletonChart = () => (
+  <div className="skeleton-chart">
+    <div className="skeleton-line skeleton-title"></div>
+    <div className="skeleton-chart-content"></div>
+  </div>
+);
+
+const SkeletonTable = ({ rows = 5 }) => (
+  <div className="skeleton-table">
+    <div className="skeleton-table-header">
+      <div className="skeleton-line"></div>
+    </div>
+    {Array.from({ length: rows }).map((_, i) => (
+      <div key={i} className="skeleton-table-row">
+        <div className="skeleton-line"></div>
+      </div>
+    ))}
+  </div>
+);
+
+// Componente de erro para seções individuais
+const SectionError = ({ message, onRetry }) => (
+  <div className="section-error">
+    <FaExclamationCircle className="error-icon" />
+    <p>{message || "Erro ao carregar dados"}</p>
+    {onRetry && (
+      <button className="btn btn-sm btn-outline" onClick={onRetry}>
+        <FaSync /> Tentar novamente
+      </button>
+    )}
+  </div>
 );
 
 const Relatorios = () => {
@@ -67,20 +110,104 @@ const Relatorios = () => {
 
   const [filtros, setFiltros] = useState(carregarPreferencias());
   const [periodoPreDefinido, setPeriodoPreDefinido] = useState("personalizado");
-  const [carregando, setCarregando] = useState(false);
   const [gerandoPDF, setGerandoPDF] = useState(false);
-  const [resumo, setResumo] = useState(null);
   const [tipos, setTipos] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [subcategorias, setSubcategorias] = useState([]);
   const [locais, setLocais] = useState([]);
   const [activeTab, setActiveTab] = useState("geral");
-  const [erroCarregamento, setErroCarregamento] = useState(null);
   const [preferenciaSalva, setPreferenciaSalva] = useState(false);
   const [produtosEstoqueCritico, setProdutosEstoqueCritico] = useState([]);
+  const [filtrosCarregados, setFiltrosCarregados] = useState(false);
+
+  // Estado para controlar se deve buscar dados
+  const [shouldFetch, setShouldFetch] = useState(false);
 
   // Novo estado para selecionar o tipo de cálculo
   const [metodoCalculo, setMetodoCalculo] = useState("transacoes");
+
+  // Construir query string
+  const buildQueryString = useCallback(() => {
+    let query = `dataInicio=${encodeURIComponent(filtros.dataInicio)}&dataFim=${encodeURIComponent(filtros.dataFim)}`;
+    if (filtros.tipo) query += `&tipo=${encodeURIComponent(filtros.tipo)}`;
+    if (filtros.categoria) query += `&categoria=${encodeURIComponent(filtros.categoria)}`;
+    if (filtros.subcategoria) query += `&subcategoria=${encodeURIComponent(filtros.subcategoria)}`;
+    if (filtros.local) query += `&local=${encodeURIComponent(filtros.local)}`;
+    query += `&metodoCalculo=${encodeURIComponent(metodoCalculo)}`;
+    query += `&useExactDates=true`;
+    return query;
+  }, [filtros, metodoCalculo]);
+
+  // React Query para resumo geral (otimizado)
+  const {
+    data: resumoGeral,
+    isLoading: isLoadingResumoGeral,
+    isError: isErrorResumoGeral,
+    refetch: refetchResumoGeral,
+  } = useQuery({
+    queryKey: ["resumoGeral", filtros, metodoCalculo],
+    queryFn: async () => {
+      const response = await api.get(`/api/relatorios/resumo-geral?${buildQueryString()}`);
+      return response.data;
+    },
+    enabled: shouldFetch,
+    staleTime: 1000 * 60 * 5, // 5 minutos
+    retry: 2,
+  });
+
+  // React Query para gráfico de vendas
+  const {
+    // data: graficoVendas, // Will be used for chart data in future
+    isLoading: isLoadingGraficoVendas,
+    // isError: isErrorGraficoVendas,
+    refetch: refetchGraficoVendas,
+  } = useQuery({
+    queryKey: ["graficoVendas", filtros, metodoCalculo],
+    queryFn: async () => {
+      const response = await api.get(`/api/relatorios/grafico-vendas?${buildQueryString()}`);
+      return response.data;
+    },
+    enabled: shouldFetch,
+    staleTime: 1000 * 60 * 5,
+    retry: 2,
+  });
+
+  // React Query para top produtos
+  const {
+    data: topProdutosData,
+    isLoading: isLoadingTopProdutos,
+    isError: isErrorTopProdutos,
+    refetch: refetchTopProdutos,
+  } = useQuery({
+    queryKey: ["topProdutos", filtros, metodoCalculo],
+    queryFn: async () => {
+      const response = await api.get(`/api/relatorios/top-produtos-otimizado?${buildQueryString()}&limite=20`);
+      return response.data;
+    },
+    enabled: shouldFetch,
+    staleTime: 1000 * 60 * 5,
+    retry: 2,
+  });
+
+  // React Query para resumo completo (para abas que precisam de mais dados)
+  const {
+    data: resumo,
+    isLoading: isLoadingResumo,
+    isError: isErrorResumo,
+    error: errorResumo,
+    refetch: refetchResumo,
+  } = useQuery({
+    queryKey: ["resumo", filtros, metodoCalculo],
+    queryFn: async () => {
+      const response = await api.get(`/api/relatorios/resumo?${buildQueryString()}`, {
+        timeout: 30000,
+      });
+      return response.data;
+    },
+    enabled: shouldFetch,
+    staleTime: 1000 * 60 * 5,
+    retry: 2,
+  });
 
   // Função para aplicar período predefinido
   const aplicarPeriodoPredefinido = useCallback((periodo) => {
@@ -114,15 +241,8 @@ const Relatorios = () => {
         return;
     }
 
-    // Converter para string no formato ISO (YYYY-MM-DD) sem manipulações adicionais
     const dataInicioStr = inicio.toISOString().split("T")[0];
     const dataFimStr = hoje.toISOString().split("T")[0];
-
-    console.log("Período predefinido:", {
-      periodo,
-      dataInicio: dataInicioStr,
-      dataFim: dataFimStr,
-    });
 
     setFiltros((prev) => ({
       ...prev,
@@ -173,119 +293,13 @@ const Relatorios = () => {
     []
   );
 
-  // IMPORTANTE: carregarResumo deve ser declarado ANTES do useEffect que o utiliza
-  const carregarResumo = useCallback(async () => {
-    try {
-      setCarregando(true);
-      setErroCarregamento(null);
-
-      // Log para depuração
-      console.log("Enviando datas:", {
-        dataInicio: filtros.dataInicio,
-        dataFim: filtros.dataFim,
-      });
-
-      // Garantir que estamos usando o formato ISO (YYYY-MM-DD) diretamente
-      // Construir query string com os valores exatos dos inputs, sem manipulação
-      let query = `dataInicio=${encodeURIComponent(filtros.dataInicio)}&dataFim=${encodeURIComponent(filtros.dataFim)}`;
-
-      if (filtros.tipo) query += `&tipo=${encodeURIComponent(filtros.tipo)}`;
-      if (filtros.categoria) query += `&categoria=${encodeURIComponent(filtros.categoria)}`;
-      if (filtros.subcategoria)
-        query += `&subcategoria=${encodeURIComponent(filtros.subcategoria)}`;
-      if (filtros.local) query += `&local=${encodeURIComponent(filtros.local)}`;
-      query += `&metodoCalculo=${encodeURIComponent(metodoCalculo)}`;
-
-      // Adicionar flag para indicar que queremos usar as datas exatas
-      query += `&useExactDates=true`;
-
-      // Resto do código para buscar produtos e resumo...
-      // Timeout aumentado para 30s para operações demoradas de relatório
-      const resposta = await api.get(`/api/relatorios/resumo?${query}`, {
-        timeout: 30000
-      });
-      
-      // Verificar se a resposta contém dados válidos
-      if (resposta.data) {
-        setResumo(resposta.data);
-        setErroCarregamento(null);
-        
-        // Verificar se o período não tem vendas e informar o usuário
-        if (resposta.data.totalVendas === 0) {
-          toast.info("Nenhuma venda encontrada no período selecionado.", {
-            toastId: 'no-sales-info',
-            autoClose: 5000,
-          });
-        }
-      }
-
-      // Buscar produtos com estoque crítico...
-    } catch (error) {
-      console.error("Erro ao carregar resumo:", error);
-      
-      // Verificar se é um erro de conexão REAL (flag do interceptor)
-      const isConnectionError = error.isConnectionError || 
-        error.code === "ECONNREFUSED" || 
-        error.code === "ERR_NETWORK" || 
-        error.message === "Network Error";
-      
-      // Tratamento específico para diferentes tipos de erro
-      if (isConnectionError && !error.response) {
-        setErroCarregamento(
-          "Não foi possível conectar ao servidor. Verifique se o backend está rodando."
-        );
-        // Não mostrar toast aqui, o interceptor já mostra
-      } else if (error.response?.status === 400) {
-        setErroCarregamento(
-          "Parâmetros inválidos. Verifique as datas e filtros selecionados."
-        );
-        toast.error("Parâmetros inválidos. Verifique os filtros.", {
-          toastId: 'params-error',
-        });
-      } else if (error.response && error.response.status >= 500) {
-        // Erro do servidor - NÃO é erro de conexão
-        setErroCarregamento(
-          "Erro no servidor ao processar a requisição. Tente novamente em alguns instantes."
-        );
-        toast.error("Erro no servidor. Tente novamente.", {
-          toastId: 'server-error',
-        });
-      } else if (error.response) {
-        // Outros erros HTTP com resposta
-        setErroCarregamento(
-          `Erro ao gerar relatório: ${error.response.data?.mensagem || 'Erro desconhecido'}`
-        );
-        toast.error("Erro ao gerar relatório. Tente novamente.", {
-          toastId: 'report-error',
-        });
-      } else {
-        // Erro genérico
-        setErroCarregamento(
-          "Não foi possível gerar o relatório. Verifique os filtros e tente novamente."
-        );
-        toast.error("Erro ao gerar relatório. Tente novamente.", {
-          toastId: 'generic-error',
-        });
-      }
-    } finally {
-      setCarregando(false);
-    }
-  }, [filtros.dataInicio, filtros.dataFim, filtros.tipo, filtros.categoria, filtros.subcategoria, filtros.local, metodoCalculo]);
-
   // Carregar dados de filtro ao montar o componente
-  // IMPORTANTE: Removido carregarResumo das dependências para evitar loops infinitos
-  // O relatório será gerado apenas quando o usuário clicar em "Gerar Relatório"
   useEffect(() => {
     const carregarOpcoesFiltro = async () => {
       try {
-        setErroCarregamento(null);
-        setCarregando(true);
-
-        // Carregar tipos de produto
         const resTipos = await api.get("/api/produtos/tipos");
         setTipos(resTipos.data);
 
-        // Carregar categorias iniciais
         const tipoSalvo = localStorage.getItem("relatorios_filtros");
         let tipoInicial = "";
         let categoriaInicial = "";
@@ -305,48 +319,36 @@ const Relatorios = () => {
           await carregarCategorias();
         }
 
-        // Carregar subcategorias iniciais
         if (tipoInicial || categoriaInicial) {
           await carregarSubcategorias(tipoInicial, categoriaInicial);
         }
 
-        // Carregar locais
         const resLocais = await api.get("/api/estoque/locais");
         setLocais(resLocais.data);
 
-        // NÃO chamar carregarResumo aqui automaticamente
-        // O usuário deve clicar em "Gerar Relatório"
+        setFiltrosCarregados(true);
       } catch (error) {
         console.error("Erro ao carregar opções de filtro:", error);
-        setErroCarregamento(
-          "Não foi possível carregar os dados iniciais. Verifique sua conexão e tente novamente."
-        );
         toast.error("Erro ao carregar dados iniciais. Tente novamente.");
-      } finally {
-        setCarregando(false);
       }
     };
 
     carregarOpcoesFiltro();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Executar apenas na montagem
+  }, [carregarCategorias, carregarSubcategorias]);
 
   // Efeito para salvar preferências automaticamente
   useEffect(() => {
     localStorage.setItem("relatorios_filtros", JSON.stringify(filtros));
   }, [filtros]);
 
-  // Adicione este useEffect logo depois dos outros useEffect existentes
+  // Carregar produtos com estoque crítico
   useEffect(() => {
     const carregarProdutosEstoqueCritico = async () => {
       try {
         const resposta = await api.get("/api/estoque/estoque-critico");
-
-        // Organizar dados por status
         const produtos = resposta.data;
         setProdutosEstoqueCritico(produtos);
 
-        // Calcular estatísticas para uso global
         const esgotados = produtos.filter(
           (p) => p.quantidade === 0 || p.status === "esgotado"
         ).length;
@@ -359,15 +361,12 @@ const Relatorios = () => {
             (p.quantidade >= 10 && p.quantidade < 20) || p.status === "baixo"
         ).length;
 
-        // Salvar estatísticas na variável global para uso em diferentes componentes
         window.estoqueCriticoStats = {
           esgotado: esgotados,
           critico: criticos,
           baixo: baixos,
           total: esgotados + criticos + baixos,
         };
-
-        console.log("Estoque crítico carregado:", window.estoqueCriticoStats);
       } catch (error) {
         console.error("Erro ao carregar estoque crítico:", error);
       }
@@ -379,7 +378,6 @@ const Relatorios = () => {
   const gerarRelatorio = (e) => {
     e.preventDefault();
     
-    // Validação de datas antes de gerar o relatório
     if (!filtros.dataInicio || !filtros.dataFim) {
       toast.error("Por favor, selecione as datas de início e fim.", {
         toastId: 'date-validation-error',
@@ -390,7 +388,6 @@ const Relatorios = () => {
     const dataInicio = new Date(filtros.dataInicio);
     const dataFim = new Date(filtros.dataFim);
     
-    // Verificar se as datas são válidas
     if (isNaN(dataInicio.getTime()) || isNaN(dataFim.getTime())) {
       toast.error("Datas inválidas. Verifique o formato das datas.", {
         toastId: 'invalid-date-error',
@@ -405,7 +402,6 @@ const Relatorios = () => {
       return;
     }
     
-    // Verificar se o período é muito grande (mais de 1 ano pode ser lento)
     const diffTime = Math.abs(dataFim - dataInicio);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
@@ -415,13 +411,19 @@ const Relatorios = () => {
       });
     }
     
-    carregarResumo();
+    setShouldFetch(true);
+    
+    setTimeout(() => {
+      refetchResumoGeral();
+      refetchGraficoVendas();
+      refetchTopProdutos();
+      refetchResumo();
+    }, 100);
   };
 
   const handleChangeFiltro = (e) => {
     const { name, value } = e.target;
 
-    // Resetar subcategoria ao mudar tipo
     if (name === "tipo") {
       carregarCategorias(value);
       setFiltros((prev) => ({
@@ -430,18 +432,13 @@ const Relatorios = () => {
         categoria: "",
         subcategoria: "",
       }));
-    }
-    // Resetar subcategoria ao mudar categoria
-    else if (name === "categoria") {
+    } else if (name === "categoria") {
       carregarSubcategorias(filtros.tipo, value);
       setFiltros((prev) => ({ ...prev, categoria: value, subcategoria: "" }));
-    }
-    // Para outros filtros, apenas atualizar o valor
-    else {
+    } else {
       setFiltros((prev) => ({ ...prev, [name]: value }));
     }
 
-    // Se mudar manualmente as datas, resetar o período predefinido
     if (name === "dataInicio" || name === "dataFim") {
       setPeriodoPreDefinido("personalizado");
     }
@@ -461,7 +458,6 @@ const Relatorios = () => {
     setPreferenciaSalva(true);
     toast.success("Preferências de filtro salvas com sucesso!");
 
-    // Resetar a confirmação após 3 segundos
     setTimeout(() => {
       setPreferenciaSalva(false);
     }, 3000);
@@ -471,7 +467,6 @@ const Relatorios = () => {
     try {
       setGerandoPDF(true);
 
-      // Construir query string com filtros
       let query = `dataInicio=${encodeURIComponent(filtros.dataInicio)}&dataFim=${encodeURIComponent(filtros.dataFim)}`;
       if (filtros.tipo) query += `&tipo=${encodeURIComponent(filtros.tipo)}`;
       if (filtros.categoria) query += `&categoria=${encodeURIComponent(filtros.categoria)}`;
@@ -482,17 +477,13 @@ const Relatorios = () => {
 
       const resposta = await api.get(`/api/relatorios/pdf?${query}`, {
         responseType: "blob",
-        timeout: 60000, // 60 segundos para PDFs grandes
+        timeout: 60000,
       });
 
-      // Criar objeto URL para o blob
       const url = window.URL.createObjectURL(new Blob([resposta.data]));
-
-      // Criar elemento de link e simular clique para download
       const link = document.createElement("a");
       link.href = url;
 
-      // Nome do arquivo para download
       const dataHoje = new Date()
         .toLocaleDateString("pt-BR")
         .replace(/\//g, "-");
@@ -501,7 +492,6 @@ const Relatorios = () => {
       document.body.appendChild(link);
       link.click();
 
-      // Limpar após download
       window.URL.revokeObjectURL(url);
       document.body.removeChild(link);
 
@@ -509,7 +499,6 @@ const Relatorios = () => {
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);
       
-      // Tratamento de erros específicos para download de PDF
       if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
         toast.error("O relatório está demorando muito. Tente filtrar por um período menor.", {
           toastId: 'pdf-timeout-error',
@@ -540,7 +529,6 @@ const Relatorios = () => {
       hoje.getDate()
     );
 
-    // Resetar para valores padrão
     setFiltros({
       dataInicio: mesAtras.toISOString().split("T")[0],
       dataFim: hoje.toISOString().split("T")[0],
@@ -554,6 +542,9 @@ const Relatorios = () => {
     toast.info("Filtros resetados com sucesso!");
   };
 
+  const isLoading = isLoadingResumoGeral || isLoadingGraficoVendas || isLoadingTopProdutos || isLoadingResumo;
+  const hasData = shouldFetch && (resumoGeral || resumo);
+
   return (
     <div className="relatorios-container">
       <h1 className="page-title">Relatórios</h1>
@@ -564,9 +555,7 @@ const Relatorios = () => {
         </h2>
 
         <form onSubmit={gerarRelatorio}>
-          {/* Container flexível para período + método de cálculo */}
           <div className="periodo-metodo-container">
-            {/* Períodos predefinidos */}
             <div className="periodos-predefinidos">
               <label>
                 <FaClock /> Período Predefinido:
@@ -586,7 +575,6 @@ const Relatorios = () => {
               </select>
             </div>
 
-            {/* Método de cálculo reposicionado para ficar ao lado */}
             <div className="metodo-calculo">
               <label htmlFor="metodoCalculo">
                 <FaExchangeAlt /> Método de Cálculo:
@@ -618,10 +606,7 @@ const Relatorios = () => {
                 id="dataInicio"
                 name="dataInicio"
                 value={filtros.dataInicio}
-                onChange={(e) => {
-                  console.log("Data inicial selecionada:", e.target.value);
-                  handleChangeFiltro(e);
-                }}
+                onChange={handleChangeFiltro}
                 required
               />
             </div>
@@ -633,10 +618,7 @@ const Relatorios = () => {
                 id="dataFim"
                 name="dataFim"
                 value={filtros.dataFim}
-                onChange={(e) => {
-                  console.log("Data final selecionada:", e.target.value);
-                  handleChangeFiltro(e);
-                }}
+                onChange={handleChangeFiltro}
                 required
                 min={filtros.dataInicio}
               />
@@ -704,16 +686,22 @@ const Relatorios = () => {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={carregando}
+              disabled={isLoading || !filtrosCarregados}
             >
-              {carregando ? "Gerando..." : "Gerar Relatório"}
+              {isLoading ? (
+                <>
+                  <span className="btn-spinner"></span> Gerando...
+                </>
+              ) : (
+                "Gerar Relatório"
+              )}
             </button>
 
             <button
               type="button"
               className="btn btn-secondary"
               onClick={handleDownloadRelatorio}
-              disabled={!resumo || gerandoPDF}
+              disabled={!hasData || gerandoPDF}
             >
               <FaDownload /> {gerandoPDF ? "Gerando PDF..." : "Baixar PDF"}
             </button>
@@ -739,21 +727,29 @@ const Relatorios = () => {
         </form>
       </div>
 
-      {erroCarregamento && (
+      {isErrorResumo && errorResumo && (
         <div className="erro-card">
           <FaExclamationTriangle className="erro-icon" />
-          <p>{erroCarregamento}</p>
+          <p>
+            {errorResumo?.response?.data?.mensagem || 
+             "Erro ao carregar dados. Verifique os filtros e tente novamente."}
+          </p>
         </div>
       )}
 
-      {carregando ? (
-        <div className="loading-container">
-          <div className="loading-spinner"></div>
-          <p>Gerando relatório...</p>
+      {!shouldFetch && !hasData && (
+        <div className="relatorio-placeholder">
+          <FaFileAlt className="placeholder-icon" />
+          <h2>Gere um relatório</h2>
+          <p>
+            Configure os filtros acima e clique em "Gerar Relatório" para
+            visualizar os resultados.
+          </p>
         </div>
-      ) : resumo ? (
+      )}
+
+      {shouldFetch && (
         <div className="relatorio-resultados">
-          {/* Cabeçalho do relatório */}
           <div className="relatorio-header">
             <div>
               <h2>Relatório de Estoque e Vendas</h2>
@@ -777,24 +773,38 @@ const Relatorios = () => {
             </div>
 
             <div className="relatorio-sumario">
-              <div className="sumario-item">
-                <p>Total de Produtos</p>
-                <h3>{resumo.totalProdutos}</h3>
-              </div>
+              {isLoadingResumoGeral ? (
+                <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              ) : isErrorResumoGeral ? (
+                <SectionError 
+                  message="Erro ao carregar resumo" 
+                  onRetry={() => refetchResumoGeral()} 
+                />
+              ) : (
+                <>
+                  <div className="sumario-item">
+                    <p>Total de Produtos</p>
+                    <h3>{resumoGeral?.totalProdutos || resumo?.totalProdutos || 0}</h3>
+                  </div>
 
-              <div className="sumario-item">
-                <p>Total de Vendas</p>
-                <h3>{resumo.totalVendas}</h3>
-              </div>
+                  <div className="sumario-item">
+                    <p>Total de Vendas</p>
+                    <h3>{resumoGeral?.totalVendas || resumo?.totalVendas || 0}</h3>
+                  </div>
 
-              <div className="sumario-item">
-                <p>Itens Sem Movimentação</p>
-                <h3>{resumo.semMovimentacao}</h3>
-              </div>
+                  <div className="sumario-item">
+                    <p>Estoque Baixo</p>
+                    <h3>{resumoGeral?.estoqueBaixo || resumo?.semMovimentacao || 0}</h3>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Tabs para visualização de diferentes relatórios */}
           <div className="relatorio-tabs">
             <button
               className={`tab-btn ${activeTab === "geral" ? "active" : ""}`}
@@ -803,32 +813,25 @@ const Relatorios = () => {
               <FaChartBar /> Visão Geral
             </button>
             <button
-              className={`tab-btn ${
-                activeTab === "topProdutos" ? "active" : ""
-              }`}
+              className={`tab-btn ${activeTab === "topProdutos" ? "active" : ""}`}
               onClick={() => setActiveTab("topProdutos")}
             >
               <FaBoxOpen /> Top Produtos
             </button>
             <button
-              className={`tab-btn ${
-                activeTab === "semMovimentacao" ? "active" : ""
-              }`}
+              className={`tab-btn ${activeTab === "semMovimentacao" ? "active" : ""}`}
               onClick={() => setActiveTab("semMovimentacao")}
             >
               <FaExclamationTriangle /> Sem Movimentação
             </button>
             <button
-              className={`tab-btn ${
-                activeTab === "estoqueCritico" ? "active" : ""
-              }`}
+              className={`tab-btn ${activeTab === "estoqueCritico" ? "active" : ""}`}
               onClick={() => setActiveTab("estoqueCritico")}
             >
               <FaExclamationCircle /> Estoque Crítico
             </button>
           </div>
 
-          {/* Conteúdo da tab selecionada */}
           <div className="tab-content">
             {activeTab === "geral" && (
               <div className="tab-geral">
@@ -836,7 +839,14 @@ const Relatorios = () => {
                   <div className="grafico-card">
                     <h3>Vendas por Categoria</h3>
                     <div className="grafico">
-                      {resumo.vendasPorCategoria.labels.length > 0 ? (
+                      {isLoadingResumo ? (
+                        <SkeletonChart />
+                      ) : isErrorResumo ? (
+                        <SectionError 
+                          message="Erro ao carregar gráfico" 
+                          onRetry={() => refetchResumo()} 
+                        />
+                      ) : resumo?.vendasPorCategoria?.labels?.length > 0 ? (
                         <Bar
                           data={{
                             labels: resumo.vendasPorCategoria.labels,
@@ -868,7 +878,14 @@ const Relatorios = () => {
                   <div className="grafico-card">
                     <h3>Estoque por Local</h3>
                     <div className="grafico">
-                      {resumo.estoquePorLocal.labels.length > 0 ? (
+                      {isLoadingResumo ? (
+                        <SkeletonChart />
+                      ) : isErrorResumo ? (
+                        <SectionError 
+                          message="Erro ao carregar gráfico" 
+                          onRetry={() => refetchResumo()} 
+                        />
+                      ) : resumo?.estoquePorLocal?.labels?.length > 0 ? (
                         <Pie
                           data={{
                             labels: resumo.estoquePorLocal.labels,
@@ -899,84 +916,85 @@ const Relatorios = () => {
                 <div className="indicadores">
                   <h3>Estatísticas do Período</h3>
                   <div className="indicadores-grid">
-                    <div className="indicador">
-                      <p className="indicador-titulo">
-                        Média{" "}
-                        {metodoCalculo === "transacoes"
-                          ? "de Vendas"
-                          : "de Itens Vendidos"}{" "}
-                        Diária
-                      </p>
-                      <p className="indicador-valor">
-                        {resumo.mediaVendasDiarias.toFixed(2)}
-                      </p>
-                    </div>
+                    {isLoadingResumo ? (
+                      <>
+                        <SkeletonCard />
+                        <SkeletonCard />
+                        <SkeletonCard />
+                        <SkeletonCard />
+                      </>
+                    ) : (
+                      <>
+                        <div className="indicador">
+                          <p className="indicador-titulo">
+                            Média{" "}
+                            {metodoCalculo === "transacoes"
+                              ? "de Vendas"
+                              : "de Itens Vendidos"}{" "}
+                            Diária
+                          </p>
+                          <p className="indicador-valor">
+                            {resumo?.mediaVendasDiarias?.toFixed(2) || "0.00"}
+                          </p>
+                        </div>
 
-                    <div className="indicador">
-                      <p className="indicador-titulo">
-                        Total de Itens Vendidos
-                      </p>
-                      <p className="indicador-valor">
-                        {resumo.totalItensVendidos}
-                      </p>
-                    </div>
+                        <div className="indicador">
+                          <p className="indicador-titulo">
+                            Total de Itens Vendidos
+                          </p>
+                          <p className="indicador-valor">
+                            {resumo?.totalItensVendidos || resumoGeral?.totalItensVendidos || 0}
+                          </p>
+                        </div>
 
-                    <div className="indicador">
-                      <p className="indicador-titulo">Dia com Maior Venda</p>
-                      <p className="indicador-valor">
-                        {resumo.diaMaiorVenda
-                          ? (() => {
-                              try {
-                                // CORREÇÃO: Adicionar método que evita problemas de fuso horário
-                                // Usando uma abordagem que preserva a data exata
-                                const [ano, mes, dia] =
-                                  resumo.diaMaiorVenda.split("-");
+                        <div className="indicador">
+                          <p className="indicador-titulo">Dia com Maior Venda</p>
+                          <p className="indicador-valor">
+                            {resumo?.diaMaiorVenda
+                              ? (() => {
+                                  try {
+                                    const [ano, mes, dia] =
+                                      resumo.diaMaiorVenda.split("-");
+                                    return `${dia.padStart(2, "0")}/${mes.padStart(
+                                      2,
+                                      "0"
+                                    )}/${ano}`;
+                                  } catch (e) {
+                                    return resumo.diaMaiorVenda;
+                                  }
+                                })()
+                              : "-"}
+                          </p>
+                        </div>
 
-                                // IMPORTANTE: Usar essa sintaxe para evitar problemas de fuso horário
-                                // Mês no formato MM e não zero-indexed
-                                return `${dia.padStart(2, "0")}/${mes.padStart(
-                                  2,
-                                  "0"
-                                )}/${ano}`;
-                              } catch (e) {
-                                console.error(
-                                  "Erro ao formatar data:",
-                                  e,
-                                  resumo.diaMaiorVenda
-                                );
-                                return resumo.diaMaiorVenda;
-                              }
-                            })()
-                          : "-"}
-                      </p>
-                    </div>
-
-                    <div className="indicador">
-                      <p className="indicador-titulo">
-                        Produtos com Estoque Crítico
-                      </p>
-                      <p className="indicador-valor estoque-critico">
-                        {window.estoqueCriticoStats?.critico +
-                          window.estoqueCriticoStats?.esgotado ||
-                          resumo.produtosEstoqueCritico ||
-                          0}
-                        <span className="indicador-info">
-                          {window.estoqueCriticoStats?.esgotado > 0 && (
-                            <span className="nivel-badge esgotado">
-                              {window.estoqueCriticoStats.esgotado} esgotados
+                        <div className="indicador">
+                          <p className="indicador-titulo">
+                            Produtos com Estoque Crítico
+                          </p>
+                          <p className="indicador-valor estoque-critico">
+                            {window.estoqueCriticoStats?.critico +
+                              window.estoqueCriticoStats?.esgotado ||
+                              resumo?.produtosEstoqueCritico ||
+                              0}
+                            <span className="indicador-info">
+                              {window.estoqueCriticoStats?.esgotado > 0 && (
+                                <span className="nivel-badge esgotado">
+                                  {window.estoqueCriticoStats.esgotado} esgotados
+                                </span>
+                              )}
+                              {window.estoqueCriticoStats?.critico > 0 && (
+                                <span className="nivel-badge critico">
+                                  {window.estoqueCriticoStats.critico} críticos
+                                </span>
+                              )}
+                              {!window.estoqueCriticoStats?.esgotado &&
+                                !window.estoqueCriticoStats?.critico &&
+                                "Menos de 10 unidades"}
                             </span>
-                          )}
-                          {window.estoqueCriticoStats?.critico > 0 && (
-                            <span className="nivel-badge critico">
-                              {window.estoqueCriticoStats.critico} críticos
-                            </span>
-                          )}
-                          {!window.estoqueCriticoStats?.esgotado &&
-                            !window.estoqueCriticoStats?.critico &&
-                            "Menos de 10 unidades"}
-                        </span>
-                      </p>
-                    </div>
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -991,43 +1009,100 @@ const Relatorios = () => {
                     : "por Quantidade Vendida"}
                 </h3>
 
-                {resumo.topProdutos.length > 0 ? (
-                  <div className="table-responsive">
-                    <table className="relatorio-table">
-                      <thead>
-                        <tr>
-                          <th>ID</th>
-                          <th>Produto</th>
-                          <th>Tipo</th>
-                          <th>Categoria</th>
-                          <th>Subcategoria</th>
-                          <th>
-                            {metodoCalculo === "transacoes"
-                              ? "Número de Vendas"
-                              : "Quantidade Vendida"}
-                          </th>
-                          <th>% do Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {resumo.topProdutos.map((item, index) => (
-                          <tr key={index}>
-                            <td>{item.id}</td>
-                            <td>{item.nome}</td>
-                            <td>{item.tipo}</td>
-                            <td>{item.categoria}</td>
-                            <td>{item.subcategoria || "-"}</td>
-                            <td>
+                {isLoadingTopProdutos || isLoadingResumo ? (
+                  <SkeletonTable rows={10} />
+                ) : isErrorTopProdutos && isErrorResumo ? (
+                  <SectionError 
+                    message="Erro ao carregar produtos" 
+                    onRetry={() => {
+                      refetchTopProdutos();
+                      refetchResumo();
+                    }} 
+                  />
+                ) : (topProdutosData?.topProdutos?.length > 0 || resumo?.topProdutos?.length > 0) ? (
+                  <>
+                    <div className="table-responsive">
+                      <table className="relatorio-table">
+                        <thead>
+                          <tr>
+                            <th>ID</th>
+                            <th>Produto</th>
+                            <th>Tipo</th>
+                            <th>Categoria</th>
+                            <th>Subcategoria</th>
+                            <th>
                               {metodoCalculo === "transacoes"
-                                ? item.transacoes
-                                : item.quantidade}
-                            </td>
-                            <td>{item.percentual}%</td>
+                                ? "Número de Vendas"
+                                : "Quantidade Vendida"}
+                            </th>
+                            <th>% do Total</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {(topProdutosData?.topProdutos || resumo?.topProdutos || []).map((item, index) => (
+                            <tr key={index}>
+                              <td>{item.id}</td>
+                              <td>{item.nome}</td>
+                              <td>{item.tipo}</td>
+                              <td>{item.categoria}</td>
+                              <td>{item.subcategoria || "-"}</td>
+                              <td>
+                                {metodoCalculo === "transacoes"
+                                  ? item.transacoes
+                                  : item.quantidade}
+                              </td>
+                              <td>{item.percentual}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="grafico-barra-horizontal">
+                      <Bar
+                        data={{
+                          labels: (topProdutosData?.topProdutos || resumo?.topProdutos || [])
+                            .slice(0, 10)
+                            .map((item) => item.nome),
+                          datasets: [
+                            {
+                              label:
+                                metodoCalculo === "transacoes"
+                                  ? "Número de Vendas"
+                                  : "Quantidade Vendida",
+                              data: (topProdutosData?.topProdutos || resumo?.topProdutos || [])
+                                .slice(0, 10)
+                                .map((item) =>
+                                  metodoCalculo === "transacoes"
+                                    ? item.transacoes
+                                    : item.quantidade
+                                ),
+                              backgroundColor: "rgba(54, 162, 235, 0.6)",
+                              borderColor: "rgba(54, 162, 235, 1)",
+                              borderWidth: 1,
+                            },
+                          ],
+                        }}
+                        options={{
+                          indexAxis: "y",
+                          responsive: true,
+                          plugins: {
+                            legend: {
+                              display: false,
+                            },
+                            title: {
+                              display: true,
+                              text: `Top 10 Produtos ${
+                                metodoCalculo === "transacoes"
+                                  ? "por Número de Vendas"
+                                  : "por Quantidade Vendida"
+                              }`,
+                            },
+                          },
+                        }}
+                      />
+                    </div>
+                  </>
                 ) : (
                   <div className="no-data-info-card">
                     <FaInfoCircle className="info-icon" />
@@ -1039,53 +1114,6 @@ const Relatorios = () => {
                     </p>
                   </div>
                 )}
-
-                {resumo.topProdutos.length > 0 && (
-                  <div className="grafico-barra-horizontal">
-                    <Bar
-                      data={{
-                        labels: resumo.topProdutos
-                          .slice(0, 10)
-                          .map((item) => item.nome),
-                        datasets: [
-                          {
-                            label:
-                              metodoCalculo === "transacoes"
-                                ? "Número de Vendas"
-                                : "Quantidade Vendida",
-                            data: resumo.topProdutos
-                              .slice(0, 10)
-                              .map((item) =>
-                                metodoCalculo === "transacoes"
-                                  ? item.transacoes
-                                  : item.quantidade
-                              ),
-                            backgroundColor: "rgba(54, 162, 235, 0.6)",
-                            borderColor: "rgba(54, 162, 235, 1)",
-                            borderWidth: 1,
-                          },
-                        ],
-                      }}
-                      options={{
-                        indexAxis: "y",
-                        responsive: true,
-                        plugins: {
-                          legend: {
-                            display: false,
-                          },
-                          title: {
-                            display: true,
-                            text: `Top 10 Produtos ${
-                              metodoCalculo === "transacoes"
-                                ? "por Número de Vendas"
-                                : "por Quantidade Vendida"
-                            }`,
-                          },
-                        },
-                      }}
-                    />
-                  </div>
-                )}
               </div>
             )}
 
@@ -1093,88 +1121,97 @@ const Relatorios = () => {
               <div className="tab-sem-movimentacao">
                 <h3>Produtos Sem Movimentação</h3>
 
-                {resumo.produtosSemMovimentacao.length > 0 ? (
-                  <div className="table-responsive">
-                    <table className="relatorio-table">
-                      <thead>
-                        <tr>
-                          <th>ID</th>
-                          <th>Produto</th>
-                          <th>Tipo</th>
-                          <th>Categoria</th>
-                          <th>Subcategoria</th>
-                          <th>Local</th>
-                          <th>Estoque</th>
-                          <th>Última Movimentação</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {resumo.produtosSemMovimentacao.map((item, index) => (
-                          <tr key={index}>
-                            <td>{item.id}</td>
-                            <td>{item.nome}</td>
-                            <td>{item.tipo}</td>
-                            <td>{item.categoria}</td>
-                            <td>{item.subcategoria || "-"}</td>
-                            <td>{item.local}</td>
-                            <td>{item.quantidade}</td>
-                            <td>
-                              {item.ultimaMovimentacao
-                                ? new Date(
-                                    item.ultimaMovimentacao
-                                  ).toLocaleDateString("pt-BR")
-                                : "Nunca"}
-                            </td>
+                {isLoadingResumo ? (
+                  <SkeletonTable rows={8} />
+                ) : isErrorResumo ? (
+                  <SectionError 
+                    message="Erro ao carregar dados" 
+                    onRetry={() => refetchResumo()} 
+                  />
+                ) : resumo?.produtosSemMovimentacao?.length > 0 ? (
+                  <>
+                    <div className="table-responsive">
+                      <table className="relatorio-table">
+                        <thead>
+                          <tr>
+                            <th>ID</th>
+                            <th>Produto</th>
+                            <th>Tipo</th>
+                            <th>Categoria</th>
+                            <th>Subcategoria</th>
+                            <th>Local</th>
+                            <th>Estoque</th>
+                            <th>Última Movimentação</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {resumo.produtosSemMovimentacao.map((item, index) => (
+                            <tr key={index}>
+                              <td>{item.id}</td>
+                              <td>{item.nome}</td>
+                              <td>{item.tipo}</td>
+                              <td>{item.categoria}</td>
+                              <td>{item.subcategoria || "-"}</td>
+                              <td>{item.local}</td>
+                              <td>{item.quantidade}</td>
+                              <td>
+                                {item.ultimaMovimentacao
+                                  ? new Date(
+                                      item.ultimaMovimentacao
+                                    ).toLocaleDateString("pt-BR")
+                                  : "Nunca"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {resumo.estoqueSemMovimentacao?.labels?.length > 0 && (
+                      <div className="grafico-sem-movimentacao">
+                        <h4>
+                          Distribuição de Produtos sem Movimentação por Local
+                        </h4>
+                        <Pie
+                          data={{
+                            labels: resumo.estoqueSemMovimentacao.labels,
+                            datasets: [
+                              {
+                                data: resumo.estoqueSemMovimentacao.dados,
+                                backgroundColor: [
+                                  "rgba(255, 99, 132, 0.6)",
+                                  "rgba(54, 162, 235, 0.6)",
+                                  "rgba(255, 206, 86, 0.6)",
+                                  "rgba(75, 192, 192, 0.6)",
+                                  "rgba(153, 102, 255, 0.6)",
+                                  "rgba(255, 159, 64, 0.6)",
+                                ],
+                                borderWidth: 1,
+                              },
+                            ],
+                          }}
+                          options={{
+                            responsive: true,
+                            plugins: {
+                              title: {
+                                display: true,
+                                text: "Produtos sem Movimentação por Local",
+                              },
+                            },
+                          }}
+                        />
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <p className="no-data-message">
                     Todos os produtos tiveram movimentação no período
                     selecionado.
                   </p>
                 )}
-
-                {resumo.produtosSemMovimentacao.length > 0 &&
-                  resumo.estoqueSemMovimentacao.labels.length > 0 && (
-                    <div className="grafico-sem-movimentacao">
-                      <h4>
-                        Distribuição de Produtos sem Movimentação por Local
-                      </h4>
-                      <Pie
-                        data={{
-                          labels: resumo.estoqueSemMovimentacao.labels,
-                          datasets: [
-                            {
-                              data: resumo.estoqueSemMovimentacao.dados,
-                              backgroundColor: [
-                                "rgba(255, 99, 132, 0.6)",
-                                "rgba(54, 162, 235, 0.6)",
-                                "rgba(255, 206, 86, 0.6)",
-                                "rgba(75, 192, 192, 0.6)",
-                                "rgba(153, 102, 255, 0.6)",
-                                "rgba(255, 159, 64, 0.6)",
-                              ],
-                              borderWidth: 1,
-                            },
-                          ],
-                        }}
-                        options={{
-                          responsive: true,
-                          plugins: {
-                            title: {
-                              display: true,
-                              text: "Produtos sem Movimentação por Local",
-                            },
-                          },
-                        }}
-                      />
-                    </div>
-                  )}
               </div>
             )}
+
             {activeTab === "estoqueCritico" && (
               <div className="tab-estoque-critico">
                 <h3>Produtos com Estoque Crítico</h3>
@@ -1233,7 +1270,6 @@ const Relatorios = () => {
                       </thead>
                       <tbody>
                         {produtosEstoqueCritico.map((produto, index) => {
-                          // Normalizar campos
                           const nome =
                             produto.produtoNome || produto.nome || "Produto";
                           const local =
@@ -1241,7 +1277,6 @@ const Relatorios = () => {
                           const quantidade = produto.quantidade || 0;
                           const estoqueMinimo = produto.estoqueMinimo || 20;
 
-                          // Determinar status
                           let status = produto.status || "";
                           if (!status) {
                             if (quantidade === 0) {
@@ -1255,7 +1290,6 @@ const Relatorios = () => {
                             }
                           }
 
-                          // Determinar texto do status
                           let statusText;
                           switch (status) {
                             case "esgotado":
@@ -1292,7 +1326,7 @@ const Relatorios = () => {
                   </div>
                 ) : (
                   <p className="no-data-message">
-                    {carregando
+                    {isLoading
                       ? "Carregando dados de estoque..."
                       : "Nenhum produto com estoque crítico encontrado."}
                   </p>
@@ -1300,15 +1334,6 @@ const Relatorios = () => {
               </div>
             )}
           </div>
-        </div>
-      ) : (
-        <div className="relatorio-placeholder">
-          <FaFileAlt className="placeholder-icon" />
-          <h2>Gere um relatório</h2>
-          <p>
-            Configure os filtros acima e clique em "Gerar Relatório" para
-            visualizar os resultados.
-          </p>
         </div>
       )}
     </div>

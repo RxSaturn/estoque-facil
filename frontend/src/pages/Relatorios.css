@@ -722,3 +722,189 @@
   font-size: 14px;
   margin: 0;
 }
+
+/* =====================================================
+   SKELETON LOADING STYLES - Dashboard Optimization
+   ===================================================== */
+
+/* Base skeleton animation */
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.skeleton-line {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200px 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+/* Skeleton Card */
+.skeleton-card {
+  background-color: white;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  min-width: 120px;
+  text-align: center;
+}
+
+.skeleton-card .skeleton-title {
+  height: 14px;
+  width: 80%;
+  margin: 0 auto 10px;
+}
+
+.skeleton-card .skeleton-value {
+  height: 24px;
+  width: 60%;
+  margin: 0 auto;
+}
+
+/* Skeleton Chart */
+.skeleton-chart {
+  background-color: #f9f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton-chart .skeleton-title {
+  height: 18px;
+  width: 40%;
+  margin-bottom: 20px;
+}
+
+.skeleton-chart-content {
+  flex: 1;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200px 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+/* Skeleton Table */
+.skeleton-table {
+  background-color: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.skeleton-table-header {
+  background-color: #f8f9fa;
+  padding: 12px;
+}
+
+.skeleton-table-header .skeleton-line {
+  height: 20px;
+  width: 100%;
+}
+
+.skeleton-table-row {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.skeleton-table-row .skeleton-line {
+  height: 16px;
+  width: 100%;
+}
+
+.skeleton-table-row:nth-child(even) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Section Error */
+.section-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  text-align: center;
+  background-color: #fff5f5;
+  border: 1px solid #fed7d7;
+  border-radius: 8px;
+  min-height: 150px;
+}
+
+.section-error .error-icon {
+  font-size: 32px;
+  color: #e53e3e;
+  margin-bottom: 12px;
+}
+
+.section-error p {
+  margin: 0 0 15px 0;
+  color: #742a2a;
+  font-size: 14px;
+}
+
+.section-error .btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+/* Button Spinner */
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 8px;
+}
+
+/* Small button variant */
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* Loading pulse animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.loading-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Responsive adjustments for skeletons */
+@media (max-width: 768px) {
+  .skeleton-card {
+    min-width: 100px;
+    padding: 12px;
+  }
+  
+  .skeleton-chart {
+    height: 200px;
+    padding: 15px;
+  }
+  
+  .section-error {
+    padding: 20px 15px;
+    min-height: 120px;
+  }
+  
+  .section-error .error-icon {
+    font-size: 24px;
+  }
+}

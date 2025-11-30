@@ -1856,3 +1856,272 @@ exports.getTopProdutosPorVendas = async (req, res) => {
     });
   }
 };
+
+/**
+ * Endpoint otimizado para obter resumo geral
+ * Utiliza agregação MongoDB para processar dados no banco
+ */
+exports.getResumoGeral = async (req, res) => {
+  try {
+    const { dataInicio, dataFim, tipo, categoria, subcategoria, local } = req.query;
+
+    // Validar parâmetros obrigatórios
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Datas de início e fim são obrigatórias",
+      });
+    }
+
+    const dataInicioObj = new Date(`${dataInicio}T00:00:00.000Z`);
+    const dataFimObj = new Date(`${dataFim}T23:59:59.999Z`);
+
+    // Construir filtros
+    const filtroProdutos = {};
+    if (tipo) filtroProdutos.tipo = tipo;
+    if (categoria) filtroProdutos.categoria = categoria;
+    if (subcategoria) filtroProdutos.subcategoria = subcategoria;
+
+    let produtosIds = null;
+    if (Object.keys(filtroProdutos).length > 0) {
+      const produtosFiltrados = await Produto.find(filtroProdutos).select("_id");
+      produtosIds = produtosFiltrados.map((p) => p._id);
+    }
+
+    // Construir filtro de vendas
+    const filtroVendas = {
+      dataVenda: { $gte: dataInicioObj, $lte: dataFimObj },
+    };
+    if (produtosIds) filtroVendas.produto = { $in: produtosIds };
+    if (local) filtroVendas.local = local;
+
+    // Construir filtro de estoque
+    const filtroEstoque = {};
+    if (produtosIds) filtroEstoque.produto = { $in: produtosIds };
+    if (local) filtroEstoque.local = local;
+
+    // Executar consultas em paralelo com agregação otimizada
+    const [
+      totalProdutos,
+      vendasAgregadas,
+      estoqueBaixoCount
+    ] = await Promise.all([
+      // Contagem total de produtos
+      Produto.countDocuments(filtroProdutos),
+      
+      // Agregação de vendas
+      Venda.aggregate([
+        { $match: filtroVendas },
+        {
+          $group: {
+            _id: null,
+            totalVendas: { $sum: 1 },
+            totalItensVendidos: { $sum: "$quantidade" }
+          }
+        }
+      ]),
+      
+      // Contagem de produtos com estoque baixo (menos de 10 unidades)
+      Estoque.countDocuments({
+        ...filtroEstoque,
+        quantidade: { $lte: 10, $gt: 0 }
+      })
+    ]);
+
+    const vendas = vendasAgregadas[0] || { totalVendas: 0, totalItensVendidos: 0 };
+
+    res.json({
+      sucesso: true,
+      totalProdutos: totalProdutos || 0,
+      totalVendas: vendas.totalVendas || 0,
+      totalItensVendidos: vendas.totalItensVendidos || 0,
+      estoqueBaixo: estoqueBaixoCount || 0
+    });
+  } catch (error) {
+    console.error("Erro ao obter resumo geral:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao obter resumo geral",
+      erro: error.message,
+    });
+  }
+};
+
+/**
+ * Endpoint otimizado para obter dados do gráfico de vendas por dia
+ * Utiliza agregação MongoDB para agrupar dados por data
+ */
+exports.getGraficoVendas = async (req, res) => {
+  try {
+    const { dataInicio, dataFim, tipo, categoria, subcategoria, local } = req.query;
+
+    // Validar parâmetros obrigatórios
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Datas de início e fim são obrigatórias",
+      });
+    }
+
+    const dataInicioObj = new Date(`${dataInicio}T00:00:00.000Z`);
+    const dataFimObj = new Date(`${dataFim}T23:59:59.999Z`);
+
+    // Construir filtros
+    const filtroProdutos = {};
+    if (tipo) filtroProdutos.tipo = tipo;
+    if (categoria) filtroProdutos.categoria = categoria;
+    if (subcategoria) filtroProdutos.subcategoria = subcategoria;
+
+    let produtosIds = null;
+    if (Object.keys(filtroProdutos).length > 0) {
+      const produtosFiltrados = await Produto.find(filtroProdutos).select("_id");
+      produtosIds = produtosFiltrados.map((p) => p._id);
+    }
+
+    // Construir filtro de vendas
+    const filtroVendas = {
+      dataVenda: { $gte: dataInicioObj, $lte: dataFimObj },
+    };
+    if (produtosIds) filtroVendas.produto = { $in: produtosIds };
+    if (local) filtroVendas.local = local;
+
+    // Agregação para agrupar vendas por dia
+    const vendasPorDia = await Venda.aggregate([
+      { $match: filtroVendas },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: "%Y-%m-%d",
+              date: "$dataVenda",
+              timezone: "UTC"
+            }
+          },
+          quantidade: { $sum: "$quantidade" },
+          transacoes: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Formatar resultado para gráficos
+    const labels = vendasPorDia.map(item => {
+      const [ano, mes, dia] = item._id.split("-");
+      return `${dia}/${mes}`;
+    });
+    
+    const dados = vendasPorDia.map(item => item.quantidade);
+    const transacoes = vendasPorDia.map(item => item.transacoes);
+
+    res.json({
+      sucesso: true,
+      labels,
+      dados,
+      transacoes
+    });
+  } catch (error) {
+    console.error("Erro ao obter gráfico de vendas:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao obter dados do gráfico",
+      erro: error.message,
+    });
+  }
+};
+
+/**
+ * Endpoint otimizado para obter top 5 produtos mais vendidos
+ * Utiliza agregação MongoDB para calcular diretamente no banco
+ */
+exports.getTopProdutos = async (req, res) => {
+  try {
+    const { dataInicio, dataFim, tipo, categoria, subcategoria, local, limite = 5 } = req.query;
+
+    // Validar parâmetros obrigatórios
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Datas de início e fim são obrigatórias",
+      });
+    }
+
+    const dataInicioObj = new Date(`${dataInicio}T00:00:00.000Z`);
+    const dataFimObj = new Date(`${dataFim}T23:59:59.999Z`);
+    const limiteNum = parseInt(limite, 10) || 5;
+
+    // Construir filtros
+    const filtroProdutos = {};
+    if (tipo) filtroProdutos.tipo = tipo;
+    if (categoria) filtroProdutos.categoria = categoria;
+    if (subcategoria) filtroProdutos.subcategoria = subcategoria;
+
+    let produtosIds = null;
+    if (Object.keys(filtroProdutos).length > 0) {
+      const produtosFiltrados = await Produto.find(filtroProdutos).select("_id");
+      produtosIds = produtosFiltrados.map((p) => p._id);
+    }
+
+    // Construir filtro de vendas
+    const filtroVendas = {
+      dataVenda: { $gte: dataInicioObj, $lte: dataFimObj },
+    };
+    if (produtosIds) filtroVendas.produto = { $in: produtosIds };
+    if (local) filtroVendas.local = local;
+
+    // Agregação otimizada com $lookup para pegar informações do produto
+    const topProdutos = await Venda.aggregate([
+      { $match: filtroVendas },
+      {
+        $group: {
+          _id: "$produto",
+          quantidadeTotal: { $sum: "$quantidade" },
+          transacoes: { $sum: 1 }
+        }
+      },
+      { $sort: { quantidadeTotal: -1 } },
+      { $limit: limiteNum },
+      {
+        $lookup: {
+          from: "produtos",
+          localField: "_id",
+          foreignField: "_id",
+          as: "produtoInfo"
+        }
+      },
+      { $unwind: { path: "$produtoInfo", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          id: { $ifNull: ["$produtoInfo.id", "N/A"] },
+          nome: { $ifNull: ["$produtoInfo.nome", "Produto Removido"] },
+          tipo: { $ifNull: ["$produtoInfo.tipo", ""] },
+          categoria: { $ifNull: ["$produtoInfo.categoria", ""] },
+          quantidade: "$quantidadeTotal",
+          transacoes: 1
+        }
+      }
+    ]);
+
+    // Calcular total para percentuais
+    const totalGeral = topProdutos.reduce((sum, p) => sum + p.quantidade, 0);
+    
+    const resultado = topProdutos.map(produto => ({
+      ...produto,
+      percentual: totalGeral > 0 
+        ? parseFloat(((produto.quantidade / totalGeral) * 100).toFixed(2))
+        : 0
+    }));
+
+    res.json({
+      sucesso: true,
+      topProdutos: resultado
+    });
+  } catch (error) {
+    console.error("Erro ao obter top produtos:", error);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao obter top produtos",
+      erro: error.message,
+    });
+  }
+};
