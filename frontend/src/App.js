@@ -44,7 +44,7 @@ const AdicionarProduto = lazy(() => import("./pages/AdicionarProduto"));
 const EditarProduto = lazy(() => import("./pages/EditarProduto"));
 const Movimentacao = lazy(() => import("./pages/Movimentacao"));
 const Historico = lazy(() => import("./pages/Historico"));
-const Relatorios = lazy(() => import("./pages/Relatorios"));
+const Relatorios = lazy(() => import("./pages/RelatoriosV2"));
 const Gerenciamento = lazy(() => import("./pages/Gerenciamento"));
 const RedefinirSenha = lazy(() => import("./pages/RedefinirSenha"));
 
