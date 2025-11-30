@@ -155,12 +155,9 @@ const Relatorios = () => {
     retry: 2,
   });
 
-  // React Query para gráfico de vendas
+  // React Query para gráfico de vendas (data will be used for enhanced charts in future iterations)
   const {
-    // data: graficoVendas, // Will be used for chart data in future
     isLoading: isLoadingGraficoVendas,
-    // isError: isErrorGraficoVendas,
-    refetch: refetchGraficoVendas,
   } = useQuery({
     queryKey: ["graficoVendas", filtros, metodoCalculo],
     queryFn: async () => {
@@ -411,14 +408,9 @@ const Relatorios = () => {
       });
     }
     
+    // Ativar busca - React Query will automatically fetch when enabled becomes true
+    // No need for setTimeout since queryKey changes trigger refetch
     setShouldFetch(true);
-    
-    setTimeout(() => {
-      refetchResumoGeral();
-      refetchGraficoVendas();
-      refetchTopProdutos();
-      refetchResumo();
-    }, 100);
   };
 
   const handleChangeFiltro = (e) => {
