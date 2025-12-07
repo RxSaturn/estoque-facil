@@ -1,37 +1,63 @@
-# Estoque Fácil - Sistema de Gerenciamento de Inventário
+# 📦 Estoque Fácil - Sistema de Gerenciamento de Inventário
 
 ![Estoque Fácil Logo](https://via.placeholder.com/150x50?text=Estoque+Facil)
 
+[![Node.js](https://img.shields.io/badge/Node.js-18.x-green?logo=node.js)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-18.2-blue?logo=react)](https://reactjs.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-7.x-brightgreen?logo=mongodb)](https://www.mongodb.com/)
+[![Express](https://img.shields.io/badge/Express-4.x-lightgrey?logo=express)](https://expressjs.com/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Active-success)](https://github.com/RxSaturn/estoque-facil)
+
 ## 📋 Visão Geral
 
-**Estoque Fácil** é um sistema completo para gerenciamento de estoque e inventário, desenvolvido para pequenas e médias empresas brasileiras. A plataforma oferece controle de produtos, movimentações, vendas e relatórios em uma interface moderna e responsiva.
+**Estoque Fácil** é um sistema completo e profissional para gerenciamento de estoque e inventário, desenvolvido para pequenas e médias empresas brasileiras. A plataforma oferece controle de produtos, movimentações, vendas e relatórios em uma interface moderna e responsiva.
+
+### 🚀 Links Rápidos
+
+- 📘 **[Guia de Instalação e Uso Completo](GUIA_INSTALACAO_USO.md)** - Manual passo a passo para usuários
+- 📄 **[Documentação Técnica (TCC)](documentation/TCC_DOCUMENTACAO_TECNICA.md)** - Documentação completa para banca examinadora
+- 🐛 **[Reportar Bug](https://github.com/RxSaturn/estoque-facil/issues)** - Abra uma issue no GitHub
 
 ### ✨ Principais Funcionalidades
 
-- Cadastro e gerenciamento completo de produtos
-- Controle de estoque em múltiplos locais
-- Registro de vendas e movimentações
-- Dashboard com visão geral e alertas
-- Relatórios detalhados e exportáveis em PDF
-- Sistema de perfis de usuários (administradores e funcionários)
-- Interface responsiva para desktop e dispositivos móveis
+- ✅ **Gestão Completa de Produtos**: Cadastro com imagens, tipos, categorias e subcategorias
+- 📊 **Controle de Estoque Multi-Local**: Gerencie estoque em diversos locais (depósitos, lojas, filiais)
+- 💰 **Registro de Vendas**: Sistema rápido e intuitivo para registrar vendas com atualização automática de estoque
+- 🔄 **Movimentações de Estoque**: Entradas, saídas e transferências entre locais com histórico completo
+- 📈 **Dashboard Inteligente**: Visão geral em tempo real com gráficos e alertas de estoque baixo
+- 📄 **Relatórios Profissionais**: Geração de relatórios detalhados com exportação para PDF
+- 👥 **Gerenciamento de Usuários**: Controle de acesso com perfis diferenciados (Admin/Funcionário)
+- 🔒 **Segurança Robusta**: Autenticação JWT, criptografia de senhas, rate limiting e proteção contra ataques
+- 📱 **Interface Responsiva**: Funciona perfeitamente em desktops, tablets e smartphones
+- 🎨 **UX Moderna**: Design intuitivo com feedback visual (toasts, loaders) para melhor experiência
 
 ## 🔧 Tecnologias
 
+### Stack MERN
+Este projeto utiliza a stack **MERN** (MongoDB, Express.js, React, Node.js), escolhida por sua robustez, escalabilidade e eficiência no desenvolvimento full-stack JavaScript.
+
 ### Backend
-- **Node.js** com **Express.js** para API RESTful
-- **MongoDB** para armazenamento de dados
-- **JWT** (JSON Web Tokens) para autenticação
-- **Bcrypt** para encriptação de senhas
-- **Multer** para upload de arquivos
+- **Node.js** v18+ com **Express.js** para API RESTful
+- **MongoDB** v7+ para armazenamento de dados NoSQL
+- **Mongoose** para ODM (Object Document Mapping) e validações
+- **JWT** (JSON Web Tokens) para autenticação stateless
+- **Bcrypt** para criptografia segura de senhas (12 rounds)
+- **Helmet** para proteção de headers HTTP
+- **Express Rate Limit** para proteção contra DDoS e brute-force
+- **Zod** para validação de schemas TypeScript-first
+- **Multer** para upload de arquivos (imagens de produtos)
 - **PDFKit** para geração de relatórios em PDF
+- **Nodemailer** para envio de emails (recuperação de senha)
 
 ### Frontend
-- **React** para construção da interface
-- **React Router** para navegação
-- **Chart.js** para gráficos e visualizações
-- **React-Toastify** para notificações
-- **Axios** para requisições HTTP
+- **React** v18.2 para construção da interface SPA
+- **React Router** v6 para navegação e rotas protegidas
+- **React Query** (@tanstack/react-query) para cache inteligente e gerenciamento de estado do servidor
+- **Axios** para requisições HTTP com interceptors
+- **Chart.js** + **react-chartjs-2** para gráficos interativos
+- **React Toastify** para notificações elegantes
+- **React Icons** para biblioteca de ícones
 - **CSS Personalizado** para estilos responsivos
 
 ## 🗂️ Estrutura do Projeto
@@ -56,243 +82,502 @@ estoque-facil/
         └── App.js           # Componente principal
 ```
 
-## 📦 Modelos de Dados
+## 📦 Modelagem de Dados
 
-### Usuario
-- `_id`: ID único MongoDB
-- `nome`: Nome completo do usuário
-- `email`: Email (único)
-- `senha`: Hash da senha
-- `perfil`: "admin" ou "funcionario"
-- `dataCriacao`: Data de criação do registro
+### Coleções MongoDB
 
-### Produto
-- `_id`: ID único MongoDB
-- `id`: Código único gerado automaticamente (ex: "GBRC01")
-- `nome`: Nome do produto
-- `tipo`: Tipo de produto
-- `categoria`: Categoria
-- `subcategoria`: Subcategoria
-- `imagemUrl`: Caminho para imagem
-- `criadoPor`: Referência ao usuário que criou
-- `dataCriacao`: Data de criação
+O sistema utiliza 6 coleções principais no MongoDB:
 
-### Estoque
-- `_id`: ID único MongoDB
-- `produto`: Referência ao produto
-- `local`: Local de armazenamento
-- `quantidade`: Quantidade disponível
-- `dataRegistro`: Data de registro inicial
-- `ultimaAtualizacao`: Data da última atualização
-- `atualizadoPor`: Referência ao usuário que atualizou
+#### 👤 usuarios
+```javascript
+{
+  _id: ObjectId,
+  nome: String,           // Nome completo
+  email: String,          // Email único (índice)
+  senha: String,          // Hash bcrypt (12 rounds)
+  perfil: String,         // "admin" | "funcionario"
+  dataCriacao: Date,
+  ativo: Boolean
+}
+```
 
-### Movimentacao
-- `_id`: ID único MongoDB
-- `tipo`: "entrada", "saida" ou "transferencia"
-- `produto`: Referência ao produto
-- `quantidade`: Quantidade movimentada
-- `localOrigem`: Local de origem
-- `localDestino`: Local de destino (opcional)
-- `data`: Data da movimentação
-- `realizadoPor`: Referência ao usuário
-- `observacao`: Observações (opcional)
+#### 📦 produtos
+```javascript
+{
+  _id: ObjectId,
+  id: String,             // Código único (ex: "ABCD01")
+  nome: String,
+  tipo: String,
+  categoria: String,
+  subcategoria: String,
+  imagemUrl: String,
+  criadoPor: ObjectId,    // Ref: usuarios
+  dataCriacao: Date
+}
+```
 
-### Venda
-- `_id`: ID único MongoDB
-- `produto`: Referência ao produto
-- `quantidade`: Quantidade vendida
-- `local`: Local da venda
-- `dataVenda`: Data e hora da venda
-- `registradoPor`: Referência ao usuário que registrou
+#### 📊 estoques
+```javascript
+{
+  _id: ObjectId,
+  produto: ObjectId,      // Ref: produtos
+  local: ObjectId,        // Ref: locais
+  quantidade: Number,
+  dataRegistro: Date,
+  ultimaAtualizacao: Date,
+  atualizadoPor: ObjectId // Ref: usuarios
+}
+```
+
+#### 🔄 movimentacoes
+```javascript
+{
+  _id: ObjectId,
+  tipo: String,           // "entrada" | "saida" | "transferencia"
+  produto: ObjectId,
+  quantidade: Number,
+  localOrigem: ObjectId,
+  localDestino: ObjectId, // Opcional (apenas transferências)
+  data: Date,
+  realizadoPor: ObjectId,
+  observacao: String
+}
+```
+
+#### 💰 vendas
+```javascript
+{
+  _id: ObjectId,
+  produto: ObjectId,
+  quantidade: Number,
+  local: ObjectId,
+  dataVenda: Date,
+  registradoPor: ObjectId
+}
+```
+
+#### 📍 locais
+```javascript
+{
+  _id: ObjectId,
+  nome: String,           // Nome único
+  descricao: String,
+  ativo: Boolean
+}
+```
+
+### Relacionamentos
+
+- **usuarios** ← cria → **produtos**
+- **produtos** ← possui → **estoques** (em múltiplos **locais**)
+- **produtos** ← geram → **movimentacoes** e **vendas**
+- **usuarios** ← realizam → **movimentacoes** e **vendas**
+
+Para diagrama ER completo e detalhes de índices, consulte a **[Documentação Técnica - Seção 5](documentation/TCC_DOCUMENTACAO_TECNICA.md#5-modelagem-de-dados)**.
 
 ## 🚀 Instalação e Configuração
 
+### ⚡ Início Rápido
+
+Para instruções detalhadas passo a passo, consulte o **[Guia Completo de Instalação e Uso](GUIA_INSTALACAO_USO.md)**.
+
 ### Requisitos Prévios
-- Node.js (v14 ou superior)
-- MongoDB (v4 ou superior)
+- Node.js v14+ (recomendado: v18+)
+- MongoDB v4+ (local ou MongoDB Atlas)
 - NPM ou Yarn
+- Git
 
-### Backend
+### Instalação Resumida
 
-1. **Clone o repositório**:
+#### 1. Clone o repositório
 ```bash
-git clone [URL_DO_REPOSITÓRIO]
-cd estoque-facil/backend
+git clone https://github.com/RxSaturn/estoque-facil.git
+cd estoque-facil
 ```
 
-2. **Configure as variáveis de ambiente**:
-```bash
-cp .env.example .env
-# Edite o arquivo .env com suas configurações
-```
+#### 2. Configure e inicie o Backend
 
-3. **Instale as dependências**:
 ```bash
+cd backend
 npm install
-```
 
-4. **Inicie o servidor**:
-```bash
+# Configure o .env (veja exemplo abaixo)
+cp .env.example .env
+
+# Inicie o servidor
 npm run dev
 ```
 
-### Frontend
+**Exemplo de `.env`:**
+```env
+PORT=5000
+MONGODB_URI=mongodb://localhost:27017/estoque-facil
+JWT_SECRET=seu_secret_super_seguro_minimo_32_caracteres
+FRONTEND_URL=http://localhost:3000
+```
 
-1. **Navegue até a pasta do frontend**:
+#### 3. Configure e inicie o Frontend
+
 ```bash
 cd ../frontend
-```
-
-2. **Instale as dependências**:
-```bash
 npm install
-```
 
-3. **Inicie o aplicativo React**:
-```bash
+# Inicie a aplicação React
 npm start
 ```
 
+O sistema estará disponível em `http://localhost:3000`
+
+### 🔐 Primeiro Acesso
+
+1. Registre um novo usuário na tela de login
+2. Promova o primeiro usuário a administrador via MongoDB:
+
+```javascript
+// MongoDB Atlas: use o console web
+// MongoDB Local: use mongosh
+use estoque-facil
+db.usuarios.updateOne(
+  { email: "seu_email@exemplo.com" }, 
+  { $set: { perfil: "admin" } }
+)
+```
+
+3. Faça login com suas credenciais
+
+Para mais detalhes, consulte a seção **[Primeiro Acesso](GUIA_INSTALACAO_USO.md#3-primeiro-acesso)** no guia completo.
+
 ## 🚢 API Endpoints
 
-### Autenticação
-- `POST /api/auth/login`: Login de usuário
-- `POST /api/auth/registro`: Registro de novo usuário
-- `GET /api/auth/verificar`: Verificar usuário atual
+### Resumo dos Endpoints
 
-### Produtos
-- `GET /api/produtos`: Listar todos os produtos
-- `POST /api/produtos`: Criar produto
-- `GET /api/produtos/:id`: Obter produto específico
-- `PUT /api/produtos/:id`: Atualizar produto
-- `DELETE /api/produtos/:id`: Remover produto
-- `GET /api/produtos/tipos`: Listar tipos de produtos
-- `GET /api/produtos/categorias`: Listar categorias
-- `GET /api/produtos/subcategorias`: Listar subcategorias
+A API RESTful do Estoque Fácil está organizada em módulos funcionais:
 
-### Estoque
-- `GET /api/estoque/verificar`: Verificar estoque de produto
-- `POST /api/estoque/transferir`: Transferir entre locais
-- `GET /api/estoque/locais`: Listar locais disponíveis
+| Módulo | Endpoint Base | Descrição |
+|--------|---------------|-----------|
+| **Autenticação** | `/api/auth` | Login, registro e verificação de tokens |
+| **Produtos** | `/api/produtos` | CRUD completo de produtos |
+| **Estoque** | `/api/estoque` | Verificação e transferências |
+| **Vendas** | `/api/vendas` | Registro e histórico de vendas |
+| **Movimentações** | `/api/movimentacoes` | Entradas, saídas e transferências |
+| **Relatórios** | `/api/relatorios` | Geração de relatórios e PDFs |
+| **Usuários** | `/api/usuarios` | Gerenciamento de usuários (Admin) |
 
-### Vendas
-- `GET /api/vendas`: Listar vendas
-- `POST /api/vendas`: Registrar venda
+### Exemplos de Requisições
 
-### Relatórios
-- `GET /api/relatorios/resumo`: Gerar resumo para relatório
-- `GET /api/relatorios/pdf`: Gerar relatório em PDF
+#### Autenticação
+```http
+POST /api/auth/login
+Content-Type: application/json
 
-### Usuários (Admin)
-- `GET /api/usuarios`: Listar usuários
-- `POST /api/usuarios`: Criar usuário
-- `PUT /api/usuarios/:id`: Atualizar usuário
-- `PUT /api/usuarios/:id/senha`: Alterar senha
-- `DELETE /api/usuarios/:id`: Remover usuário
+{
+  "email": "admin@estoque.com",
+  "senha": "senha123"
+}
+
+# Response
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "usuario": {
+    "_id": "65abc123...",
+    "nome": "Administrador",
+    "email": "admin@estoque.com",
+    "perfil": "admin"
+  }
+}
+```
+
+#### Criar Produto
+```http
+POST /api/produtos
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "nome": "Notebook Dell",
+  "tipo": "Eletrônico",
+  "categoria": "Informática",
+  "subcategoria": "Notebooks",
+  "estoqueInicial": {
+    "local": "65abc456...",
+    "quantidade": 50
+  }
+}
+```
+
+#### Registrar Venda
+```http
+POST /api/vendas
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "produto": "65abc789...",
+  "local": "65abc456...",
+  "quantidade": 2
+}
+```
+
+Para documentação completa da API, consulte a **[Documentação Técnica - Seção 6](documentation/TCC_DOCUMENTACAO_TECNICA.md#6-endpoints-da-api)**.
 
 ## 📝 Guia de Uso
 
-### Primeiro Acesso
+### Fluxo Básico de Operação
 
-1. Registre um novo usuário na tela de login
-2. Use MongoDB para promover o primeiro usuário a administrador:
-   ```javascript
-   use estoque-facil
-   db.usuarios.updateOne({ email: "seu_email@exemplo.com" }, { $set: { perfil: "admin" } })
-   ```
+#### 1️⃣ Cadastro de Produtos
+- Acesse **Produtos** → **Adicionar Produto**
+- Preencha nome, tipo, categoria e subcategoria
+- Adicione uma imagem (opcional)
+- Defina estoque inicial e local
 
-### Fluxo Básico
+#### 2️⃣ Gestão de Estoque
+- **Transferências**: Mova produtos entre locais
+- **Entradas**: Registre compras ou devoluções
+- **Saídas**: Registre perdas, doações ou outros tipos de saída
 
-1. **Cadastro de Produtos**:
-   - Acesse "Produtos" > "Adicionar Produto"
-   - Preencha os dados e adicione estoque inicial
+#### 3️⃣ Registro de Vendas
+- Acesse **Vendas** → **Registrar Venda**
+- Selecione produto, local e quantidade
+- O sistema automaticamente:
+  - ✅ Reduz o estoque
+  - ✅ Registra a venda no histórico
+  - ✅ Cria uma movimentação de saída
+  - ✅ Atualiza o dashboard
 
-2. **Transferência de Estoque**:
-   - Acesse "Movimentação"
-   - Selecione origem, destino e quantidade
+#### 4️⃣ Geração de Relatórios
+- Acesse **Relatórios**
+- Defina período e filtros (categoria, local)
+- Visualize gráficos interativos
+- Exporte para PDF
 
-3. **Registro de Vendas**:
-   - Acesse "Vendas" > "Registrar Venda"
-   - Selecione produto, local e quantidade
+Para guia detalhado com capturas de tela e resolução de problemas, consulte o **[Guia Completo de Uso](GUIA_INSTALACAO_USO.md#4-guia-de-uso-do-sistema)**.
 
-4. **Geração de Relatórios**:
-   - Acesse "Relatórios"
-   - Defina período e filtros desejados
-   - Visualize gráficos ou exporte PDF
+## 🏗️ Arquitetura e Padrões de Projeto
+
+### Arquitetura do Sistema
+
+O Estoque Fácil utiliza arquitetura **Cliente-Servidor** com comunicação via API RESTful:
+
+```
+Frontend (React SPA) → API REST (Express.js) → Banco de Dados (MongoDB)
+```
+
+### Padrões Implementados
+
+- **MVC (Model-View-Controller)**: Separação clara entre models, controllers e routes
+- **Repository/Service Pattern**: Lógica de negócio encapsulada em services
+- **Middleware Pipeline**: Autenticação, validação e tratamento de erros
+- **Context API + Hooks**: Gerenciamento de estado global no frontend
+- **React Query**: Cache inteligente e sincronização automática com o servidor
+
+### Segurança
+
+- 🔐 **Autenticação JWT**: Tokens stateless com expiração de 7 dias
+- 🔒 **Criptografia Bcrypt**: Hash de senhas com 12 rounds
+- 🛡️ **Helmet.js**: Proteção de headers HTTP (XSS, CSRF, Clickjacking)
+- ⏱️ **Rate Limiting**: Proteção contra DDoS e brute-force
+- ✅ **Validação Zod**: Validação rigorosa de entrada de dados
+- 🌐 **CORS**: Controle de acesso cross-origin
+
+Para detalhes completos sobre arquitetura, tecnologias e implementação, consulte a **[Documentação Técnica](documentation/TCC_DOCUMENTACAO_TECNICA.md)**.
 
 ## 🛠️ Solução de Problemas
 
-### Erro de Conexão com MongoDB
+## 🛠️ Solução de Problemas
+
+### Problemas Comuns
+
+#### ❌ Erro de Conexão com MongoDB
+**Solução**: 
 - Verifique se o MongoDB está em execução
 - Confirme a string de conexão no arquivo `.env`
-- Verifique se o IP está na whitelist (MongoDB Atlas)
+- Se usar MongoDB Atlas, verifique se o IP está na whitelist
 
-### Uploads Não Funcionam
-- Verifique se a pasta `uploads` existe e tem permissões
-- Confirme que o Multer está configurado corretamente
+#### ❌ Porta 5000 já está em uso
+**Solução**: 
+- Altere a porta no arquivo `.env`: `PORT=5001`
+- Ou finalize o processo que está usando a porta
 
-### Erros no Frontend
-- Limpe o cache do navegador
-- Verifique se o proxy está configurado no `package.json`
-- Confira erros no console do navegador
+#### ❌ Frontend não carrega (tela branca)
+**Solução**:
+- Limpe o cache do navegador (Ctrl+Shift+Delete)
+- Verifique se o backend está rodando
+- Abra o console do navegador (F12) e verifique erros
 
-## 🔍 Componentes Frontend Principais
+#### ❌ Token inválido / Sessão expirada
+**Solução**:
+- Faça logout e login novamente
+- Verifique se JWT_SECRET no `.env` tem pelo menos 32 caracteres
 
-### Páginas
-- `Login.js`: Autenticação de usuários
-- `Dashboard.js`: Visão geral do sistema
-- `Produtos.js`: Lista de produtos
-- `AdicionarProduto.js`: Formulário de cadastro
-- `Movimentacao.js`: Controle de movimentações
-- `Vendas.js`: Registro e histórico de vendas
-- `Relatorios.js`: Geração de relatórios
-- `Usuarios.js`: Gerenciamento de usuários
+Para soluções detalhadas e mais problemas, consulte a **[Seção de Resolução de Problemas](GUIA_INSTALACAO_USO.md#5-resolução-de-problemas)** no guia completo.
 
-### Componentes
-- `Layout.js`: Template principal da aplicação
-- `Sidebar.js`: Menu de navegação lateral
-- `RotaPrivada.js`: Proteção de rotas autenticadas
+## 🔍 Estrutura de Componentes
 
-## 📊 Relatórios Disponíveis
+### Frontend (React)
 
-1. **Visão Geral**:
-   - Vendas por categoria
-   - Estoque por local
-   - Estatísticas do período
+```
+src/
+├── pages/              # Páginas principais da aplicação
+│   ├── Login.js        # Autenticação
+│   ├── Dashboard.js    # Visão geral e gráficos
+│   ├── Produtos.js     # Lista e gerenciamento
+│   ├── Movimentacao.js # Controle de movimentações
+│   ├── Vendas.js       # Registro e histórico
+│   ├── Relatorios.js   # Geração de relatórios
+│   └── Usuarios.js     # Gerenciamento (Admin)
+├── components/         # Componentes reutilizáveis
+│   ├── Layout.js       # Template principal
+│   ├── Sidebar.js      # Menu de navegação
+│   └── RotaPrivada.js  # Proteção de rotas
+├── contexts/           # Estado global (Context API)
+│   └── AuthContext.js  # Autenticação do usuário
+├── services/           # Comunicação com API
+│   └── api.js          # Cliente Axios configurado
+└── hooks/              # Custom hooks
+    └── useAuth.js      # Hook de autenticação
+```
 
-2. **Top Produtos**:
-   - Ranking de produtos mais vendidos
-   - Percentual de cada produto no total de vendas
+### Backend (Node.js + Express)
 
-3. **Produtos Sem Movimentação**:
-   - Lista de produtos parados
-   - Distribuição por local
+```
+backend/
+├── models/             # Esquemas Mongoose
+├── controllers/        # Lógica de negócio
+├── routes/             # Definições de rotas
+├── middlewares/        # Auth, validação, rate limit
+│   ├── auth.js         # Verificação JWT
+│   ├── validateResource.js  # Validação Zod
+│   └── rateLimit.js    # Proteção DDoS
+├── services/           # Serviços especializados
+├── validators/         # Schemas Zod
+└── server.js           # Ponto de entrada
+```
 
-## 🔮 Próximas Melhorias
+## 📊 Relatórios e Análises
 
-- [ ] Remover Implementações temporárias e dados simulados do backend
-- [ ] Adicionar opção de Atualizar Estoque em Movimentações
-- [ ] Corrigir Histórico de Vendas em Vendas e Registar Vendas em Movimentações
-- [ ] Adicionar Visualização do Histórico de movimentações
-- [ ] Melhoria na página de Relatórios
-- [ ] Atualização do dashboard com mais informações
-- [ ] Mudança da página Usuários para Gerenciamento
+O sistema oferece relatórios completos com visualizações gráficas interativas:
+
+### 📈 Tipos de Relatórios
+
+1. **Visão Geral**
+   - Total de vendas por período
+   - Vendas por categoria (gráfico pizza)
+   - Distribuição de estoque por local (gráfico barras)
+   - Estatísticas consolidadas
+
+2. **Top Produtos**
+   - Ranking dos produtos mais vendidos
+   - Percentual de participação nas vendas
+   - Análise de desempenho
+
+3. **Produtos Sem Movimentação**
+   - Lista de produtos parados há mais de 30 dias
+   - Distribuição por local e categoria
+   - Identificação de estoque obsoleto
+
+### 📄 Exportação
+
+- **PDF Profissional**: Gera relatórios formatados com gráficos incorporados
+- **Filtros Avançados**: Por período, categoria, local e tipo de produto
+- **Visualização Interativa**: Gráficos Chart.js com tooltips e zoom
+
+## 🔮 Melhorias Futuras (Roadmap)
+
+## 🔮 Melhorias Futuras (Roadmap)
+
+### Versão 1.1 (Em Desenvolvimento)
+- [ ] Remover implementações temporárias e dados simulados do backend
+- [ ] Adicionar opção de atualizar estoque em movimentações
+- [ ] Corrigir histórico de vendas e registrar vendas em movimentações
+- [ ] Adicionar visualização do histórico de movimentações
+- [ ] Melhorias na página de relatórios
+
+### Versão 2.0 (Planejado)
+- [ ] Dashboard expandido com mais métricas e KPIs
+- [ ] Redesign da página de gerenciamento de usuários
+- [ ] Sistema de notificações push em tempo real
+- [ ] Auditoria completa com log de todas as ações
+- [ ] Suporte a múltiplos idiomas (i18n)
+
+### Versão 3.0 (Futuro)
 - [ ] Aplicativo móvel nativo (React Native)
+- [ ] Integração com sistemas ERP externos
+- [ ] Leitura de código de barras
+- [ ] Integração com nota fiscal eletrônica (NF-e)
+- [ ] Autenticação OAuth2 (Google, Microsoft)
+- [ ] Sistema de backup automático
       
+## 👥 Contribuindo
+
+Contribuições são muito bem-vindas! Este é um projeto de código aberto e adoraríamos contar com sua ajuda para melhorá-lo.
+
+### Como Contribuir
+
+1. **Fork** o repositório
+2. **Clone** seu fork: `git clone https://github.com/seu-usuario/estoque-facil.git`
+3. **Crie uma branch** para sua feature: `git checkout -b feature/nova-funcionalidade`
+4. **Faça suas alterações** seguindo os padrões do projeto
+5. **Commit** suas mudanças: `git commit -m 'feat: Adiciona nova funcionalidade'`
+6. **Push** para a branch: `git push origin feature/nova-funcionalidade`
+7. **Abra um Pull Request** descrevendo suas alterações
+
+### Padrões de Commit
+
+Seguimos o padrão [Conventional Commits](https://www.conventionalcommits.org/):
+
+- `feat:` Nova funcionalidade
+- `fix:` Correção de bug
+- `docs:` Alterações em documentação
+- `style:` Formatação, ponto e vírgula, etc
+- `refactor:` Refatoração de código
+- `test:` Adição ou correção de testes
+- `chore:` Tarefas de build, configs, etc
+
+### Reportar Bugs
+
+Encontrou um bug? Abra uma [issue](https://github.com/RxSaturn/estoque-facil/issues) com:
+- Descrição detalhada do problema
+- Passos para reproduzir
+- Comportamento esperado vs. atual
+- Screenshots (se aplicável)
+- Informações do ambiente (SO, Node.js, MongoDB)
+
+## 📚 Documentação Adicional
+
+- 📘 **[Guia Completo de Instalação e Uso](GUIA_INSTALACAO_USO.md)** - Manual detalhado para usuários finais
+- 📄 **[Documentação Técnica (TCC)](documentation/TCC_DOCUMENTACAO_TECNICA.md)** - Documentação completa para desenvolvedores e banca examinadora
+- 🐛 **[Issues](https://github.com/RxSaturn/estoque-facil/issues)** - Reporte bugs ou sugira melhorias
+
 ## 📄 Licença
 
-Este projeto está licenciado sob a licença MIT - consulte o arquivo [LICENSE](LICENSE) para obter detalhes.
+Este projeto está licenciado sob a licença **MIT** - consulte o arquivo [LICENSE](LICENSE) para obter detalhes.
 
-## 👥 Contribuições
+A licença MIT permite:
+- ✅ Uso comercial
+- ✅ Modificação
+- ✅ Distribuição
+- ✅ Uso privado
 
-Contribuições são bem-vindas! Para contribuir:
+## 🙏 Agradecimentos
 
-1. Faça um fork do repositório
-2. Crie uma branch para sua feature (`git checkout -b feature/nova-funcionalidade`)
-3. Faça commit de suas alterações (`git commit -m 'Adiciona nova funcionalidade'`)
-4. Envie para a branch (`git push origin feature/nova-funcionalidade`)
-5. Abra um Pull Request
+Este projeto foi desenvolvido como Trabalho de Conclusão de Curso (TCC), demonstrando a aplicação prática de tecnologias modernas de desenvolvimento web full-stack.
 
-Este README fornece uma documentação abrangente do projeto "Estoque Fácil", detalhando a arquitetura, estrutura, endpoints da API, modelos de dados e instruções de uso. É projetado para servir como uma referência completa, facilitando a consulta e futuras modificações, inclusive com assistência de outros agentes de IA.
+**Tecnologias principais**: MongoDB, Express.js, React, Node.js (MERN Stack)
 
-A documentação está estruturada para dar uma visão clara do sistema completo, desde sua instalação até os detalhes técnicos mais específicos. Isso permitirá que você mantenha o projeto de forma eficiente e desenvolva novas funcionalidades com base no trabalho já realizado.
+---
+
+## 📞 Suporte e Contato
+
+- 🐛 **Reportar Bug**: [Abrir Issue](https://github.com/RxSaturn/estoque-facil/issues/new)
+- 💡 **Sugerir Funcionalidade**: [Abrir Issue](https://github.com/RxSaturn/estoque-facil/issues/new)
+- 📧 **Contato**: Através do GitHub
+
+---
+
+<div align="center">
+
+**⭐ Se este projeto foi útil para você, considere dar uma estrela no GitHub!**
+
+Desenvolvido com ❤️ usando a Stack MERN
+
+</div>
