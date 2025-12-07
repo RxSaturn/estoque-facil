@@ -383,8 +383,6 @@ Para detalhes completos sobre arquitetura, tecnologias e implementação, consul
 
 ## 🛠️ Solução de Problemas
 
-## 🛠️ Solução de Problemas
-
 ### Problemas Comuns
 
 #### ❌ Erro de Conexão com MongoDB
@@ -480,8 +478,6 @@ O sistema oferece relatórios completos com visualizações gráficas interativa
 - **PDF Profissional**: Gera relatórios formatados com gráficos incorporados
 - **Filtros Avançados**: Por período, categoria, local e tipo de produto
 - **Visualização Interativa**: Gráficos Chart.js com tooltips e zoom
-
-## 🔮 Melhorias Futuras (Roadmap)
 
 ## 🔮 Melhorias Futuras (Roadmap)
 
