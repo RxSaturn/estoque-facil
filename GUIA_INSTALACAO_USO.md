@@ -88,6 +88,7 @@ Você tem duas opções: instalar localmente ou usar MongoDB Atlas (na nuvem).
      mongodb+srv://admin:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
      ```
    - **Importante**: Substitua `<password>` pela senha que você criou!
+   - **Nota**: O nome do banco de dados (`estoque-facil`) será criado automaticamente na primeira conexão
 
 #### Opção B: MongoDB Local
 
